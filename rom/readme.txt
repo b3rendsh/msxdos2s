@@ -1,4 +1,4 @@
-The ROM's in this folder have been assembled with the following build options.
+The MSX-DOS ROM's in this folder have been assembled with the following build options.
 
 MSXD22S.ROM (mod-32k):
 
@@ -24,4 +24,8 @@ DOS1	EQU	0	; DOS1 in DOS2 bank 3
 HSH	EQU	0	; HSH style 0: no DOS2 skip key, 1: DOS2 skip key (SELECT or CODE+GRAPH), 2: DOS2 skip key (INSERT)
 BNKADR	EQU	07FFEH
 BNKTRL	EQU	0	; translate bank numbers
+
+
+The BEER20_DISK.ROM is a new experimental driver version 2.0 for the BEER-IDE disk interface.
+
 
