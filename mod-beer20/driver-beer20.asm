@@ -525,13 +525,18 @@ r597:	add	hl,de
 r598:	ld	a,(iy+011h)
 r599:	ld	(iy+00bh),a		; MAXENT - Max directory entries
 	add	hl,de
+IFDEF BEER19_OLD
+; Incompatible interpretation of the hidden sectors field. In MS-DOS versions up to 3.0 this is the number of sectors 
+; preceding the partition as a 16-bit value, later versions used a 32 bit value. In MSX-DOS it is not useable or used.
+; BEER 1.9 adds this value to the offset for the first data sector relative to the start of the partition.
 	ld	e,(ix+01ch)		; Number of hidden sectors
 	ld	d,(ix+01dh)
 	add	hl,de
+ENDIF
 	ld	(iy+00ch),l		; FIRREC - first data sector
 	ld	(iy+00dh),h
 	ex	de,hl
-	ld	l,(ix+013h)		; Number of hidden sectors
+	ld	l,(ix+013h)		; Total number of sectors
 	ld	h,(ix+014h)
 	ld	bc,00000h
 	ld	a,l
