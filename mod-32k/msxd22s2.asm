@@ -5,7 +5,7 @@
 ; Source re-created by Z80DIS 2.2
 ; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
 ;
-; Code Copyrighted by ASCII and maybe others
+; Code Copyrighted by ASCII, OKEI and maybe others
 ; Source comments by Arjen Zeilemaker
 ;
 ; Sourcecode supplied for STUDY ONLY
@@ -15,15 +15,19 @@
 ; H.J. Berends:
 ; Converted sources to assemble with z88dk z80asm
 ; Mod: The rom bank switching code is removed
-
+; Mod: FAT16 kernel patches based on FAT16 v0.12 by OKEI
 
         INCLUDE "DISK.INC"
 
 	SECTION	S2
 
-	; labels defined used in s1
-	PUBLIC	K1_BEGIN		; start of kernel code
+	; labels used in s1
+	PUBLIC	K1_BEGIN		; begin of kernel code
 	PUBLIC	K1_END			; end of kernel code
+IFDEF FAT16
+	PUBLIC	K2_BEGIN		; begin of fat16 patch code
+	PUBLIC	K2_END			; end of fat16 patch code
+ENDIF
 
 RDSLT   EQU     000CH
 CALSLT  EQU     001CH
@@ -397,7 +401,6 @@ _IPARM	equ	08BH		; rem: missing definition?
 
 ; ------------------------------------------------------------------------------
 ; Following kernel code is copied to ram 
-; Todo: modify copy routine
 ; ------------------------------------------------------------------------------
 K1_BEGIN:
 
@@ -825,21 +828,30 @@ C029C:  LD      A,0DCH
 J029E:  LD      HL,0
         RET
 
-I02A2:  DEFW    C0CFB,C03A8,C03B6,C042E,C043D,C0441,C03D4,C03FE
-        DEFW    C03BE,C029C,C0456,C03CD,C0B90,C0B95,C0BAB,C374B
-        DEFW    C378F,C37A9,C37C3,C38C0,C3826,C386D,C38A8,C38ED
-        DEFW    C0BC6,C0BDC,C0BE4,C0BEC,C029C,C029C,C029C,C029C
-        DEFW    C029C,C392D,C3941,C395B,C3994,C029C,C3D19,C3D15
-        DEFW    C3943,C029C,C1024,C1059,C10A3,C10AD,C0C48,C2558
-        DEFW    C255B,C0C50,C029C,C029C,C029C,C029C,C029C,C029C
-        DEFW    C029C,C029C,C029C,C029C,C029C,C029C,C029C,C029C
-        DEFW    C18BC,C196F,C18C0,C1D9C,C1D8A,C1DE1,C1DEE,C1DFE
-        DEFW    C1E13,C1E23,C1E33,C1E77,C2003,C1F0A,C1F31,C1F56
-        DEFW    C1F7B,C1FB4,C1F14,C1F3B,C1F60,C1F93,C1FD6,C0CCF
-        DEFW    C0CD5,C182D,C1843,C1863,C1878,C188A,C1893,C0CE0
-        DEFW    C201F,C2066,C0CFD,C029C,C029C,C0D05,C0D0A,C0D39
-        DEFW    C0D93,C0E44,C0E8B,C0EDE,C0EFF,C0F55,C0EB6,C0EC8
-        DEFW    C0ED2
+; MSX-DOS 2 Functions
+
+I02A2:  DEFW    C0CFB,C03A8,C03B6,C042E,C043D,C0441,C03D4,C03FE	; 0
+        DEFW    C03BE,C029C,C0456,C03CD,C0B90,C0B95,C0BAB,C374B	; 8
+        DEFW    C378F,C37A9,C37C3,C38C0,C3826,C386D,C38A8,C38ED	; 10
+        DEFW    C0BC6,C0BDC,C0BE4,C0BEC,C029C,C029C,C029C,C029C	; 18
+        DEFW    C029C,C392D,C3941,C395B,C3994,C029C,C3D19,C3D15	; 20
+        DEFW    C3943,C029C,C1024,C1059,C10A3,C10AD,C0C48,C2558	; 28
+        DEFW    C255B,C0C50,C029C,C029C,C029C,C029C,C029C,C029C	; 30
+        DEFW    C029C,C029C,C029C,C029C,C029C,C029C,C029C,C029C	; 38
+        DEFW    C18BC,C196F,C18C0,C1D9C,C1D8A,C1DE1,C1DEE,C1DFE	; 40
+        DEFW    C1E13,C1E23,C1E33,C1E77,C2003,C1F0A,C1F31,C1F56	; 48
+        DEFW    C1F7B,C1FB4,C1F14,C1F3B,C1F60,C1F93,C1FD6,C0CCF	; 50
+        DEFW    C0CD5,C182D,C1843,C1863,C1878,C188A,C1893,C0CE0	; 58
+        DEFW    C201F,C2066,C0CFD,C029C,C029C,C0D05,C0D0A	; 60
+
+IFDEF FAT16
+; Functions 67 Format a disk and 68 Create or destroy RAM disk
+; are disabled and space is re-used for patch code.
+	DEFW	C029C,C029C	
+ELSE
+        DEFW    C0D39,C0D93
+ENDIF
+	DEFW	C0E44,C0E8B,C0EDE,C0EFF,C0F55,C0EB6,C0EC8,C0ED2	; 69
 
 ;	  Subroutine initialize buffered input history buffer
 ;	     Inputs  ________________________
@@ -2155,17 +2167,13 @@ J0A6B:  LD      A,C
 
 C0A6C:  CALL    H_CHOU
 
-	IF USESBF = 0
-
         PUSH    IX
         LD      IX,CHPUT
         CALL    C0B78
         POP     IX
         RET
 
-	ENDIF
-
-	IF	(OPTM = 0) || (USESBF = 1)
+	IF	OPTM = 0
 
 Q_0A7B: LD      E,A
         CP      1BH
@@ -2464,11 +2472,20 @@ C0BEC:  LD      C,E
         LD      E,(IX+22)
         LD      D,(IX+23)
         PUSH    DE
+IFDEF FAT16
+	JP	ALLOC
+J0C07:
+ELSE
         LD      DE,2
+ENDIF
         LD      B,D
         LD      C,D
 J0C09:  PUSH    DE
+IFDEF FAT16
+	CALL	FATRED
+ELSE
         CALL    C2D86
+ENDIF
         LD      A,D
         OR      E
         JR      NZ,J0C12
@@ -2480,10 +2497,17 @@ J0C12:  POP     DE
         EX      (SP),HL
         INC     DE
         JR      NZ,J0C09
+IFDEF FAT16
+J0C1B:
+ENDIF
         PUSH    BC
         LD      E,(IX+12)
         LD      D,(IX+13)
+IFDEF FAT16
+	CALL	BUF_1
+ELSE
         CALL    C2B6A
+ENDIF
         LD      DE,11
         ADD     HL,DE
         LD      DE,(SSECBU)
@@ -2594,16 +2618,25 @@ J0CA9:  LD      (DE),A
         LD      H,(IX+23)
         DEC     HL
         LD      B,(IX+11)
+IFDEF FAT16
+FIXCAL:	LD	C,29H
+	ADC	A,A
+	DJNZ	FIXCAL+1	; jump in middle of instruction which makes it 'add hl,hl'
+ELSE
         JR      J0CBD
-
 J0CBC:  ADD     HL,HL
 J0CBD:  DJNZ    J0CBC
+ENDIF
         LD      C,(IX+20)
         LD      B,(IX+21)
         ADD     HL,BC
+IFDEF FAT16
+	CALL	ALLSEC
+ELSE
         EX      DE,HL
         DEC     HL
         DEC     HL
+ENDIF
         LD      (HL),D
         DEC     HL
         LD      (HL),E
@@ -2719,7 +2752,181 @@ J0D28:  INC     C
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C0D39:  EX      AF,AF'
+C0D39:
+
+; -----------------------------------------------------------------------------
+; FAT16:PATCH3
+
+IFDEF FAT16
+FORMAT:
+
+;CLUSTER NUMBER
+CLST_1:	LD	D,(HL)			;#1534
+	JR	CHK_C			;Check data 'FFFFh'
+	
+CLST_2:	DB	0FDh,0CBh,20h,0DEh	;SET  3,(IY+20h)	;#158B
+	JR	CHK_C
+	
+CLST_4:	LD	DE,(0BBE8h)		;#1C53
+	JR	CHK_C
+	
+CLST_8:	POP	AF			;#1B87
+	POP	DE
+	JR	CHK_D
+	
+CLST_5:	POP	AF			;#2F83
+	PUSH	BC
+CHK_D:	PUSH	AF
+	JR	CHK_C
+	
+CLST_6:	LD	DE,(0BBA3h)		;#2FAF
+CHK_C:	LD	A,D			;DE=FFFFh Z=0
+	AND	E
+	JR	CHK_A
+
+CLST_7:	JR	NZ,CHK_C		;#3021
+	INC	SP
+	INC	SP
+	RET
+
+CLST_9:	LD	DE,(0BBE8h)		;#1CB1
+	CALL	CHK_C
+	LD	DE,(0BBE4h)
+	RET	NZ
+	JR	CHK_C
+
+CLST_3:	LD	DE,(0BBE6h)		;#1C0D
+
+CHECK:	LD	A,D
+CHK_A:	INC	A
+	JR	Z,CHK_B
+	XOR	A
+	RET				;z=1 
+CHK_B:	DEC	A
+	RET				;z=0 
+	
+CLST_A:	LD	A,(HL)
+	JR	CHK_A
+	
+;---------------------------------
+	
+CLUST:	LD	HL,(0B9FAh)		;FCB+20h DPB address
+	CALL	CHKDRV
+	RET	Z			;FAT16
+	LD	A,(IX+2Ah)
+	JP	C39CE
+	
+CLUST2:	LD	HL,(0B9FAh)
+	CALL	CHKDRV
+	RET	Z			;FAT16
+	LD	A,(IX+1Dh)
+	JP	C3CD7
+	
+;-------------------------------------------------------------------
+RAMDSK:
+	
+
+;Get FAT address
+FATRED:	PUSH	AF
+	CALL	CHKDRV
+	JR	Z,Z0018		;use FAT16
+	POP	AF
+	CALL	C2D86		;FAT12 routine 
+	BIT	7,D
+	RET
+
+;Read 16bitFAT
+
+Z0018:	POP	AF
+	CALL	FATADR		;get address & sector set
+	JR	Z,Z0019		;no error
+Z0020:	XOR	A
+	LD	(0BBEAh),A
+	LD	A,0F2h	
+	LD	DE,0FFFFh
+	CALL	C3686
+	JR	Z,Z0020
+	JR	Z0021		;error
+	
+Z0019:	PUSH	HL
+	LD	A,(DE)		;DE=FAT address
+	LD	L,A
+	INC	DE
+	LD	A,(DE)
+	LD	H,A
+	EX	DE,HL		;DE=next cluster number
+	LD	HL,0FFF7h	;HL=wrong cluster number
+	OR	A
+	SBC	HL,DE
+	POP	HL
+	JR	NC,Z1021	;not end of cluster
+Z0021:	LD	DE,0FFFFh	;End of cluster
+	OR	D		;Z=0
+	SCF			;Cy=1
+	RET
+Z1021:	XOR	A		;Cy=0 Z=1
+	RET
+	
+	
+;-----------------------------------------------------------
+;Get sector number of FAT & read FAT sector in disk buffer
+;Get address of FAT
+	
+FATADR:	PUSH	IX		;IX=#B9DA
+	PUSH	BC	
+	PUSH	HL		;HL=DPB address 
+	PUSH	HL
+	POP	IX
+	DB	0FDh,0CBh,29h,86h	;RES	0,(IY+29h)
+	LD	L,(IX+16h)
+	LD	H,(IX+17h)
+	XOR	A
+	SBC	HL,DE
+	JR	C,FATAD_	;ERROR
+	LD	H,D		;DE=cluster number
+	LD	L,E
+	ADD	HL,HL		;cluster number * 2(16bit)
+	PUSH	HL
+	LD	E,D		;cluster * 2 / 200hbytes = sector
+	LD	D,0
+	LD	L,(IX+0Ch)	;sector number of FAT top
+	LD	H,(IX+0Dh)	;
+	ADD	HL,DE		;get sector number of FAT
+	EX	DE,HL
+	CALL	BUF_1		;get address of disk buffer
+	LD	BC,0Bh
+	ADD	HL,BC		;start address of FAT in disk buffer
+	POP	BC
+	LD	A,B
+	AND	01h		;get leave from FATaddress/200h
+	LD	B,A
+	ADD	HL,BC		;get address
+	EX	DE,HL
+	CP	A		;Z=1 right
+FATAD_:	POP	HL
+	POP	BC
+	POP	IX
+	RET
+
+;-------------------------------
+;Z=1  FAT16 drive   Z=0  FAT12 drive
+CHKDRV:
+	PUSH	HL
+	PUSH	DE
+	LD	DE,001Dh
+	ADD	HL,DE
+	BIT	7,(HL)
+	POP	DE
+	POP	HL
+	RET
+
+	DB	033H,0BAH	; Unused code / address alignment
+
+; -----------------------------------------------------------------------------
+ELSE
+; -----------------------------------------------------------------------------
+
+	EX      AF,AF'
         PUSH    HL
         POP     IX
         LD      A,B
@@ -2847,6 +3054,11 @@ J0E04:  LD      HL,(D_BA33)
         CALL    C2C5A
         LD      HL,0
         LD      (D_BA33),HL
+
+ENDIF	; FAT16:PATCH3
+; -----------------------------------------------------------------------------
+
+IF !FAT16
         XOR     A
         LD      (D_BE00),A
         LD      HL,I_BE02
@@ -2869,6 +3081,7 @@ J0E2F:  LD      A,(D_BE00)
         LD      A,C
         RET
 
+ENDIF
 ;	  Subroutine clear ramdisk bootsector and ramdisk segment table
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -4146,8 +4359,12 @@ C151A:  PUSH    BC
         ADD     HL,DE
         LD      E,(HL)
         INC     HL
+IFDEF FAT16
+	CALL	CLST_1
+ELSE
         LD      D,(HL)
         BIT     7,D
+ENDIF
         JR      NZ,J1597
         LD      BC,(D_BB9E)
         PUSH    BC
@@ -4191,8 +4408,15 @@ J1582:  POP     HL
         LD      (HL),E
         POP     BC
         LD      (D_BB9E),BC
+IFDEF FAT16
+	CALL	CLST_2
+	NOP
+	NOP
+	NOP
+ELSE
         SET     3,(IY+32)
         BIT     7,D
+ENDIF
         JR      Z,J1597
         INC     HL
         INC     HL
@@ -4918,8 +5142,12 @@ J1983:  PUSH    AF
         CALL    Z,C198F
         POP     AF
         CALL    C1A3B
+IFDEF FAT16
+	CALL	STOR_7
+ELSE
         EX      DE,HL
         LDIR
+ENDIF
         RET
 
 ;	  Subroutine update FIB with directory entry info
@@ -5013,7 +5241,11 @@ C19F8:  PUSH    BC
 
 J1A06:  CALL    C1A3B
         LDIR
+IFDEF FAT16
+	CALL	STOR_8
+ELSE
         LD      C,(IX+25)
+ENDIF
         LD      B,1
         CALL    C318D
         POP     BC
@@ -5182,7 +5414,11 @@ C1B27:  PUSH    DE
         EX      (SP),IX
         PUSH    BC
         LD      B,1
+IFDEF FAT16
+	CALL	BUF_2
+ELSE
         CALL    C2B78
+ENDIF
         POP     BC
         PUSH    BC
         LD      DE,11
@@ -5231,8 +5467,13 @@ J1B81:  LD      B,14H   ; 20
 J1B83:  INC     HL
         LD      (HL),C
 J1B85:  DJNZ    J1B83
-J1B87:  POP     DE
+J1B87:  
+IFDEF FAT16
+	CALL	CLST_8
+ELSE
+	POP     DE
         BIT     7,D
+ENDIF
         JR      Z,J1B8E
         LD      D,B
         LD      E,B
@@ -5321,7 +5562,11 @@ C1BE6:  PUSH    HL
         PUSH    BC
         CALL    C1A3B
         EX      DE,HL
+IFDEF FAT16
+	CALL	STOR_1
+ELSE
         LD      DE,I_BBD2
+ENDIF
         LDIR
         SET     0,(IY+47)
         POP     BC
@@ -5338,13 +5583,25 @@ C1BFA:  PUSH    BC
         JR      Z,J1C0D
         PUSH    HL
         CALL    C1A3B
+IFDEF FAT16
+	CALL	STOR_2
+ELSE
         LD      HL,I_BBD2
+ENDIF
         LDIR
         POP     HL
         JR      J1C2D
 
-J1C0D:  LD      DE,(D_BBE6)
+J1C0D:  
+IFDEF FAT16
+	CALL	CLST_3
+	NOP
+	NOP
+	NOP
+ELSE
+	LD      DE,(D_BBE6)
         BIT     7,D
+ENDIF
         LD      A,0D5H
         JR      NZ,J1C2E
         LD      A,0FFH
@@ -5399,8 +5656,16 @@ J1C51:  POP     HL
 ;	     Inputs  HL = pointer to drive table
 ;	     Outputs ________________________
 
-C1C53:  LD      DE,(D_BBE8)
+C1C53:  
+IFDEF FAT16
+	CALL	CLST_4
+	NOP
+	NOP
+	NOP
+ELSE
+	LD      DE,(D_BBE8)
         BIT     7,D
+ENDIF
         JR      Z,J1CBA
         PUSH    BC
         PUSH    HL
@@ -5456,26 +5721,46 @@ J1C8E:  PUSH    HL
         JR      J1CF9
 
 J1CA4:  POP     HL
+IFDEF FAT16
+	CALL	SUB_16
+	NOP
+ELSE
         INC     DE
         LD      A,(D_BBE1)
+ENDIF
         DEC     A
         JR      NZ,J1CE1
         CP      (IY+94)
         JR      NZ,J1CE3
+IFDEF FAT16
+	CALL	CLST_9
+	NOP
+	NOP
+	NOP
+ELSE
         LD      DE,(D_BBE4)
         BIT     7,D
+ENDIF
         SCF
         POP     BC
         RET     NZ
 J1CBA:  PUSH    BC
         PUSH    DE
+IFDEF FAT16
+	CALL	FATRED
+ELSE
         CALL    C2D86
+ENDIF
         LD      B,D
         LD      C,E
         POP     DE
         PUSH    DE
         XOR     A
+IFDEF FAT16
+	CALL	GETSUB
+ELSE
         CALL    C2DB6
+ENDIF
         PUSH    DE
         EX      DE,HL
         LD      HL,10
@@ -5505,7 +5790,11 @@ J1CED:  LD      (D_BBE1),A
 J1CF9:  EX      (SP),IX
         PUSH    AF
         LD      B,1
+IFDEF FAT16
+	CALL	BUF_4
+ELSE
         CALL    C2B78
+ENDIF
         POP     BC
         EX      (SP),IX
         LD      DE,-21
@@ -6388,7 +6677,12 @@ J218F:  LD      E,(HL)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C21A3:  LD      HL,54
+C21A3:  
+IFDEF FAT16
+	LD	HL,56
+ELSE	
+	LD      HL,54
+ENDIF
         CALL    C01CB                   ; allocate BDOS data block
         RET     NZ
         PUSH    DE
@@ -6546,7 +6840,11 @@ C2284:  PUSH    BC
         LD      (IX+33),H
         LD      BC,(D_BBE2)
         LD      (IX+34),C
+IFDEF FAT16
+	CALL	STOR_3
+ELSE
         LD      (IX+35),B
+ENDIF
         LD      A,(D_BBDF)
         SUB     (IY+96)
         LD      (IX+36),A
@@ -6627,8 +6925,12 @@ C2308:  BIT     7,(IX+30)
         LD      DE,(D_BBE2)
         LD      L,(IX+34)
         LD      H,(IX+35)
+IFDEF FAT16
+	CALL	STOR_4
+ELSE
         OR      A
         SBC     HL,DE
+ENDIF
         POP     HL
         RET     NZ
         LD      E,(IX+32)
@@ -6793,7 +7095,11 @@ J2430:  LD      (HL),A
         INC     DE
         LD      A,(DE)
         DJNZ    J2430
+IFDEF FAT16
+	CALL	STOR_5
+ELSE
         LD      HL,D_BBDE
+ENDIF
         LD      DE,I_BBC6
         LD      BC,12
         LDIR
@@ -6821,7 +7127,11 @@ J2430:  LD      (HL),A
         RET     NZ
         CALL    C1BE6
         PUSH    HL
+IFDEF FAT16
+	CALL	STOR_6
+ELSE
         LD      HL,I_BBC6
+ENDIF
         LD      DE,D_BBDE
         LD      BC,12
         LDIR
@@ -6997,7 +7307,11 @@ J2578:  LD      B,2
         RET     NZ
         CALL    C2C49
         CALL    C2C59
+IFDEF FAT16
+	CALL	ABSSEC
+ELSE
         CALL    C2599
+ENDIF
         CALL    C2C49
         CALL    C2C59
         LD      DE,9
@@ -7045,7 +7359,12 @@ J25C8:  PUSH    BC
         PUSH    DE
         PUSH    DE
         EX      (SP),IX
+IFDEF FAT16
+	CALL	RAMRED
+	DB	0BBH		; filler (instruction "cp e")
+ELSE
         LD      DE,(D_BBB4)
+ENDIF
         PUSH    DE
         DEC     A
         JR      Z,J25E4
@@ -7064,7 +7383,11 @@ J25E6:  EX      AF,AF'
         LD      L,B
         LD      H,0
         ADD     HL,DE
+IFDEF FAT16
+	CALL	NUM_1
+ELSE
         LD      (D_BBB4),HL
+ENDIF
         POP     HL
         POP     DE
         LD      A,D
@@ -7103,7 +7426,11 @@ J261C:  POP     HL
         POP     BC
         INC     (IY+52)
         JR      NZ,J2630
+IFDEF FAT16
+	CALL	NUM_2
+ELSE
         INC     (IY+53)
+ENDIF
 J2630:  JP      C2599
 
 ;	  Subroutine correct buffer
@@ -7122,13 +7449,21 @@ J2636:  PUSH    BC
         LD      D,(HL)
         EX      DE,HL
         LD      BC,(D_BBB4)
+IFDEF FAT16
+	JP	DSKBUF
+C264C:
+ELSE
         SBC     HL,BC
         POP     BC
+ENDIF
         LD      A,H
         INC     A
         JR      NZ,J2665
         LD      A,L
         ADD     A,B
+IFDEF FAT16
+J2652:
+ENDIF
         JR      NC,J2665
         DEC     DE
         DEC     DE
@@ -7202,7 +7537,11 @@ J26B8:  LD      B,3
 
 J26BB:  LD      B,2
         LD      DE,(D_BBB4)
+IFDEF FAT16
+	CALL	BUF_2
+ELSE
         CALL    C2B78
+ENDIF
         POP     DE
         ADD     HL,DE
         LD      BC,11
@@ -7545,7 +7884,11 @@ J28D3:  LD      A,B
         CP      C
         JR      NC,J28FA
         PUSH    DE
+IFDEF FAT16
+	CALL	FATRED
+ELSE
         CALL    C2D86
+ENDIF
         EX      (SP),HL
         OR      A
         INC     HL
@@ -7636,9 +7979,16 @@ C295F:  XOR     A
         INC     DE
         LD      (D_BBBC),DE
         LD      DE,(D_BBB6)
+IFDEF FAT16
+	CALL	FATRED
+        LD      (D_BBB6),DE
+	NOP
+	NOP
+ELSE
         CALL    C2D86
         LD      (D_BBB6),DE
         BIT     7,D
+ENDIF
         POP     DE
         LD      A,0C8H
         RET     NZ
@@ -7762,11 +8112,19 @@ J2A19:  JR      NZ,J2A92
         CALL    C2B3A
         JR      NZ,J2A94
         PUSH    DE
+IFDEF FAT16
+	CALL	FATRED
+	CALL	Z,C2FFC
+	POP	DE
+	LD	BC,0FFFFH
+	NOP
+ELSE
         CALL    C2D86
         BIT     7,D
         CALL    Z,C2FFC
         POP     DE
         LD      B,0FFH
+ENDIF
         CALL    C2DD3
         LD      C,(IX+39)
         LD      B,(IX+40)
@@ -7940,8 +8298,14 @@ J2B59:  LD      A,B
         OR      C
         RET     Z
         DEC     BC
+IFDEF FAT16
+	CALL	FATRED
+	NOP
+	NOP
+ELSE
         CALL    C2D86
         BIT     7,D
+ENDIF
         JR      Z,J2B59
         DEFB    03EH
 J2B65:  POP     HL
@@ -8009,9 +8373,15 @@ J2BA7:  CALL    C2D0F
         LD      A,(IY+34)
         LD      (HL),A
         INC     HL
+IFDEF FAT16
+	CALL	SECNUM
+	INC	HL
+	LD	(HL),A
+ELSE
         LD      C,(IX+17)
         LD      (HL),C
         INC     HL
+ENDIF
         PUSH    DE
         INC     HL
         INC     HL
@@ -8048,7 +8418,11 @@ J2BEE:  PUSH    DE
         LD      A,(DATA_S)
         LD      C,A
         LD      A,00H
+IFDEF FAT16
+	CALL	REDBUF
+ELSE
         CALL    C324F
+ENDIF
         POP     BC
         POP     DE
         JR      Z,J2C13
@@ -8091,9 +8465,13 @@ C2C26:  PUSH    HL
         LD      A,(HL)
         SUB     E
         JR      NZ,J2C36
+IFDEF FAT16
+	CALL	CMPSEC
+ELSE
         INC     HL
         LD      A,(HL)
         SUB     D
+ENDIF
 J2C36:  POP     HL
         RET
 
@@ -8348,8 +8726,12 @@ J2D25:  PUSH    HL
         JR      Z,J2D3B
         LD      A,E
 J2D32:  ADD     A,(HL)
+IFDEF FAT16
+	CALL	FSIZE1
+ELSE
         JR      NC,J2D36
         INC     D
+ENDIF
 J2D36:  DJNZ    J2D32
         LD      E,A
         LD      B,1
@@ -8372,7 +8754,11 @@ J2D4A:  PUSH    DE
         LD      A,(DATA_S)
         LD      C,A
         LD      A,1
+IFDEF FAT16
+	CALL	WRTBUF
+ELSE
         CALL    C324F
+ENDIF
         POP     BC
         POP     DE
         JR      NZ,J2D5C
@@ -8382,7 +8768,11 @@ J2D5C:  CP      0F1H
         LD      BC,J0101
 J2D63:  PUSH    AF
         LD      A,E
+IFDEF FAT16
+	CALL	FSIZE2
+ELSE
         ADD     A,(IX-4)
+ENDIF
         LD      E,A
         JR      NC,J2D6C
         INC     D
@@ -8448,6 +8838,28 @@ C2DB6:  PUSH    HL
         EX      DE,HL
         DEC     HL
         DEC     HL
+
+; -----------------------------------------------------------------------------
+; FAT16:PATCH_X
+
+IFDEF FAT16
+GET_SE:
+	LD	C,A
+	XOR	A
+	JR	Z0022
+Z0023:	ADD	HL,HL		;bit 0-15 of sector number
+	ADC	A,A		;bit16-23 of sector number
+Z0022:	DJNZ	Z0023
+	LD	B,A		;bit16-23
+	LD	A,C
+	ADD	A,L
+	LD	L,A
+	EX	DE,HL		;BDE=sector number
+	LD	A,B
+	JP	GETSEC
+
+ELSE
+
         DEFB    00EH
 J2DC1:  ADD     HL,HL
         DJNZ    J2DC1
@@ -8463,6 +8875,9 @@ J2DC1:  ADD     HL,HL
         ADD     HL,DE
         EX      DE,HL
         POP     BC
+ENDIF	
+; -----------------------------------------------------------------------------
+
         POP     HL
         RET
 
@@ -8477,8 +8892,13 @@ C2DD3:  CALL    C2EA2
 ;	     Outputs ________________________
 
 C2DD6:  PUSH    DE
+IFDEF FAT16
+	JP	FATWRT
+J2DDA:
+ELSE
         LD      A,B
         CP      10H     ; 16 
+ENDIF
         JR      C,J2DDF
         LD      BC,I0FFF
 J2DDF:  CALL    C2E37
@@ -8523,7 +8943,11 @@ J2E0F:  CALL    C2C38
         LD      DE,(D_BBA7)
         EX      (SP),IX
         PUSH    AF
+IFDEF FAT16
+	CALL	BUF_1
+ELSE
         CALL    C2B6A
+ENDIF
         CALL    C2C38
         LD      BC,512+7
         ADD     HL,BC
@@ -8564,7 +8988,11 @@ C2E37:  PUSH    IX
         LD      H,(IX+13)
         ADD     HL,DE
         EX      DE,HL
+IFDEF FAT16
+	CALL	BUF_1
+ELSE
         CALL    C2B6A
+ENDIF
         LD      BC,11
         ADD     HL,BC
         POP     BC
@@ -8579,7 +9007,11 @@ C2E37:  PUSH    IX
         LD      (D_BBA7),DE
         LD      (D_BBA5),A
         INC     DE
+IFDEF FAT16
+	CALL	BUF_1
+ELSE
         CALL    C2B6A
+ENDIF
         LD      BC,11
         ADD     HL,BC
         LD      A,(HL)
@@ -8628,7 +9060,12 @@ C2EA2:  PUSH    HL
 C2EAE:  PUSH    HL
         EX      (SP),IX
         BIT     7,(IX+25)
+IFDEF FAT16
+	NOP
+	NOP
+ELSE
         JR      NZ,J2F16
+ENDIF
         BIT     0,(IX+24)
         JR      NZ,J2F16
         LD      A,1
@@ -8645,10 +9082,19 @@ J2ED0:  PUSH    BC
         DEC     A
         LD      B,00H
         JR      NZ,J2EDC
+IFDEF FAT16
+	CALL	BUF_3
+ELSE
         CALL    C2B78
+ENDIF
         JR      J2EE9
 
-J2EDC:  CALL    C2B6A
+J2EDC:  
+IFDEF FAT16
+	CALL	BUF_1
+ELSE
+	CALL    C2B6A
+ENDIF
         CALL    C2D0F
         PUSH    HL
         CALL    C2C38
@@ -8669,10 +9115,18 @@ J2EF6:  LD      A,B
         PUSH    BC
         LD      DE,0
         LD      B,1
+IFDEF FAT16
+	CALL	BUF_3
+ELSE
         CALL    C2B78
+ENDIF
         CALL    C2CB7
         CALL    C2C38
+IFDEF FAT16
+	CALL	CHKVOL
+ELSE
         LD      DE,46
+ENDIF
         ADD     HL,DE
         POP     BC
         LD      (HL),B
@@ -8736,7 +9190,11 @@ J2F54:  INC     DE
         POP     HL
         JR      C,J2F99
         PUSH    DE
+IFDEF FAT16
+	CALL	FATRED
+ELSE
         CALL    C2D86
+ENDIF
         LD      A,D
         OR      E
         POP     DE
@@ -8744,8 +9202,12 @@ J2F54:  INC     DE
         LD      B,D
         LD      C,E
         POP     DE
+IFDEF FAT16
+	CALL	CLST_5
+ELSE
         PUSH    BC
         BIT     7,D
+ENDIF
         JR      Z,J2F78
         LD      (D_BBA3),BC
 J2F78:  CALL    Z,C2DD6
@@ -8768,8 +9230,15 @@ J2F78:  CALL    Z,C2DD6
 
 J2F99:  POP     DE
         POP     DE
+IFDEF FAT16
+	CALL	CLST_6
+	NOP
+	NOP
+	NOP
+ELSE
         LD      DE,(D_BBA3)
         BIT     7,D
+ENDIF
         CALL    Z,C2FFC
         POP     DE
         LD      A,0D4H
@@ -8797,9 +9266,13 @@ C2FA9:  PUSH    DE
         LD      H,D
         LD      L,E
         SBC     HL,BC
+IFDEF FAT16
+	CALL	BUF_5
+ELSE
         LD      B,L
         DEC     B
         DEC     DE
+ENDIF
         POP     HL
         JR      J2FCF
 
@@ -8821,7 +9294,11 @@ J2FD7:  PUSH    BC
         JR      NZ,J2FDD
         CALL    C2CB7
 J2FDD:  LD      B,00H
+IFDEF FAT16
+	CALL	BUF_2
+ELSE
         CALL    C2B78
+ENDIF
         PUSH    HL
         LD      BC,11
         ADD     HL,BC
@@ -8847,7 +9324,11 @@ J2FE8:  LD      (HL),A
 ;	     Outputs ________________________
 
 C2FFC:  PUSH    DE
+IFDEF FAT16
+	CALL	FATRED
+ELSE
         CALL    C2D86
+ENDIF
         POP     BC
         PUSH    DE
         LD      D,B
@@ -8857,8 +9338,12 @@ C2FFC:  PUSH    DE
         POP     DE
         LD      A,D
         OR      E
+IFDEF FAT16
+	CALL	CLST_7
+ELSE
         RET     Z
         BIT     7,D
+ENDIF
         JR      Z,C2FFC
         RET
 
@@ -8886,11 +9371,271 @@ C3013:  LD      A,4
         XOR     A
         RET
 
+
 ;	  Subroutine format disk
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C3030:  BIT     7,A
+C3030:  
+
+; -----------------------------------------------------------------------------
+; FAT16:PATCH2
+
+IF FAT16
+
+	DB	0CBH			; Address alignment
+
+;Write bit16-23 of sector number at buffer+8
+SECNUM:	DB	0DDh,0CBh,1Dh,7Eh	;BIT	7,(IX+1Dh)
+	LD	A,0
+	JR	NZ,SECN_1		;FAT12
+	LD	A,(DSKEX)		;FAT16
+SECN_1:	LD	C,(IX+11h)
+	LD	(HL),C
+	RET
+	
+;-----------------------------------------------
+;Compare sector number at buffer
+CMPSEC:					;#6C33 (#6C47)
+	INC	HL
+	LD	A,(HL)
+	SUB	D
+	RET	NZ			;Z=0 different sector
+	DB	0DDh,0CBh,1Dh,7Eh	;BIT	7,(IX+1Dh)
+	JR	Z,CMPS_1		;Z=1 FAT16
+	XOR	A
+	RET			
+CMPS_1:	LD	A,(DSKEX)	
+	INC	HL
+	INC	HL
+	INC	HL
+	CP	(HL)			;bit16-23 of sector number
+	RET
+
+;------------------------------------------------------
+;Set to bit16-23 of sector number at registerC
+;
+SETNUM:
+	PUSH	AF		;#3540 (#3554)
+	LD	A,(IX+1Dh)
+	BIT	7,A
+	JR	NZ,MED_ID	;FAT12
+	LD	A,(RW_16)
+	LD	C,A		;FAT16 C=bit16-23
+	POP	AF
+	RET
+MED_ID:	LD	C,A		;C=MEDIA ID
+	POP	AF
+	RET
+	
+;-------------------------------------------------------
+;Total of cluster
+TALCLS:
+	LD	A,L		;HL=BOOT +13h,14h
+	OR	H
+	JR	Z,WINFMT	;Format with Windows95
+	SBC	HL,DE
+	JP	J3467		;12bitFAT
+
+WINFMT:	LD	L,(IX+20h)	;Cluster size
+	LD	H,(IX+21h)
+	LD	A,(IX+22h)
+	OR	A
+	SBC	HL,DE
+	SBC	A,0
+WINFM_:	DEC	C
+	JP	Z,J3470
+	SRL	A
+	RR	H
+	RR	L
+	JR	WINFM_
+
+;-----------------------------
+;DISK BUFFER
+DSKBUF:
+	SBC	HL,BC
+	PUSH	AF
+	PUSH	DE
+	DEC	DE
+	DEC	DE
+	DEC	DE
+	EX	DE,HL
+	LD	A,(HL)		;Drive number of buffer
+	DEC	A
+	ADD	A,A
+	LD	HL,0BA25h	;(DRIVE-1)*2+BA25h=(DPB address)
+	ADD	A,L
+	LD	L,A
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	ADD	A,1Dh
+	LD	L,A
+	LD	A,0
+	ADC	A,H		;HL=DPB+1Dh
+	BIT	7,(HL)		;Z=1 FAT16  Z=0 FAT12
+	EX	DE,HL
+	POP	DE
+	JR	Z,CALUC		;FAT16
+	POP	AF
+	POP	BC
+	JP	C264C
+	
+CALUC:
+	POP	AF
+	PUSH	DE
+	INC	DE
+	INC	DE
+	INC	DE
+	LD	A,(DE)
+	LD	BC,(BIT16)
+	SBC	A,C
+	POP	DE
+	POP	BC
+	INC	A
+	JP	NZ,J2665
+	LD	A,L
+	ADD	A,B
+	JR	NC,PAT_40
+	LD	A,0
+	ADC	A,H
+PAT_40:	JP	J2652
+
+;-------------------------------------
+;1CC4h
+GETSUB:	CALL	C2DB6
+	LD	A,(BIT16)
+	LD	(SDIR_1),A
+	RET
+
+;1CA5h
+SUB_16:	INC	DE			;[ver0.11]
+	LD	A,D
+	OR	E
+	JR	NZ,SUB_
+	LD	A,(SDIR_1)
+	INC	A
+	LD	(SDIR_1),A
+SUB_:	LD	A,(0BBE1h)
+	RET
+	
+;-------------------------------------
+;SECTER READ/WRITE
+;2588
+ABSSEC:
+	XOR	A
+	LD	(BIT16),A
+	JP	C2599
+
+;-----------------------------------------------------------
+;FAT WRITE 
+FATWRT:	CALL	CHKDRV
+	JR	Z,FATWR2		;16bit FAT
+	LD	A,B
+	CP	10h
+	JP	J2DDA			;12bit FAT
+
+FATWR2:	CALL	FATADR			;Get address
+	JR	Z,FATWR3		;Right routine
+	LD	A,0FFh
+	LD	(0BBEAh),A
+FATWR4:	LD	A,0F2h
+	LD	DE,0FFFFh
+	CALL	C3686
+	JR	Z,FATWR4
+	JP	J2E35
+FATWR3:	PUSH	HL
+	LD	A,C
+	LD	(DE),A			;FAT write
+	INC	DE
+	LD	A,B
+	LD	(DE),A
+	JP	J2E0F			;Return
+	
+;----------------------------------------------------------
+;Set sector number at #BBB4
+NUM_1:	LD	(0BBB4h),HL
+	RET	NC
+SECINC:	LD	A,(BIT16)
+	INC	A
+	LD	(BIT16),A
+	RET
+	
+NUM_2:	
+	INC	(IY+35h)
+	RET	NZ
+	JR	SECINC
+	
+;-----------------------------------------------
+;2B7Eh
+BUF_1:	XOR	A
+	LD	(DSKEX),A	;FAT
+PAT_31:	JP	C2B6A
+
+BUF_5:	XOR	A		;#2FD2
+	LD	(BIT16),A
+	LD	B,L
+	DEC	B
+	DEC	DE
+	RET
+
+BUF_4:	LD	BC,(0BBE8h)	;SUB DIR? ROOT?
+	INC	BC
+	LD	A,B
+	OR	C
+	LD	B,01h
+	JR	Z,BUF_3		;(BBE8)=FFFF
+	LD	A,(SDIR_1)
+	JR	BUF_
+
+BUF_2:	LD	A,(BIT16)
+	JR	BUF_
+	
+BUF_3:	XOR	A
+BUF_:	LD	(DSKEX),A	;FAT
+	JP	C2B78
+
+;--------------------------------------------------------------
+;Read a sector for Random block access
+
+RAMRED:	PUSH	AF
+	LD	A,(BIT16)
+	LD	(RW_16),A	;write bit16-23 of sector number 
+	LD	DE,(0BBB4h)
+	POP	AF
+	RET
+
+
+;------------------------------------------------------------
+;Read/write a sector for buffer
+REDBUF:	PUSH	AF
+	LD	A,(DSKEX)
+	JR	REDB_1
+
+WRTBUF:	PUSH	AF
+	LD	A,(IX-3)	;bit16-23
+REDB_1:	LD	(RW_16),A	;use bit16-23 of sector number
+	POP	AF
+	JP	C324F
+
+;---------------------------------
+;34F0h  JP DSKROM
+DSKROM:	CP	06h
+	JP	NC,J351D
+	CP	02h
+	JR	NC,PAT_42
+	PUSH	AF
+	XOR	A
+	LD	(RW_16),A
+	POP	AF
+PAT_42:	JP	C34D8
+
+	DEFB    0,"MSXDOS  SYS"		; Unused data in FAT16 patch
+
+; -----------------------------------------------------------------------------
+ELSE
+; -----------------------------------------------------------------------------
+	BIT     7,A
         JR      NZ,J303F
         LD      E,C
         LD      C,D
@@ -9050,8 +9795,11 @@ RC0AB:  DEFB    0,"MSXDOS  SYS"
 
 RC0B7:
         DEPHASE
+
         PHASE  I30F2+RC0B7-RC01E
 
+ENDIF	;FAT16:PATCH2
+; -----------------------------------------------------------------------------
 
 ;	  Subroutine check disk change
 ;	     Inputs  C = drive, B = type (0 = for disk, 1 = for file, 2 = flush dirty sector buffers), IX = pointer to FIB
@@ -9177,7 +9925,11 @@ J324A:  POP     HL
 ;	     Outputs ________________________
 
 C324F:  CALL    C3264
+IFDEF FAT16
+	CALL	C34D8
+ELSE
         CALL    C34D4
+ENDIF
 
 ;	  Subroutine next 0.5 seconds no disk change
 ;	     Inputs  ________________________
@@ -9278,7 +10030,11 @@ C32CB:  PUSH    IX
         LD      B,6
 J32D7:  LD      A,(DE)
         CP      (HL)
+IFDEF FAT16
+	JR	NZ,GETVOL
+ELSE
         JR      NZ,J32E2
+ENDIF
         INC     HL
         INC     DE
         DJNZ    J32D7
@@ -9324,6 +10080,46 @@ J3303:  LD      DE,0
         JR      NZ,J3346
         CALL    C334E
         JR      Z,J3341
+
+; -----------------------------------------------------------------------------
+; FAT16:PATCH5
+
+IFDEF FAT16
+
+	DB	18H,2AH		; FAT16 address alignment to 331A
+
+GETVOL:
+	PUSH	IX
+	POP	HL
+	LD	DE,000Ah
+	ADD	HL,DE
+	LD	A,(HL)		;UNDEL FLG (DOS1,FAT16)
+	CP	01h
+	JR	Z,PAT_47
+	XOR	A
+PAT_47:	LD	HL,I32E8+6
+	LD	(HL),A
+	INC	HL
+	XOR	A
+	DEC	A
+	RET
+
+CHKVOL:
+	PUSH	AF
+	LD	A,(IX+19h)	;check VOL
+	CP	0FFh
+	LD	DE,002Eh
+	JR	NZ,VOL_1
+	LD	DE,0012h
+VOL_1:	POP	AF
+	RET
+
+	DB	20H,00H		; Address alignment
+
+; -----------------------------------------------------------------------------
+ELSE
+; -----------------------------------------------------------------------------
+
         LD      DE,1
         LD      B,1
         LD      A,(DATA_S)
@@ -9341,6 +10137,10 @@ J3303:  LD      DE,0
         CALL    C3382
         JR      NZ,J3346
         LD      (IX+32),00H
+
+ENDIF	;FAT16:PATCH5
+; -----------------------------------------------------------------------------
+
 J3341:  POP     DE
         POP     BC
         RET
@@ -9381,6 +10181,14 @@ C334E:  PUSH    IX
         LD      DE,6
         ADD     HL,DE
         LD      A,(HL)
+IFDEF FAT16
+GETDPB:	POP	HL
+	XOR	A			; DOS 2.2 patch on patch
+	RET				; "
+	DEC	D			; unused code
+	LD	A,3			; "
+	CALL	C34D4			; "
+ELSE
         INC     HL
         DEC     A
         CP      0CH     ; 12 
@@ -9388,8 +10196,8 @@ C334E:  PUSH    IX
         LD      A,(HL)
         OR      A
         POP     HL
+ENDIF
         RET
-
 J337F:  POP     HL
         OR      H
         RET
@@ -9398,7 +10206,88 @@ J337F:  POP     HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C3382:  LD      B,A
+C3382:  
+
+; -----------------------------------------------------------------------------
+; FAT16:PATCH4
+
+IFDEF FAT16
+
+STOR_1:	PUSH	AF
+	LD	A,(SDIR_1)		;BBE2h-3h
+	LD	(SDIR_2),A		;BBD6h-7h
+	POP	AF
+	LD	DE,0BBD2h
+	RET
+	
+STOR_2:	PUSH	AF
+	LD	A,(SDIR_2)
+	LD	(SDIR_1),A
+	POP	AF
+	LD	HL,0BBD2h
+	RET
+	
+STOR_3:	LD	(IX+23h),B		;bit7-15 of sector
+	LD	A,(SDIR_1)
+	LD	(IX+32h),A		;File handle
+	RET
+	
+STOR_4:	OR	A
+	SBC	HL,DE
+	RET	NZ
+	LD	A,(SDIR_1)
+	SUB	(IX+32h)
+	RET
+	
+STOR_5:	PUSH	AF
+	LD	A,(SDIR_1)
+	LD	(SDIR_3),A
+	POP	AF
+	LD	HL,0BBDEh
+	RET
+	
+STOR_6:	PUSH	AF
+	LD	A,(SDIR_3)
+	LD	(SDIR_1),A
+	POP	AF
+	LD	HL,0BBC6h
+	RET
+
+STOR_7:	PUSH	AF
+	LD	A,(SDIR_1)
+	ld	(ix+38h),a		;[ver0.12]
+	POP	AF
+	EX	DE,HL
+	LDIR
+	RET
+	
+STOR_8:	PUSH	AF
+	ld	a,(ix+38h)		;[ver0.12]
+	LD	(SDIR_1),A
+	POP	AF
+	LD	C,(IX+19h)
+	RET
+
+ALLSEC:
+	EX	DE,HL
+	DEC	HL
+	DEC	HL
+	OR	A
+	RET	Z			;FAT12
+	LD	(HL),0
+	DEC	HL
+	LD	(HL),0
+	LD	BC,0011h
+	ADD	HL,BC
+	LD	(HL),A
+	DEC	HL
+	RET
+
+; -----------------------------------------------------------------------------
+ELSE
+; -----------------------------------------------------------------------------
+
+	LD      B,A
         LD      A,3
         CALL    C34D4
         RET     NZ
@@ -9467,6 +10356,11 @@ J33E7:  ADD     HL,HL
         LD      (HL),E
         INC     HL
         LD      (HL),D
+
+ENDIF	; FAT16:PATCH4
+; -----------------------------------------------------------------------------
+
+IF !FAT16
         INC     HL
         LD      A,(IX+1)
         LD      (HL),A
@@ -9479,6 +10373,7 @@ J33E7:  ADD     HL,HL
         POP     IX
         POP     HL
         RET
+ENDIF
 
 ;	  Subroutine update drive table with bootsector BPB info
 ;	     Inputs  HL = pointer to drive table, IX = pointer to bootsector
@@ -9517,7 +10412,11 @@ J3430:  SRL     D
         RR      E
         DEC     A
         JR      NZ,J3430
+IFDEF FAT16
+	NOP
+ELSE
         CP      (HL)
+ENDIF
         INC     HL
         LD      (HL),E
         INC     HL
@@ -9532,8 +10431,12 @@ J343E:  LD      A,(IX+22)
         XOR     A
         LD      D,A
 J3448:  ADD     A,E
+IFDEF FAT16
+	CALL	FSIZE3
+ELSE
         JR      NC,J344C
         INC     D
+ENDIF
 J344C:  DJNZ    J3448
         LD      E,A
         ADD     HL,DE
@@ -9553,8 +10456,12 @@ J344C:  DJNZ    J3448
         PUSH    HL
         LD      L,(IX+19)
         LD      H,(IX+20)
+IFDEF FAT16
+	JP	TALCLS
+ELSE
         OR      A
         SBC     HL,DE
+ENDIF
 J3467:  DEC     C
         JR      Z,J3470
         SRL     H
@@ -9575,8 +10482,13 @@ J3470:  INC     HL
         LD      BC,5
         LDIR
         EX      DE,HL
+IFDEF FAT16
+	CALL	DPBSET
+	NOP
+ELSE
         LD      A,(IX+21)
         LD      (HL),A
+ENDIF
         POP     HL
         PUSH    HL
         INC     HL
@@ -9632,8 +10544,12 @@ C34C3:  PUSH    HL
         LD      BC,31
         ADD     HL,BC
         POP     BC
+IFDEF FAT16
+	CALL	CLST_A
+ELSE
         XOR     A
         BIT     7,(HL)
+ENDIF
         JR      NZ,J34D2
         LD      (HL),A
         DEC     HL
@@ -9645,8 +10561,15 @@ J34D2:  POP     HL
 ;	     Inputs  A = function, HL = drive table, BC=, DE=, IX = disk driver HL
 ;	     Outputs ________________________
 
-C34D4:  CP      06H     ; 6 
+C34D4:  
+IFDEF	FAT16
+	JP	DSKROM
+	DB	45H
+C34D8:
+ELSE
+	CP      06H     ; 6 
         JR      NC,J351D
+ENDIF
         PUSH    IY
         PUSH    HL
         PUSH    HL
@@ -9728,7 +10651,11 @@ J3532:  EX      AF,AF'
         LD      HL,04000H
         EXX
         LD      A,C
+IFDEF FAT16
+	CALL	SETNUM
+ELSE
         LD      C,(IX+29)
+ENDIF
         PUSH    BC
         CALL    C35C6
         JR      C,J3544
@@ -10509,7 +11436,12 @@ C399D:  EX      DE,HL
         LD      DE,I_B9FF
         LD      BC,8
         LDIR
+IFDEF FAT16
+	JP	CLUST
+C39CE:
+ELSE
         LD      A,(IX+42)
+ENDIF
         LD      B,00H
         BIT     6,A
         JR      Z,J39D6
@@ -10613,8 +11545,12 @@ J3A77:  OR      A
         PUSH    HL
         CALL    C198F
         CALL    C1A3B
+IFDEF FAT16
+	CALL	STOR_7
+ELSE
         EX      DE,HL
         LDIR
+ENDIF
         POP     HL
         POP     DE
         POP     BC
@@ -10998,7 +11934,12 @@ C3CB4:  PUSH    IX
         LD      HL,I_B9FF
         LD      BC,8
         LDIR
+IFDEF FAT16
+	JP	CLUST2
+C3CD7:
+ELSE
         LD      A,(IX+29)
+ENDIF
         AND     0FH     ; 15 
         LD      B,A
         LD      A,(DSB9E8)
@@ -11213,7 +12154,195 @@ J3E28:  DJNZ    J3E1B
 
         DEPHASE
 
-; ------------------------------------------------------------------------------
 K1_END:
 ; ------------------------------------------------------------------------------
 
+; FAT16:PATCH - Extra FAT16 routines
+; Future changes:
+; 1. Move variables to page 3 so page 0 can run from rom
+; 2. Move extra FAT16 code to end of s2
+; 3. Re-enable format and ramdisk functions
+; 4. Move patches to patched addresses 
+; ------------------------------------------------------------------------------
+IFDEF FAT16
+
+K2_BEGIN:
+	PHASE	3F00H
+
+; Change cluster number to sector number
+; Input:  DE=cluster number
+; Output: DE=sector number bit0-15
+;  	  BIT16 = bit16-23
+;
+GETSEC:	LD	BC,0009h		
+	ADD	HL,BC			;DPB+14h start sector of data area
+	LD	C,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,C
+	ADD	HL,DE
+	JR	NC,Z0024
+	INC	A
+Z0024:	EX	DE,HL			;BDE=sector number
+	LD	(BIT16),A		;save bit16-23 
+	POP	BC
+	POP	HL
+	RET
+
+;----------------------------------------
+FSIZE1:	JR	NC,FSIZ_1
+	INC	D
+FSIZ_1:	INC	(HL)	
+	DEC	(HL)
+	RET	NZ
+	INC	D
+	RET
+	
+FSIZE2:	LD	A,(IX-4)
+	OR	A
+	JR	NZ,FSIZ_2
+	INC	D
+FSIZ_2:	ADD	A,E
+	RET
+	
+FSIZE3:	JR	NC,FSIZ_3
+	INC	D
+FSIZ_3:	INC	E
+	DEC	E
+	RET	NZ
+	INC	D
+	RET
+
+;------------------------------------
+;#1Bh PATCH
+ALLOC:	LD	DE,0002h
+	CALL	CHKDRV
+	JP	NZ,J0C07		;FAT12 drive
+	LD	A,(BUFSEG)
+	OR	A
+	JP	Z,J0C07			;Not use buffer
+	
+BUF_RD:	DI
+	LD	A,(IX+06h)		;Local drive 
+	LD	(BUF_DR+1),A
+	LD	A,(IX+0)		;Slot number of diskrom
+	LD	(DSKSLT+3),A
+
+	LD	L,(IX+0Ch)		;FAT TOP
+	LD	H,(IX+0Dh)
+	LD	(FATTOP+1),HL
+	POP	HL			;Total cluster
+	PUSH	IY
+	PUSH	IX			;DPB address
+	PUSH	HL			;Total cluster
+	LD	BC,0
+	LD	A,0C9h
+	LD	(0038h),A		;Todo: di ipv ?
+	LD	A,(BUFSEG)		;Buffer segment
+	OUT	(0FEh),A		;PAGE2 BUFFER
+	
+FREE_0:	CALL	BUFRD			;Read
+	PUSH	HL			;Cluster number
+	ADD	HL,HL
+	LD	A,H			;FAT address
+	AND	01h
+	LD	H,A
+	SET	7,H			;address 8000h
+	POP	DE			;Cluster number
+FREE_1:	LD	A,(HL)
+	INC	HL
+	OR	(HL)			;'00,00' 
+	INC	HL
+	JR	NZ,FREE_2
+	INC	BC			;Count to free cluster
+FREE_2:	EX	(SP),HL
+	SBC	HL,DE
+	ADD	HL,DE
+	EX	(SP),HL
+	INC	DE
+	JR	Z,FREE_3		;End of Cluster
+	BIT	6,H			;Check address = C000h
+	JR	Z,FREE_1
+	JR	FREE_0
+	
+FREE_3:	LD	A,(0F2CFh)		;PAGE2
+	OUT	(0FEh),A
+	LD	A,0C3h
+	LD	(0038h),A		;Todo: ei?
+	POP	HL
+	POP	IX
+	POP	IY
+	PUSH	HL			;Total of cluster
+	JP	J0C1B
+	
+BUFRD:	PUSH	BC			;Counter
+	PUSH	DE			;Cluster number
+	LD	E,D
+	LD	D,0
+FATTOP:	LD	HL,0001h		;FAT TOP
+	ADD	HL,DE
+	EX	DE,HL
+BUF_DR:	LD	A,0			;Drive
+	LD	B,20h
+	LD	C,0
+	LD	HL,8000h
+	OR	A
+DISKIO:	LD	IX,4010h
+DSKSLT:	LD	IY,0
+	CALL	001Ch
+	POP	HL
+	POP	BC
+	RET
+
+;--------------------------------------
+;349Fh FAT12
+DPBSET:	LD	A,(IX+15h)
+	LD	(HL),A
+ADPBST:	PUSH	HL			; @DPBST
+	PUSH	IX
+	POP	HL
+	LD	BC,0200h
+DPB_1:	LD	A,46h			;'F'
+	CPIR
+	JR	Z,DPB_2
+	OR	A
+	JR	DPB_3
+	
+DPB_2:	PUSH	HL
+	PUSH	BC
+	LD	B,04h
+	LD	DE,MOJI			;'AT16'
+DPB_4:	LD	A,(DE)
+	XOR	(HL)
+	JR	NZ,DPB_5
+	INC	HL
+	INC	DE
+	DJNZ	DPB_4
+	SCF
+DPB_5:	POP	BC
+	POP	HL
+	JR	NC,DPB_1
+
+DPB_3:	POP	HL
+	LD	A,(HL)
+	RET	NC
+	RES	7,(HL)
+	RET
+
+MOJI:	DB	"AT16"
+;-------------------------------------
+
+BUFSEG:	DB	0		;Segment number for buffer
+BIT16:	DB	0		;bit16-23 for calculation of sector
+DSKEX:	DB	0		;bit16-23 for Disk buffer
+SDIR_1:	DB	0		;BBE2h   bit16-23
+SDIR_2:	DB	0		;BBD2h+4 bit16-23
+SDIR_3:	DB	0		;BBC6h+4 bit16-23
+RW_16:	DB	0		;bit16-23 for DISKIO
+
+	DEPHASE
+
+K2_END:
+
+ENDIF	; FAT16:PATCH
+; ------------------------------------------------------------------------------

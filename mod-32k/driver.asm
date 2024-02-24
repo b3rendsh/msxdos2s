@@ -13,19 +13,32 @@
 ; H.J. Berends:
 ; Converted sources to assemble with z88dk z80asm
 ; Mod: removed self check command (call dos2memchk)
+; Mod: HSH style 2 DOS2 skip key is INS
 
 	SECTION	DRV
 
-BRSLREG EQU     0138H                   ; use BRSLREG instead of RSLREG to avoid name clash with disk.mac
+
+; Symbols which are defined by the disk hardware driver
+
+	PUBLIC	INIHRD
+	PUBLIC	DRIVES
+	PUBLIC	INIENV
+	PUBLIC	DSKIO
+	PUBLIC	DSKCHG
+	PUBLIC	GETDPB
+	PUBLIC	CHOICE
+	PUBLIC	DSKFMT
+	PUBLIC	MTOFF
+	PUBLIC	OEMSTA
+	PUBLIC	DEFDPB
+	PUBLIC	MYSIZE
+	PUBLIC	SECLEN
+
+SNSMAT  EQU     0141H   
 
 DEFDPB	EQU	$-1
 MYSIZE	EQU	0
 SECLEN  EQU     512
-
-        IF HSH = 0
-INIHRD:
-        ENDIF
-C6EFA:	RET
 
 DRIVES:
 C6EFB:	LD	L,0                     ; number of drives of this interface = 0
@@ -59,38 +72,12 @@ OEMSTA:
 	RET
 ; ------------------------------------------------------------------------------
 
-        IF HSH = 1
+; Mod: HSH style 2 DOS2 skip key is INS (also removed obsolete code)
 
-INIHRD:
-        LD      A,7
-        CALL    SNSMAT
-        BIT     6,A                     ; SELECT key pressed ?
-        JR      Z,LQDOS2                ; yep, quit DOS2
-        LD      A,6
-        CALL    SNSMAT
-        BIT     4,A                     ; CODE key pressed ?
-        RET     NZ                      ; nope,
-        BIT     2,A                     ; with GRAPH key pressed ?
-        RET     NZ                      ; nope,
-LQDOS2: INC     SP
-        INC     SP
-        RET
-
-        ENDIF
-
-        IF HSH = 2
-
-INIHRD:
-        LD      A,8
+INIHRD:	LD      A,8
         CALL    SNSMAT
         BIT     2,A                     ; INS key pressed ?
-        JR      Z,LQDOS2                ; yep, quit DOS2
-        RET
-        DEFB    0D2H,000H,000H,000H,000H,000H,0FFH,0FFH,0FFH,0FFH
-LQDOS2: INC     SP
+        RET	NZ			; Z=yes
+	INC     SP
         INC     SP
         RET
-        DEFB    06EH
-
-        ENDIF
-

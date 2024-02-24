@@ -12,16 +12,17 @@
 ; Recreation NOT permitted without authorisation of the copyrightholders
 ;
 ; ------------------------------------------------------------------------------
-; H_J. Berends:
+; H.J. Berends:
 ; Converted sources to assemble with z88dk z80asm
 ; Mod: Removed ROM mapper and other unused code
 ; Mod: Removed Kanji error messages
+; Mod: Simplified international character generator
+; Mod: Initialize FAT16 kernel and workspace patches based on FAT16 v0.12 by OKEI
+
 
         INCLUDE "DISK.INC"
 
 	SECTION	S1
-
-;S_ORG1	EQU	04000H		; Offset for current address: $ calculations
 
 	; routines called in s0
 	PUBLIC	C49D7		; C4100 --> C49D7 check and invoke memorymapper of 6 or more segments
@@ -37,7 +38,10 @@
 	; labels defined in s2
 	EXTERN	K1_BEGIN
 	EXTERN	K1_END
-
+IFDEF FAT16
+	EXTERN	K2_BEGIN
+	EXTERN	K2_END
+ENDIF
 
 DOSST1  MACRO   X,Y
         LOCAL   _D1
@@ -180,6 +184,13 @@ J410F:  DI
 	LD	BC,K1_END-K1_BEGIN	; Number of bytes
 	LDIR
 
+IFDEF FAT16
+	LD	HL,K2_BEGIN		; Source
+	LD	DE,3F00H		; Target
+	LD	BC,K2_END-K2_BEGIN	; Number of bytes
+	LDIR
+ENDIF
+
 	POP	AF
 	LD	H,080H			; restore page 2 slot (ie. RAM)
 	CALL	ENASLT			; uses the ENASLT routine of the just loaded disk rom
@@ -190,6 +201,45 @@ J410F:  DI
         CALL    C418C			; rem: initialize characterset
 
 I416E:  CALL    0                       ; initialize BDOS code
+
+IFDEF FAT16
+; DPB+1E init patch:
+; change from '00,FF,00' to 'FF,FF,00'
+	PUSH	AF
+        LD      A,(DATA_S)              ; BDOS data segment
+        CALL    PUT_P2                  ; PUT_P2
+	LD	BC,0801h		; check 8 drives (B), counting from 1 (C)
+DIRINT:	PUSH	BC		
+	LD	B,0
+	LD	HL,0BA23H		; page 2
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	E,(HL)
+	INC	HL
+	LD	A,(HL)
+	LD	D,A
+	LD	HL,001Eh
+	ADD	HL,DE
+	XOR	A
+	CP	(HL)			;(DPB+1Eh),00
+	JR	NZ,DIRIN_
+	INC	HL
+	DEC	A
+	CP	(HL)			;(DPB+1Fh),FFh
+	JR	NZ,DIRIN_
+	INC	HL
+	INC	A
+	CP	(HL)			;(DPB+20h),00h
+	JR	NZ,DIRIN_
+	DEC	HL
+	DEC	HL
+	DEC	A
+	LD	(HL),A			;(DPB+1Eh),FFh
+DIRIN_:	POP	BC
+	INC	C
+	DJNZ	DIRINT
+	POP	AF
+ENDIF
 
         EX      AF,AF'
         DI
@@ -208,110 +258,38 @@ I416E:  CALL    0                       ; initialize BDOS code
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-; Mod: fixed to international character generator because page 0 is already changed at 
-; this point and therefore IDBYT0 returns wrong value.
-; Note: routine can be optimized to reduce rom size
+; Mod: fixed to international character generator and simplified to reduce rom size.
 
-C418C:  LD      A,1			; Mod: fixed value 1 instead of LD A,(IDBYT0)
-        AND     0FH
+C418C:  LD      A,1
         LD      (KBUF+0),A
         LD      HL,ISBA75
+	LD	DE,I423F
         XOR     A
-        LD      B,A
-J4199:  PUSH    AF
-        CALL    C41A4
+J4199:  PUSH	AF
+	CALL    C41A4		; translate char code?
         LD      (HL),A
-        POP     AF
+	POP	AF
+        INC     HL
         INC     A
-        INC     HL
-        DJNZ    J4199
+	JR	NZ,J4199
         RET
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
-
-C41A4:  PUSH    HL
-        PUSH    BC
-        PUSH    AF
-        LD      A,(KBUF+0)
-        AND     03H
-        ADD     A,A
-        LD      C,A
-        LD      B,0
-        LD      HL,I41DC
-        ADD     HL,BC
-        LD      A,(HL)
-        INC     HL
-        LD      H,(HL)
-        LD      L,A
-        POP     AF
-        LD      B,(HL)
-        INC     HL
-J41BB:  CP      (HL)
-        INC     HL
-        JR      C,J41C2
-        CP      (HL)
-        JR      C,J41D7
-J41C2:  INC     HL
-        INC     HL
-        DJNZ    J41BB
-        CP      80H
-        JR      C,J41D9
+C41A4:  CP      'a'
+        RET	C		; no change
+        CP      'z'+1
+        JR      C,J41D7		; lower case to upper case
+	CP      080H
+        RET     C
         CP      0C0H
-        JR      NC,J41D9
-        LD      C,(HL)
-        INC     HL
-        LD      H,(HL)
-        LD      L,C
-        LD      C,A
-        ADD     HL,BC
-        LD      A,(HL)
-        JR      J41D9
-J41D7:  INC     HL
-        ADD     A,(HL)
-J41D9:  POP     BC
-        POP     HL
-        RET
-
-I41DC:  DEFW    I41E4
-        DEFW    I41EA
-        DEFW    I41F0
-        DEFW    I41F6
-
-; japanese charactergenerator
-
-I41E4:  DEFB    1
-        DEFB    061H,07BH,-32
-        DEFW    I41FF-080H
+        RET     NC
+	LD	A,(DE)		; translate charcode between 080H and 0C0H
+	INC	DE
+	RET
+;
+J41D7:  ADD     A,-32		; Make uppercase
+J41D9:  RET
 
 ; international charactergenerator
-
-I41EA:  DEFB    1
-        DEFB    061H,07BH,-32
-        DEFW    I423F-080H
-
-; korean charactergenerator
-
-I41F0:  DEFB    1
-        DEFB    061H,07BH,-32
-        DEFW    I41FF-080H
-
-; unknown charactergenerator (3)
-
-I41F6:  DEFB    2
-        DEFB    061H,07BH,-32
-        DEFB    0C0H,0DFH,-32
-        DEFW    I41FF-080H
-
-I41FF:  DEFB    080H,081H,082H,083H,084H,085H,086H,087H
-        DEFB    088H,089H,08AH,08BH,08CH,08DH,08EH,08FH
-        DEFB    090H,091H,092H,093H,094H,095H,096H,097H
-        DEFB    098H,099H,09AH,09BH,09CH,09DH,09EH,09FH
-        DEFB    0A0H,0A1H,0A2H,0A3H,0A4H,0A5H,0A6H,0A7H
-        DEFB    0A8H,0A9H,0AAH,0ABH,0ACH,0ADH,0AEH,0AFH
-        DEFB    0B0H,0B1H,0B2H,0B3H,0B4H,0B5H,0B6H,0B7H
-        DEFB    0B8H,0B9H,0BAH,0BBH,0BCH,0BDH,0BEH,0BFH
 
 I423F:  DEFB    080H,09AH,045H,041H,08EH,041H,08FH,080H
         DEFB    045H,045H,045H,049H,049H,049H,08EH,08FH

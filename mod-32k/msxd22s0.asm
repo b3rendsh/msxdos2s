@@ -15,6 +15,7 @@
 ; H.J. Berends:
 ; Converted sources to assemble with z88dk z80asm
 ; Mod: Kanji, rom mapper and self check code is removed
+; Mod: removed MSX2 check
 
         INCLUDE "DISK.INC"
 
@@ -27,6 +28,16 @@ S_ORG0	EQU	04000H		; Offset for current address: $ calculations
 	PUBLIC	C4E05		; get slot id of page 1
 	PUBLIC	C4E12		; get slot id of page 2
 
+	; Routines which can be used by the disk hardware driver
+	PUBLIC  PROMPT		; Prints a message for two drive emulation on a single drive.
+	PUBLIC  GETSLT		; Get disk driver's slot address.
+	PUBLIC  GETWRK		; Get address of disk driver's work area.
+	PUBLIC  DIV16		; BC:=BC/DE, remainder in HL.
+	PUBLIC  ENASLT		; Enables a slot a address specified by A:HL.
+	PUBLIC  XFER		; Eactly emulates an LDIR.. ..used when transferring data to/fro page-1.
+	PUBLIC  SETINT		; Setup routine at (HL) as a timer interrupt routine (50Hz/60Hz0.
+	PUBLIC  PRVINT		; Calls previous timer interrupt routine...
+
 	; routines defined in s1
 	EXTERN	C49D7
 	EXTERN	J410F
@@ -34,6 +45,20 @@ S_ORG0	EQU	04000H		; Offset for current address: $ calculations
 	EXTERN	J4C09
 	EXTERN	J4AF7
 
+	; Symbols which must be defined by the disk hardware driver
+	EXTERN	INIHRD		; Initialize hardware
+	EXTERN	DRIVES		; Return number of drives in system
+	EXTERN	INIENV		; Initialize work area
+	EXTERN	DSKIO		; Sector read and write
+	EXTERN	DSKCHG		; Get disk change status
+	EXTERN	GETDPB		; Get disk parameter block (DPB)
+	EXTERN	CHOICE		; Return format choice string
+	EXTERN	DSKFMT		; Format a disk
+	EXTERN	MTOFF		; Turn drive motors off
+	EXTERN	OEMSTA		; Used for system expansion (OEMSTATEMENT)
+	EXTERN	MYSIZE		; Size of the page-3 RAM work area required by the driver in bytes.
+	EXTERN	SECLEN		; Maximum sector size for media supported by this driver (512).
+	EXTERN	DEFDPB		; Base address of an 18 byte "default" DPB for this driver.
 
 BOT16K	EQU	0C000H			; lower of 16 KB RAM
 BOT32K	EQU	08000H			; lower of 32 KB RAM
@@ -191,7 +216,7 @@ KAB_VE  EQU     0F302H  ; --S--
 CPMCAL  EQU     0F306H  ; --S--
 COUNTR  EQU     0F30EH  ; --S--
 KANJTA  EQU     0F30FH  ; ----I
-DOS_VER EQU     0F313H  ; --SL-
+DOSVER 	EQU     0F313H  ; --SL-
 P0_64K  EQU     0F314H  ; ---L-
 P1_64K  EQU     0F315H  ; ---L-
 P2_64K  EQU     0F316H  ; ---L-
@@ -325,7 +350,7 @@ LFFFF	EQU	0FFFFH
 
         DEFB    "AB"
 
-	DEFW    C403C                   ; EXTENSION ROM INIT handler
+	DEFW    J47D6                   ; EXTENSION ROM INIT handler
         DEFW    C575C                   ; EXTENSION ROM CALL statement handler
 
         DEFW    0                       ; EXTENSION ROM device handler (no device)
@@ -342,54 +367,37 @@ C4022:  JP      J4B1B                   ; SYSTEM:  Start DiskBASIC
 C4025:  SCF                             ; use specified work area
         JP      J4E67			; format disk
 C4029:  JP      J4CD3                  	; SYSTEM:  Stop drives
-
         NOP
 
-;         Subroutine GETSLT
-;            Inputs  ________________________
-;            Outputs ________________________
-
+; DOS entry point subroutine GETSLT
+;
 GETSLT:
 C402D:  JP      C4E05                  	; get slot id of page 1
 
-;	_DOSCP	4030H
-
-SINIT:
+; DOS entry point $INIT
+;
+DOS_SINIT:
 L4030:  LD      HL,(DOSHIM)             ; SYSTEM:  get top of MSXDOS memory
         RET
 
-; 04034H
+;
 ; DOS1 kernel compatible:  CP/M BIOS CONST entry
 ; This entry is supported, to use MSXDOS.SYS
-
-;	_DOSCP	4034H
-
-SSBIOS:
+;
+DOS_SSBIOS:
 C4034:  JP      J4177
 
-	DEFS    04038H-$-S_ORG0,0
-
-; 04038H
+;
 ; DOS2: pointer to kernel version ASCIIZ string
-
+;
+	DEFS    04038H-$-S_ORG0,0
         DEFW    I411E
-
-	DEFS	0403CH-$-S_ORG0,0
-
-
-;         Subroutine EXTENSION ROM INIT handler
-;            Inputs  ________________________
-;            Outputs ________________________
-
-; Mod: removed bank selection code
-C403C:  JP      J47D6
-
-	DEFS	04043H-$-S_ORG0,0
 
 ;         Subroutine EXTBIO handler
 ;            Inputs  ________________________
 ;            Outputs ________________________
-
+;
+	DEFS	04043H-$-S_ORG0,0
 I4043:  CALL    C410C
         JP      FCALSA
 
@@ -403,42 +411,40 @@ I4049:	PUSH    AF
         POP     AF
         RET
 
-;         Subroutine inter DOS2 ROM bank call
-;            Inputs  A = DOS2 ROM bank, IX = routine
-;            Outputs ________________________
-
 ; Mod: removed rom mapper code (J405B)
 
-        DEFS    04078H-$-S_ORG0,0FFH
+; Mod: relocated J4177 to J4185 here
+J4177:  LD      HL,C0086		; CONST
+        JR      J4185
+J417C:  LD      HL,C0080		; CONIN
+        JR      J4185
+J4181:  LD      C,A
+J4182:  LD      HL,C0083		; CONOUT
+J4185:  JP      GO_BIO
 
-; 04078H
+;
 ; DOS1 kernel compatible:  CP/M BIOS CONIN entry
 ; This entry is supported, to use MSXDOS.SYS
-
-;	_DOSCP	4078H
-
-SIN:
+;
+        DEFS    04078H-$-S_ORG0,0
+DOS_SIN:
         JP      J417C
 
-        DEFS    04080H-$-S_ORG0,0FFH
-
 ; DOS2:  RAMDISK driver jumpentries
-
+;
+        DEFS    04080H-$-S_ORG0,0
 L4080:  JP      J6D49                   ; RAMDISK:  DSKIO routine
 L4083:  JP      J6D39                   ; RAMDISK:  DSKCHG routine
 L4086:  JP      J6EF1                   ; RAMDISK:  GETDPB routine
 L4089:  JP      J6EF2                   ; RAMDISK:  CHOICE routine
 L408C:  JP      J6EF6                   ; RAMDISK:  DSKFMT routine
 
-        DEFS    0408FH-$-S_ORG0,0
-
-; 0408F
+;
 ; DOS1 kernel compatible:  CP/M BIOS CONOUT entry
 ; This entry is supported, to use MSXDOS.SYS
-
-;	_DOSCP	408FH
-
-SOUT:
+;
+        DEFS    0408FH-$-S_ORG0,0
+DOS_SOUT:
 L408F:  JP      J4181
 
 ; ------------------------------------------------------------------------------
@@ -451,204 +457,152 @@ I4109	EQU	J4C09
 C410C	EQU	J4AF7
 ; ------------------------------------------------------------------------------
 
-; Mod: addded s after version number to identify modified rom
-I411E:  DEFB    "MSX-DOS kernel version 2.20s",0
-I413A:
-	IF DOS201 = 1
+; Mod: addded suffix after version number to identify build options in modified rom
 
-	DEFB    "Disk BASIC version 2.01s",0
+I411E:  DEFB    "MSX-DOS kernel version 2.20",MOD1,MOD2,0
+I413A:	DEFB    "Disk BASIC version 2.01",MOD1,MOD2,0
         DEFB    "Copyright (C) 1989 ASCII Corporation",0
 
-	ELSE
+; ------------------------------------------------------------------------------
+; Todo: Relocate S0 code to the unused space between the DOS entry points.
+; ------------------------------------------------------------------------------
 
-	DEFB    "Disk BASIC version 2.00s",0
-        DEFB    "Copyright (C) 1988 ASCII Corporation",0
+; *************************************
+; -------------------------------------
 
-	ENDIF
-
-
-J4177:  LD      HL,C0086		; CONST
-        JR      J4185
-
-J417C:  LD      HL,C0080		; CONIN
-        JR      J4185
-
-J4181:  LD      C,A
-J4182:  LD      HL,C0083		; CONOUT
-J4185:  JP      GO_BIO
-
-        DEFS    041EFH-$-S_ORG0,0C9H
 ;
 ; BDOS 00CH ENTRY
 ;
-
-;	_DOSCP	41EFH
-
-CPMVER:
+        DEFS    041EFH-$-S_ORG0,0C9H
+DOS_CPMVER:
 L41EF:  LD      C,00CH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
-
-        DEFS    0436CH-$-S_ORG0,0C9H
+        JP      J4F54
 
 ;
 ; BDOS 013H ENTRY
 ;
-
-;	_DOSCP	436CH
-
-DELETE:
+        DEFS    0436CH-$-S_ORG0,0C9H
+DOS_DELETE:
 L436C:  LD      C,013H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    04392H-$-S_ORG0,0C9H
 ;
 ; BDOS 017H ENTRY
 ;
-
-;	_DOSCP	4392H
-
-RENAME:
+        DEFS    04392H-$-S_ORG0,0C9H
+DOS_RENAME:
 L4392:  LD      C,017H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    04462H-$-S_ORG0,0C9H
 ;
 ; BDOS 00FH ENTRY
 ;
-
-;	_DOSCP	4462H
-
-OPEN:
+        DEFS    04462H-$-S_ORG0,0C9H
+DOS_OPEN:
 L4462:  LD      C,00FH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    0456FH-$-S_ORG0,0C9H
 ;
 ; BDOS 010H ENTRY
 ;
-
-;	_DOSCP	456FH
-
-CLOSE:
+        DEFS    0456FH-$-S_ORG0,0C9H
+DOS_CLOSE:
 L456F:  LD      C,010H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    0461DH-$-S_ORG0,0C9H
 ;
 ; BDOS 016H ENTRY
 ;
-
-;	_DOSCP	461DH
-
-CREATE:
+        DEFS    0461DH-$-S_ORG0,0C9H
+DOS_CREATE:
 L461D:  LD      C,016H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    046BAH-$-S_ORG0,0C9H
 ;
 ; BDOS 02FH ENTRY
 ;
-
-;	_DOSCP	46BAH
-
-ABSREA:
+        DEFS    046BAH-$-S_ORG0,0C9H
+DOS_ABSREA:
 L46BA:  LD      C,02FH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    04720H-$-S_ORG0,0C9H
 ;
 ; BDOS 030H ENTRY
 ;
-
-;	_DOSCP	4720H
-
-ABSWRI:
+        DEFS    04720H-$-S_ORG0,0C9H
+DOS_ABSWRI:
 L4720:  LD      C,030H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    04775H-$-S_ORG0,0C9H
 ;
 ; BDOS 014H ENTRY
 ;
-
-;	_DOSCP	4775H
-
-SEQRD:
+        DEFS    04775H-$-S_ORG0,0C9H
+DOS_SEQRD:
 L4775:  LD      C,014H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    0477DH-$-S_ORG0,0C9H
 ;
 ; BDOS 015H ENTRY
 ;
-
-;	_DOSCP	477DH
-
-SEQWRT:
+        DEFS    0477DH-$-S_ORG0,0C9H
+DOS_SEQWRT:
 L477D:  LD      C,015H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    04788H-$-S_ORG0,0C9H
 ;
 ; BDOS 021H ENTRY
 ;
-
-;	_DOSCP	4788H
-
-RNDRD:
+        DEFS    04788H-$-S_ORG0,0C9H
+DOS_RNDRD:
 L4788:  LD      C,021H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    04793H-$-S_ORG0,0C9H
 ;
 ; BDOS 022H ENTRY
 ;
-
-;	_DOSCP	4793H
-
-RNDWRT:
+        DEFS    04793H-$-S_ORG0,0C9H
+DOS_RNDWRT:
 L4793:  LD      C,022H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    047B2H-$-S_ORG0,0C9H
 ;
 ; BDOS 027H ENTRY
 ;
-
-;	_DOSCP	47B2H
-
-BLKRD:
+        DEFS    047B2H-$-S_ORG0,0C9H
+DOS_BLKRD:
 L47B2:  LD      C,027H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    047BEH-$-S_ORG0,0C9H
 ;
 ; BDOS 026H ENTRY
 ;
-
-;	_DOSCP	47BEH
-
-BLKWRT:
+        DEFS    047BEH-$-S_ORG0,0C9H
+DOS_BLKWRT:
 L47BE:  LD      C,026H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    047D1H-$-S_ORG0,0C9H
 ;
 ; BDOS 028H ENTRY
 ;
-
-;	_DOSCP	47D1H
-
-ZWRITE:
+        DEFS    047D1H-$-S_ORG0,0C9H
+DOS_ZWRITE:
 L47D1:  LD      C,028H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
+; -------------------------------------
+; *************************************
+
+
+;         Subroutine EXTENSION ROM INIT handler
+;            Inputs  ________________________
+;            Outputs ________________________
 
 J47D6:  CALL    INIHRD			; initialize hardware disk driver
         DI 
         LD      A,(IDBYT2)
         OR      A			; MSX2 or higher ?
-        RET     Z			; nope, quit
+	NOP				; Mod: no MSX2 check with "ret z"
         LD      A,(DISKID)
         OR      A			; initialize disk system canceled ?
         RET     M			; yep, quit
@@ -725,7 +679,7 @@ J4845:  LD      (HL),0C9H
 
 ; disk interface not starting the disk system initialization
 
-J4865:  LD      A,(DOS_VER)
+J4865:  LD      A,(DOSVER)
         CP      22H			; disk system initialization by disk system version 2.20 or higher ?
         JR      NC,J4888		; yep,
 
@@ -734,7 +688,7 @@ J4865:  LD      A,(DOS_VER)
         CALL    C492A			; switch system RAM to slot with memory mapper
         RET     C			; not found, quit
 J4870:  LD      A,22H
-        LD      (DOS_VER),A		; update disk system version to 2.2x
+        LD      (DOSVER),A		; update disk system version to 2.2x
         CALL    C402D                   ; GETSLT
         LD      HL,H_RUNC
         LD      (HL),0F7H
@@ -1916,164 +1870,124 @@ J4F54:  XOR     A
         LD      (CPMCAL),A		; assume not a CP/M function call (for compatibility with MSXDOS1)
         JP      J6A86			; execute DOS1 BDOS function
 
-        DEFS    04FB8H-$-S_ORG0,0C9H
+; *************************************
+; -------------------------------------
+
 ;
 ; BDOS 011H ENTRY
 ;
-
-;	_DOSCP	4FB8H
-
-SRCHFR:
+        DEFS    04FB8H-$-S_ORG0,0C9H
+DOS_SRCHFR:
 L4FB8:  LD      C,011H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    05006H-$-S_ORG0,0C9H
 ;
 ; BDOS 012H ENTRY
 ;
-
-;	_DOSCP	5006H
-
-SRCHNX:
+        DEFS    05006H-$-S_ORG0,0C9H
+DOS_SRCHNX:
 L5006:  LD      C,012H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    0501EH-$-S_ORG0,0C9H
 ;
 ; BDOS 023H ENTRY
 ;
-
-;	_DOSCP	501EH
-
-FILESI:
+        DEFS    0501EH-$-S_ORG0,0C9H
+DOS_FILESI:
 L501E:  LD      C,023H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    0504EH-$-S_ORG0,0C9H
 ;
 ; BDOS 018H ENTRY
 ;
-
-;	_DOSCP	504EH
-
-LOGIN:
+        DEFS    0504EH-$-S_ORG0,0C9H
+DOS_LOGIN:
 L504E:  LD      C,018H
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    05058H-$-S_ORG0,0C9H
 ;
 ; BDOS 01AH ENTRY
 ;
-
-
-;	_DOSCP	5058H
-
-SETDMA:
+        DEFS    05058H-$-S_ORG0,0C9H
+DOS_SETDMA:
 L5058:  LD      C,01AH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    0505DH-$-S_ORG0,0C9H
 ;
 ; BDOS 01BH ENTRY
 ;
-
-;	_DOSCP	505DH
-
-GETEFA:
+        DEFS    0505DH-$-S_ORG0,0C9H
+DOS_GETEFA:
 L505D:  LD      C,01BH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    0509FH-$-S_ORG0,0C9H
 ;
 ; BDOS 00DH ENTRY
 ;
-
-;	_DOSCP	509FH
-
-DSKRES:
+        DEFS    0509FH-$-S_ORG0,0C9H
+DOS_DSKRES:
 L509F:  LD      C,00DH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    050A9H-$-S_ORG0,0C9H
 ;
 ; DOS1 kernel compatible:  flush buffers
 ; This entry is supported, to use MSXDOS.SYS
 ;
-
-;	_DOSCP	50A9H
-
-WRTFAT:
+        DEFS    050A9H-$-S_ORG0,0C9H
+DOS_WRTFAT:
 L50A9:  LD      BC,0FFH*256+5FH		; drive = all, function = flush disk buffers
         LD      D,0			; flush only
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    050C4H-$-S_ORG0,0C9H
 ;
 ; BDOS 019H ENTRY
 ;
-
-;	_DOSCP	50C4H
-
-GETDRV:
+        DEFS    050C4H-$-S_ORG0,0C9H
+DOS_GETDRV:
 L50C4:  LD      C,019H
         JR      L50CA
 
-        DEFS    050C8H-$-S_ORG0,0C9H
 ;
 ; BDOS 024H ENTRY
 ;
-
-;	_DOSCP	50C8H
-
-SETRND:
+        DEFS    050C8H-$-S_ORG0,0C9H
+DOS_SETRND:
 L50C8:  LD      C,024H
-L50CA:  JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+L50CA:  JP      J4F54
 
-        DEFS    050D5H-$-S_ORG0,0C9H
 ;
 ; BDOS 00EH ENTRY
 ;
-
-;	_DOSCP	50D5H
-
-SELDSK:
+        DEFS    050D5H-$-S_ORG0,0C9H
+DOS_SELDSK:
 L50D5:  LD      C,00EH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    050E0H-$-S_ORG0,0C9H
 ;
 ; BDOS 00AH ENTRY
 ;
-
-;	_DOSCP	50E0H
-
-BUFIN:
+        DEFS    050E0H-$-S_ORG0,0C9H
+DOS_BUFIN:
 L50E0:  LD      C,00AH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    05183H-$-S_ORG0,0C9H
 ;
 ; DOS1 kernel compatible:  newline to console
 ; This entry is supported, to use MSXDOS.SYS
 ;
-
-;	_DOSCP	5183H
-
-CRLF:
+        DEFS    05183H-$-S_ORG0,0C9H
+DOS_CRLF:
 L5183:  LD      E,13
         CALL    L53A7
         LD      E,10
         JP      L53A7
 
-        DEFS    0535DH-$-S_ORG0,0C9H
 ;
 ; DOS1 kernel compatible:  print abort string (DOS1:  ^C)
 ; This entry is supported, to use MSXDOS.SYS
 ;
-
-;	_DOSCP	535DH
-
-BUFOUT:
+        DEFS    0535DH-$-S_ORG0,0C9H
+DOS_BUFOUT:
 L535D:  EXX
         PUSH    BC              	; errorcode
         EXX
@@ -2097,16 +2011,13 @@ L5379:  LD      A,(DE)
         INC     DE
         JR      L5379
 
-        DEFS 053A7H-$-S_ORG0,0C9H
 ;
 ; BDOS 002H ENTRY
 ;
-
-;	_DOSCP	53A7H
-
-CONOUT:
+        DEFS 053A7H-$-S_ORG0,0C9H
+DOS_CONOUT:
 L53A7:  LD      C,2
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
 C53AC:	LD	HL,0C91AH	; LD A,(DE)  RET
         PUSH	HL 		; on stack (routine)
@@ -2128,146 +2039,112 @@ C53C0:	LD	HL,SDOSON
         PUSH	HL 		; Call "routine" on stack
         JP	SDOSOF		; Switch RAM on page 1
 
-        DEFS    0543CH-$-S_ORG0,0C9H
 ;
 ; BDOS 00BH ENTRY
 ;
-
-;	_DOSCP	543CH
-
-CONSTA:
+        DEFS    0543CH-$-S_ORG0,0C9H
+DOS_CONSTA:
 L543C:  LD      C,00BH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    05445H-$-S_ORG0,0C9H
 ;
 ; BDOS 001H ENTRY
 ;
-
-;	_DOSCP	5445H
-
-CONIN:
+        DEFS    05445H-$-S_ORG0,0C9H
+DOS_CONIN:
 L5445:  LD      C,1
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    0544EH-$-S_ORG0,0C9H
 ;
 ; BDOS 008H ENTRY
 ;
-
-;	_DOSCP	544EH
-
-IN:
+        DEFS    0544EH-$-S_ORG0,0C9H
+DOS_IN:
 L544E:  LD      C,8
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    05454H-$-S_ORG0,0C9H
 ;
 ; BDOS 006H ENTRY
 ;
-
-;	_DOSCP	5454H
-
-RAWIO:
+        DEFS    05454H-$-S_ORG0,0C9H
+DOS_RAWIO:
 L5454:  LD      C,6
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    05462H-$-S_ORG0,0C9H
 ;
 ; BDOS 007H ENTRY
 ;
-
-;	_DOSCP	5462H
-
-RAWINP:
+        DEFS    05462H-$-S_ORG0,0C9H
+DOS_RAWINP:
 L5462:  LD      C,7
         DEFB    011H            ; Pseudo LD DE,nnnn
 ;
 ; BDOS 005H ENTRY
 ;
-
-;	_DOSCP	5465H
-
-LIST:
+DOS_LIST:
 L5465:  LD      C,5
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    0546EH-$-S_ORG0,0C9H
 ;
 ; BDOS 003H ENTRY
 ;
-
-;	_DOSCP	546EH
-
-READER:
+        DEFS    0546EH-$-S_ORG0,0C9H
+DOS_READER:
 L546E:  LD      C,3
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    05474H-$-S_ORG0,0C9H
 ;
 ; BDOS 004H ENTRY
 ;
-
-;	_DOSCP	5474H
-
-PUNCH:
+        DEFS    05474H-$-S_ORG0,0C9H
+DOS_PUNCH:
 L5474:  LD      C,4
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    0553CH-$-S_ORG0,0C9H
 ;
 ; BDOS 02AH ENTRY
 ;
-
-;	_DOSCP	553CH
-
-GETDAT:
+        DEFS    0553CH-$-S_ORG0,0C9H
+DOS_GETDAT:
 L553C:  LD      C,02AH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    05552H-$-S_ORG0,0C9H
 ;
 ; BDOS 02BH ENTRY
 ;
-
-;	_DOSCP	5552H
-
-SETDAT:
+        DEFS    05552H-$-S_ORG0,0C9H
+DOS_SETDAT:
 L5552:  LD      C,02BH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    055DBH-$-S_ORG0,0C9H
 ;
 ; BDOS 02CH ENTRY
 ;
-
-;	_DOSCP	55DBH
-
-GETTIM:
+        DEFS    055DBH-$-S_ORG0,0C9H
+DOS_GETTIM:
 L55DB:  LD      C,02CH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    055E6H-$-S_ORG0,0C9H
 ;
 ; BDOS 02DH ENTRY
 ;
-
-;	_DOSCP	55E6H
-
-SETTIM:
+        DEFS    055E6H-$-S_ORG0,0C9H
+DOS_SETTIM:
 L55E6:  LD      C,02DH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
 
-        DEFS    055FFH-$-S_ORG0,0C9H
 ;
 ; BDOS 02EH ENTRY
 ;
+        DEFS    055FFH-$-S_ORG0,0C9H
 
-;	_DOSCP	55FFH
-
-SETRAW:
+DOS_SETRAW:
 L55FF:  LD      C,2EH
-        JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+        JP      J4F54
+
+; -------------------------------------
+; *************************************
+
 
 ;         Subroutine allocate memory (adjust BASIC areapointers)
 ;            Inputs  ________________________
@@ -2694,11 +2571,6 @@ C58AF:  CALL    C6654			; check for BASIC character
 J58C7:  SRL     D
         RR      E
         JR      NC,J58CE
-
-; HSH V2 has
-;       LD      D,E
-; looks like a bit in EPROM was corrupted (013H vs 053H)
-
         INC     DE
 J58CE:  DJNZ    J58C7
         LD      A,E
@@ -3029,20 +2901,11 @@ C5A82:  EI
         INC     HL
         INC     HL			; +2
 
-	IF DOS201 = 1
-
+	; DOS201 fix
         XOR     A
         LD      (HL),A                  ; record size = 1
         INC     HL			; +3
         LD      (HL),A                  ; clear backup character
-
-	ELSE
-
-	INC	HL			; +3
-	XOR	A
-	LD	(HL),A                  ; clear backup character
-
-	ENDIF
 
         INC     HL			; +4
         LD      (HL),D                  ; update device
@@ -3569,7 +3432,7 @@ J5DAB:  POP     HL			; restore size of work area
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5DB6:  PUSH    DE			; store device coode
+C5DB6:  PUSH    DE			; store device code
         XOR     A
         LD      (RUNBNF),A		; assume destination = RAM without execute
         LD      C,A
@@ -4547,62 +4410,31 @@ C6361:  LD      A,1
         INC     HL
         LD      B,(HL)			; file handle
 
-	IF DOS201 = 1
+	;DOS201 fixes
 
         INC     HL
         LD      C,(HL)			; record size -1
-
-	ENDIF
-
         LD      A,1			; relative to the current position
         LD      DE,0
         LD      HL,0			; offset = 0
-
-
-	IF DOS201 = 1
-
         PUSH    BC			; store file handle, record size -1
         LD      C,4AH			; function = move file handle pointer
-
-        ELSE
-
-        LD      C,4AH			; function = move file handle pointer
-        PUSH    BC			; store file handle, 4AH
-
-        ENDIF
-
-
         CALL    C655D			; execute BDOS function (handle error)
         POP     BC			; restore file handle, record size -1
         POP     AF			; restore function
         DEC     A			; LOC ?
-
-	IF DOS201 = 1
-
         JR      NZ,J6399		; nope, return file size
         PUSH    BC			; store file handle, record size -1
         CALL    C63E4			; calculate LOC value
         POP     BC			; restore file handle, record size -1
         JR      J63B7			; return LOC value
 
-	ELSE
-
-	JR	Z,J63B7			; yep, return current position
-
-	ENDIF
-
 J6399:  PUSH    HL
         PUSH    DE			; store current position
         LD      A,2			; relative to the end of the file
         LD      DE,0
         LD      HL,0			; offset = 0
-
-	IF DOS201 = 1
-
-        LD      C,4AH			; function = move file handle pointer
-
-	ENDIF
-
+	LD      C,4AH			; function = move file handle pointer
         PUSH    BC			; store file handle
         CALL    C655D			; execute BDOS function (handle error)
         POP     BC			; restore file handle
@@ -4638,9 +4470,6 @@ C63BA:  PUSH    BC			; store low word value
         CALL    C664F			; convert to single float (low word value)
         CALL    CONDS			; convert to double float
         JP      DECADD			; DAC = DAC + ARG
-
-
-	IF DOS201 = 1
 
 ;         Subroutine calculate LOC value
 ;            Inputs  ________________________
@@ -4679,8 +4508,6 @@ J6403:  OR      A
         RET     NZ
         INC     D
         RET
-
-	ENDIF
 
 ;         Subroutine disk free (H_DSKF)
 ;            Inputs  ________________________
@@ -6397,7 +6224,6 @@ J6EF6:  LD      A,0CH
         RET
 
 ; DRIVER section starts here
-
-        INCLUDE	"DRIVER.ASM"
-
+; See driver.asm
+ 
 ; Mod: no filling to end of bank

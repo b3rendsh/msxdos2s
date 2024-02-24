@@ -3,6 +3,7 @@ MSX DOS 2 sources:
 - Copy of MSX DOS 2.2 sources from sourceforge (subset)  
 - Converted sources to assemble with z88dk's z80asm  
 - Modified sources to create a MSX DOS 2.2 32K ROM  
+- Optional FAT16 kernel patch  
   
 BEER IDE sources:  
 - Experimental new driver version 2.0, compatible with DOS 2.2  
@@ -17,8 +18,8 @@ The original 64K ROM came on a cartridge with a ROM mapper. To use that version 
   
 Putting the ROM inside an MSX-2 machine can be relatively easy, depending on the machine and slot layout. Note that the internal DOS 1 DISKROM should remain in place because it contains the OEM disk driver. 
     
-The next steps are to include the new BEER IDE driver and a FAT16 patch in the 32K DOS 2 ROM.
-
+Next steps are to build an optimized BEER IDE 2.0 disk based driver for Nextor.  
+  
 The source files are provided and modified for study only.  
 
 ## References
