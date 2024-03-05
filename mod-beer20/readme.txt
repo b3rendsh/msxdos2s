@@ -21,10 +21,10 @@ Limitations
 the limitations regarding the format of the disk. For compatibility 
 with DOS 2.2 FAT12 it is recommended to flash a CF card with the 
 existing msxmenu-v1.68-beer.dsk or other with the same disk structure.
-2. When using BEER-IDE with another DOS version 2.2 or higher make sure
-that DOS 2.2 is loaded before the BEER-IDE. Eg. DOS 2+ interface in 
-slot 1 and BEER-IDE in slot 2. If not then the system may halt with 
-the message "Not enough memory".
+2. Look for the BEER19_OLD and FLOPPY labels in the source code to see 
+the details what changed compared to version 1.9. Most notably the drive
+assignment to internal floppy disks is no longer fixed to A and B but 
+according to MSX-DOS default behaviour.
 
 Work in progress
 ----------------

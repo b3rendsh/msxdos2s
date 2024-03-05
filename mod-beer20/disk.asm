@@ -20,6 +20,9 @@
 ; is 100% identical to the SONY and Philips NMS8250. Check with the OEM build 
 ; which uses a driver stub.
 
+
+; DEFINE FLOPPY			; Uncomment for BEER 1.9 compatible floppy drive A and B assignment
+
 	SECTION DISK 
         ORG     04000H
 
@@ -764,7 +767,7 @@ A41B5:  ld      d,a
 
 ; Identification string (not used)
 IFDEF BEER20
-Q41C1:  defb    " MSX-DOS IDE v2.0 based on SOLiD IDE v1.9     "
+Q41C1:  defb    " MSX-DOS IDE v2.01 based on SOLiD IDE v1.9    "
 ELSE
 Q41C1:  defb    " MSX-DOS ver. 2.2 Copyright 1984 by Microsoft "
 ENDIF
@@ -4819,7 +4822,7 @@ A5825:  call    A5FCD                   ; get my SLTWRK entry
         jr      nc,A5838
         ld      (MAXSEC),de             ; nope, adjust
 A5838:
-IFDEF BEER20
+IFDEF FLOPPY
 ; Beer19 will initially skip the 1st diskinterface in the DRVTABLE so the floppydisk interface
 ; can take this position. The result is that drives A and B will be reserved for floppy and 
 ; C to F for the IDE harddisk. If after basic initialization it turns out there is no floppy 
@@ -4857,7 +4860,7 @@ A5850:  call    DRIVES                  ; query no. of drives
         ld      a,8
         sub     c                       ; as much as possible
 A585C:
-IFDEF BEER20
+IFDEF FLOPPY
 ; Floppy - Part 2 of 3
 r275:	ld	(de),a
 	push	af
@@ -4985,7 +4988,7 @@ A58F0:  ld      (hl),0C3H
         inc     hl
         djnz    A58F0                   ; initialize jumptable
 
-IFDEF BEER20
+IFDEF FLOPPY
 ; Adjust DRVTBL if the reserved space for the floppy diskinterface is not taken after initialization.
 ; This only works correctly if beer ide is the master disk interface.
 ; Floppy - Part 3 of 3
@@ -5266,7 +5269,7 @@ J5A36:  LD      (HL),A
         ADD     HL,DE
         LD      (HL),X003B % 256	; LOW X003B
         INC     HL
-        LD      (HL),X003B / 256	; HIGH X003B update "store and change secundairy slotregister" routine
+        LD      (HL),X003B / 256	; HIGH X003B update "store and change secondary slotregister" routine
         LD      HL,T63BA
         CALL    A6306                   ; relocate
 
@@ -6096,7 +6099,7 @@ A5FC2:
 ;       Inputs          -
 ;       Outputs         HL = pointer to SLTWRK entry
 
-A5FCD:  call    A5FE7                   ; get my primairy slot
+A5FCD:  call    A5FE7                   ; get my primary slot
         add     a,a
         add     a,a
         add     a,a
@@ -6828,7 +6831,7 @@ J6436:  POP     BC
         LD      A,B
         AND     3FH
         OR      C
-        CALL    X0046                   ; restore secundairy slotregister
+        CALL    X0046                   ; restore secondary slotregister
         POP     AF
         POP     HL
         RET
@@ -6913,7 +6916,7 @@ R007E:  CALL    C64E7
         OR      D
         LD      HL,SLTTBL
         ADD     HL,BC
-        LD      (HL),A                  ; update secundairy slotregister copy in SLTTBL
+        LD      (HL),A                  ; update secondary slotregister copy in SLTTBL
         PUSH    HL
         EX      AF,AF'
         EXX
@@ -6927,7 +6930,7 @@ R0094:  CALL    C6455                   ; MSXDOS CALSLT
         AND     3FH
         OR      C
         DI
-        CALL    X004B                   ; restore secundairy slotregister
+        CALL    X004B                   ; restore secondary slotregister
         LD      (HL),E
         EX      AF,AF'
         EXX
@@ -6956,7 +6959,7 @@ R00BC:  CALL    C64E7
         OR      D
         LD      HL,SLTTBL
         ADD     HL,BC
-        LD      (HL),A                  ; update secundairy slotregister copy in SLTTBL
+        LD      (HL),A                  ; update secondary slotregister copy in SLTTBL
         POP     HL
         LD      A,C
         JR      J649C                   ; MSXDOS ENASLT
@@ -7028,7 +7031,7 @@ J64FF:  ADD     A,55H
         CPL
         LD      H,A
         POP     AF
-R0116:  CALL    C655C                   ; store and change secundairy slotregister
+R0116:  CALL    C655C                   ; store and change secondary slotregister
         POP     AF
         AND     03H
         RET
@@ -7043,7 +7046,7 @@ C6511:  LD      C,A                     ; store slotid
         LD      A,C                     ; restore slotid
         RET     NZ                      ; not page 0, quit
         LD      A,(RAMAD0)
-        AND     E                       ; get primairy slot from slotid helper routines
+        AND     E                       ; get primary slot from slotid helper routines
         CP      B                       ; same as requested ?
         LD      A,C                     ; restore slotid
         RET
@@ -7052,7 +7055,7 @@ C6511:  LD      C,A                     ; store slotid
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-J651E:  CALL    C6549                   ; switch page 0 (same primairy slot)
+J651E:  CALL    C6549                   ; switch page 0 (same primary slot)
         LD      E,(HL)                  ; read byte from slot
         JR      C6529
 
@@ -7061,21 +7064,21 @@ J651E:  CALL    C6549                   ; switch page 0 (same primairy slot)
 ;       Outputs         ________________________
 
 J6524:  POP     DE
-R0131:  CALL    C6549                   ; switch page 0 (same primairy slot)
+R0131:  CALL    C6549                   ; switch page 0 (same primary slot)
         LD      (HL),E                  ; write byte to slot
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C6529:  LD      A,B                     ; stored secundairy slotregister
-        JR      J6557                   ; restore secundairy slotregister and quit
+C6529:  LD      A,B                     ; stored secondary slotregister
+        JR      J6557                   ; restore secondary slotregister and quit
 
 ;       Subroutine      workaround code CALSLT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-J652C:  CALL    C6541                   ; switch page 0 (same primairy slot)
+J652C:  CALL    C6541                   ; switch page 0 (same primary slot)
         PUSH    HL
         PUSH    BC
         EX      AF,AF'
@@ -7086,7 +7089,7 @@ J652C:  CALL    C6541                   ; switch page 0 (same primairy slot)
         POP     BC
 R0145:  CALL    C6529
         POP     HL
-        LD      (HL),B                  ; update secundairy slotregister copy in SLTTBL
+        LD      (HL),B                  ; update secondary slotregister copy in SLTTBL
         EX      AF,AF'
         EXX
         RET
@@ -7095,12 +7098,12 @@ R0145:  CALL    C6529
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C6541:  CALL    C6549                   ; switch page 0 (same primairy slot)
+C6541:  CALL    C6549                   ; switch page 0 (same primary slot)
         LD      HL,SLTTBL
-        LD      (HL),D                  ; update secundairy slotregister copy in SLTTBL (BUG, assumes primairy slot 0!)
+        LD      (HL),D                  ; update secondary slotregister copy in SLTTBL (BUG, assumes primary slot 0!)
         RET
 
-;       Subroutine      switch page 0 (same primairy slot)
+;       Subroutine      switch page 0 (same primary slot)
 ;       Inputs          A = slotid
 ;       Outputs         ________________________
 
@@ -7110,10 +7113,10 @@ C6549:  RRCA
         LD      D,A                     ; get secundiary slot from slotid
         LD      A,(YFFFF)
         CPL
-        LD      B,A                     ; store current secundairy slot register
+        LD      B,A                     ; store current secondary slot register
         AND     0FCH
         OR      D
-        LD      D,A                     ; new secundairy slot register, page 0 switched
+        LD      D,A                     ; new secondary slot register, page 0 switched
 J6557:  LD      (YFFFF),A
         LD      A,E
         RET
@@ -7125,34 +7128,34 @@ L63F4   EQU     C655C-C63F4
 
 
 
-;       Subroutine      store and change secundairy slotregister (helper routine at 003BH)
+;       Subroutine      store and change secondary slotregister (helper routine at 003BH)
 ;       Inputs          ________________________
 ;       Outputs         _______________________
 
 C655C:
 	PHASE	003BH
 
-X003B:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
+X003B:  OUT     (0A8H),A                ; make secondary slotregister accessable (switch page 3)
         LD      A,(YFFFF)
         CPL
-        LD      L,A                     ; store current secundairy slotregister
+        LD      L,A                     ; store current secondary slotregister
         AND     H
         OR      D
-        JR      J656F                   ; change secundairy slotregister, restore primairy slotregister and quit
+        JR      J656F                   ; change secondary slotregister, restore primary slotregister and quit
 
-;       Subroutine      restore secundairy slotregister (helper routine at 0046H)
+;       Subroutine      restore secondary slotregister (helper routine at 0046H)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-X0046:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
+X0046:  OUT     (0A8H),A                ; make secondary slotregister accessable (switch page 3)
         LD      A,L
-        JR      J656F                   ; change secundairy slotregister, restore primairy slotregister and quit
+        JR      J656F                   ; change secondary slotregister, restore primary slotregister and quit
 
-;       Subroutine      restore secundairy slotregister (helper routine at 004BH)
+;       Subroutine      restore secondary slotregister (helper routine at 004BH)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-X004B:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
+X004B:  OUT     (0A8H),A                ; make secondary slotregister accessable (switch page 3)
         LD      A,E
 J656F:  LD      (YFFFF),A
         LD      A,B
