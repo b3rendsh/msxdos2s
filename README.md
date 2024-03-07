@@ -7,19 +7,23 @@ MSX DOS 2 sources:
   
 BEER IDE sources:  
 - Experimental new driver version 2.0, compatible with DOS 2.2  
+- DOS 1.03 disk system with integrated BEER 2.0 driver and disk kernel customization  
+  
+Development:  
+- Restructured MSX DOS 2.2 disk system with integrated BEER 2.0 driver  
+- Optional FAT16 kernel patch where the ramdisk function is preserved  
 
 ## Information
-This repository contains modified MSX DOS 2.2 sources. 
-The purpose is to create a 32K ROM that can run from a standard MSX cartridge.  
-Kanji support and dos2memchk ("CALL DOS2MEMCHK" in BASIC) are removed to reduce size.  
-There is no OEM disk driver included, only the dummy driver from ASCII.  
-    
+This repository contains modified MSX DOS 2.2 sources. The purpose is to create a 32K ROM that can run from a standard MSX cartridge or can be used as a disk ROM for the BEER IDE interface.  
+  
+Kanji support and dos2memchk ("CALL DOS2MEMCHK" in BASIC) are removed to reduce size. The standard version includes the dummy disk driver from ASCII. 
+  
+The development version includes the BEER 2.0 driver. To use it with existing disks make sure that the boot partition contains the msxdos2.sys and command2.com version 2.20 or compatible. The system won't work reliably with a DOS 1 based shell or other alternative, the same limitations as the original DOS 2.2 apply. Without boot disk the system will start disk basic.  
+  
 The original 64K ROM came on a cartridge with a ROM mapper. To use that version you need a small logic circuit e.g. a 74LS138 and 74LS74 in addition to a 64K EPROM. With the 32K version this circuit is no longer needed.  
   
-Putting the ROM inside an MSX-2 machine can be relatively easy, depending on the machine and slot layout. Note that the internal DOS 1 DISKROM should remain in place because it contains the OEM disk driver. 
+Putting the ROM inside an MSX-2 machine can be relatively easy, depending on the machine and slot layout. Note that any internal DOS 1 disk ROM should remain in place because it contains the OEM disk driver. 
     
-Next steps are to build an optimized BEER IDE 2.0 disk based driver for Nextor.  
-  
 The source files are provided and modified for study only.  
 
 ## References

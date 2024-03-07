@@ -31,12 +31,22 @@ Sources in src-z80asm folder.
 
 
 BEER20_DISK.ROM
---------------
+---------------
 New experimental driver version 2.0 for the BEER-IDE disk interface.
 The included DOS version is 1.03. 
 With this rom you can use the beer-ide together with higher DOS versions.
 Also the MS-DOS file system compatibility is improved.
 Sources in mod-beer20 folder.
+
+
+DEVELOPMENT
+-----------
+Newer development versions will not be provided as a ROM in this repository.
+There will be a build script so you can create the ROM from source code.
+You can choose the target build options that are most suitable for you.
+Sources in dev-32k folder.
+
+
 
 
 
