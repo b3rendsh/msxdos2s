@@ -24,7 +24,8 @@ The original 64K ROM came on a cartridge with a ROM mapper. To use that version 
   
 Putting the ROM inside an MSX-2 machine can be relatively easy, depending on the machine and slot layout. Note that any internal DOS 1 disk ROM should remain in place because it contains the OEM disk driver. 
     
-The source files are provided and modified for study only.  
+## Limitations
+The source files are provided and modified for study only and the ROM files are provided for testing only. This repository contains mostly a re-composition of the creative work of ASCII, SOLiD, OKEI and maybe others. It is provided freely and "as it is" in the hope that it will be useful, but without any warranty of any kind, either expressed or implied. Use at own risk!  
 
 ## References
 MSX system sources:  
