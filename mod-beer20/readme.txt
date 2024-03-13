@@ -7,13 +7,23 @@ The goal is to improve compatibility and enable future enhancements
 and support by the MSX development community by providing restructured 
 and documented open sources for the disk interface rom.
 
-Improvement
------------
+The BEER-IDE disk interface codebase consists of following modules:
+1. Standard MSX-DOS 1.03 disk system.
+2. Disk system enhancements i.e. FAT and floppy drive handling.
+3. Low level IDE disk driver for use with the BEER-202 hardware.
+
+
+Improvements
+------------
 Main improvement is that it now works with other disk interfaces, DOS 2
 or Nextor in the same system. If the DOS version of the other disk 
 interface is 2.2 or higher then that one will become the master disk 
 interface. If it is a DOS 1 interface (e.g. floppy) then the BEER-IDE
 will become the master disk interface.
+
+The low-level module can now also be used as a driver in a MSX-DOS 2.2 
+based disk system.
+
 
 Limitations
 -----------
@@ -26,18 +36,19 @@ the details what changed compared to version 1.9. Most notably the drive
 assignment to internal floppy disks is no longer fixed to A and B but 
 according to MSX-DOS default behaviour.
 
+
 Work in progress
 ----------------
-1. Integrate driver and FAT16 patch in a 32K DOS 2.2 rom.
-2. Dynamic drive assignment.
-3. Device based driver for Nextor.
-4. Improve standard disk format compatibility with MS-DOS.
-5. Hardware update BEER-202 with 32K DOS 2.2 and DOS1/DOS2 switch.
-6. DOS 2.2 BEER-IDE for MSX-1/64K without mapper (feasibility study).
+1. Dynamic drive assignment.
+2. Device based driver for Nextor.
+3. Improve standard disk format compatibility with MS-DOS.
+4. Hardware update BEER-202 with 32K DOS 2.2 and DOS1/DOS2 switch.
+5. DOS 2.2 BEER-IDE for MSX-1/64K without mapper (feasibility study).
+
 
 Disclaimer
 ----------
-This is an expiremental driver for the BEER-IDE interface, it has been
+This is an experimental driver for the BEER-IDE interface, it has been
 tested in OpenMSX and with a real BEER-202 card in a Philips VG8010
 MSX-1 and NMS8255 MSX-2 computer. It is provided freely and "as it is"
 in the hope that it will be useful, but without any warranty of any 

@@ -626,8 +626,12 @@ OEMSTA:	scf
 
 ; ------------------------------------------
 ; Default DPB pattern
+; Note that the beer18 sources didn't include the DRIVE in the DPB definition
+; Any references to the DEFAULT_DPB label had offfset -1 so the ret opcode (C9) 
+; from the routine above would be included as drive number.
 ; ------------------------------------------
 DEFAULT_DPB:
+	db	000h		; DRIVE		Drive number (beer19: C9)
 	db	0F9h		; MEDIA		Media type
 	dw	200h		; SECSIZ	Sector size
 	db	00Fh		; DIRMSK	Directory mask
