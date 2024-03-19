@@ -24,6 +24,12 @@ will become the master disk interface.
 The low-level module can now also be used as a driver in a MSX-DOS 2.2 
 based disk system.
 
+The disk system will dynamically assign drives for the number of defined 
+and accessible primary partitions on the disk e.g. if there are 2 primary 
+partitions on a disk then 2 drives are assigned not 4. This prevents
+the creation of phantom drive letters.
+
+
 
 Limitations
 -----------
@@ -39,11 +45,10 @@ according to MSX-DOS default behaviour.
 
 Work in progress
 ----------------
-1. Dynamic drive assignment.
-2. Device based driver for Nextor.
-3. Improve standard disk format compatibility with MS-DOS.
-4. Hardware update BEER-202 with 32K DOS 2.2 and DOS1/DOS2 switch.
-5. DOS 2.2 BEER-IDE for MSX-1/64K without mapper (feasibility study).
+1. Device based driver for Nextor.
+2. Improve standard disk format compatibility with MS-DOS.
+3. Hardware update BEER-202 with 32K DOS 2.2 and DOS1/DOS2 switch.
+4. DOS 2.2 BEER-IDE for MSX-1/64K without mapper (feasibility study).
 
 
 Disclaimer

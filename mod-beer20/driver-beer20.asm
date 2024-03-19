@@ -63,6 +63,17 @@ DEFDPB		EQU	DEFAULT_DPB
 GetWorkBuf	EQU	GETWRK
 GetMySlot	EQU	GETSLT
 
+; Structure of disk interface work area:
+; +00,4	First absolute sector of partition #1
+; +04	Partition type of partition #1
+; +05,4	First absolute sector of partition #2
+; +09	Partition type of partition #2
+; +10,4	First absolute sector of partition #3
+; +14	Partition type of partition #3
+; +15,4	First absolute sector of partition #4
+; +19 	Partition type of partition #4
+; +20 	Current drive (?)
+; +21 	Boot drive (last partition that is flagged active)
 
 ; ------------------------------------------
 ; INIHRD - Initialize the HDD / get sectors & heads
@@ -108,17 +119,63 @@ ExitDiskInit:
 
 ; ------------------------------------------
 ; DRIVES - Get number of drives connected
-; A maximum of 4 primary partitions is supported, therefore returns fixed value 4.
+; A maximum of 4 primary partitions is supported.
 ; Input:
 ;   F = The zero flag is reset if one physical drive must act as two logical drives.
 ; Output:
-;   L = Number of drives connected.
+;   L = Number of drives connected. A value of 0 is not allowed.
 ; ------------------------------------------
-; Todo: use partition table to count the actual number of accessible partitions.
 
 GetHardDiskCount:
-	ld	l,4
+IFDEF BEER19_OLD
+; The beer19 driver returns a fixed value of 4 drives, which will result in phantom 
+; drives if there are fewer accessible partitions than 4 on the disk.
+	ld	l,4		
 	ret
+ELSE
+	push	bc
+	push	de
+	push	hl
+	ld	hl,9000h	; Buffer address
+	call	ReadMBR
+	jr	c, r404
+	ld	a,(091feh)	; Validate boot signature (AA 55)
+	cp	055h
+	jr	nz,r404
+	ld	a,(091ffh)
+	cp	0aah
+	jr	nz,r404
+	ld	hl,091c2h	; Set pointer to  partition type of first partition entry in partition table
+	ld	bc,00400h	; b=4 entries (primary partition) c=partition count
+r401:	ld	a,(hl)		; Partition type
+	cp	001h		; FAT12
+	jr	z,r402
+	cp	004h		; FAT16 (<=32MB)
+	jr	z,r402
+	cp	006h		; FAT16B (>32MB)
+	jr	z,r402
+	cp	00eh		; FAT16B with LBA
+	jr	nz,r403
+r402:	inc	c		; Increase partition count
+r403:	ld	a,l
+	add	a,010h		; Move pointer to next partition
+	ld	l,a
+	djnz	r401		; process next partition entry (max 4)
+	ld	a,c
+	or	a
+	jr	z,r404
+	pop	hl
+	ld	l,a		; set number of drives
+	jr	r405
+
+r404:	pop	hl
+	ld	l,1		; Minimum is 1
+
+r405:	pop	de
+	pop	bc
+	xor 	a		; set zero flag
+	ret
+ENDIF
 
 ; ------------------------------------------
 ; INIENV - Initialize the work area (environment).
@@ -137,7 +194,7 @@ MasterBoot:
 	ld	a,(091ffh)
 	cp	0aah
 	ret	nz
-	call	GetWorkBuf
+	call	GetWorkBuf	; HL and IX point to work buffer
 	push	hl
 	ld	d,h
 	ld	e,l
@@ -147,14 +204,14 @@ MasterBoot:
 	ldir
 	pop	de
 	ld	hl,091beh	; Start of partition table
-	ld	bc,00400h	; 4 entries (primary partition)
-	ld	a,001h
+	ld	bc,00400h	; b=4 entries (primary partition) c=active partition
+	ld	a,001h		; beer19: 1 extra partition is added to prevent a 0 partition count
 	ex	af,af'
 r612a:	ld	a,(hl)		; Status byte (Active/inactive)
 	cp	080h		; Active?
 	jr	nz,r612
 	ex	af,af'
-	ld	c,a
+	ld	c,a		; update active partition number
 	ex	af,af'
 r612:	push	bc
 	inc	hl
@@ -192,18 +249,18 @@ r614a:	inc	hl
 	inc	hl
 	inc	de
 	ex	af,af'
-	inc	a
+	inc	a		; increase partition count
 	ex	af,af'
 r614b:	pop	bc
 	djnz	r612a		; process next partition entry (max 4)
 	ld	(ix+014h),0ffh
 	ex	af,af'
-	ld	b,a
+	ld	b,a		; partition count
 	push	ix
 	push	bc
 	call	GetMySlot
 	ld 	hl,DRVTBL
-	ld	b,a
+	ld	b,a		; B = this disk interface slot number
 	ld	c,000h
 r614c:	ld	a,(hl)
 	add	a,c
@@ -211,18 +268,20 @@ r614c:	ld	a,(hl)
 	inc	hl
 	ld	a,(hl)
 	inc	hl
-	cp	b
-	jr	nz,r614c
+	cp	b		; this interface?
+	jr	nz,r614c	; nz=no
 	dec	hl
 	dec	hl
 	ld	a,c
 	sub	(hl)
 	pop	bc
-	ld	(hl),b
+IFDEF BEER19_OLD
+	ld	(hl),b		; update number of drives connected to interface (= accessible partitions + 1)
+ENDIF
 	add	a,c
 	dec	a
 	pop	ix
-	ld	(ix+015h),a
+	ld	(ix+015h),a	; Set boot drive
 	ret
 
 ; ------------------------------------------
@@ -246,8 +305,8 @@ HDD_SectorIO:
 	push	de
 	push	bc
 	push	af
-	cp	4
-	jr	nc,r581			;Wrong partition number
+	cp	4			; Max 4 drives (partitions) supported
+	jr	nc,r581			
 	call	GetWorkBuf
 	pop	af
 	push	af
@@ -260,8 +319,8 @@ HDD_SectorIO:
 	add	hl,de
 	push	hl
 	pop	ix
-	ld	a,(ix+00h)		;Test if partition exist (must have
-	or	(ix+01h)		;nonzero start cylinder)
+	ld	a,(ix+00h)		; Test if partition exist (must have
+	or	(ix+01h)		; nonzero start cylinder)
 	or	(ix+02h)
 	or	(ix+03h)
 	jp	z,r581
@@ -287,7 +346,7 @@ r582:	call	Wait_HDD
 	ret
 ;
 r581:	pop	bc
-	ld	a,4
+	ld	a,4			; Error 4 = Data (CRC) error (abort,retry,ignore message)
 	scf
 	pop	bc
 	pop	de
@@ -674,12 +733,17 @@ r611:	ld	a,0C7h
 ; ------------------------------------------
 HDDBOOT:
 	di
-	in	a,(0AAh)	; direct get keyboard in (todo: replace with call SNSMAT)
+IFDEF BEER19_OLD
+	in	a,(0AAh)	; direct get keyboard in
 	and	0F0h
 	or	7
 	out	(0AAh),a
 	nop
 	in	a,(0A9h)
+ELSE
+	ld	a,7
+	call	SNSMAT
+ENDIF
 	and	40h		; If [SELECT] key pressed then do not boot 
 	scf
 	ret	z

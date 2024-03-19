@@ -65,7 +65,7 @@ ENDIF
 	EXTERN	OEMSTA		; Used for system expansion (OEMSTATEMENT)
 	EXTERN	MYSIZE		; Size of the page-3 RAM work area required by the driver in bytes.
 	EXTERN	SECLEN		; Maximum sector size for media supported by this driver (512).
-	EXTERN	DEFDPB		; Base address of an 18 byte "default" DPB for this driver.
+	EXTERN	DEFDPB		; Base address of a 21 byte "default" DPB for this driver.
 
 IFDEF BEER20
 	; Additional symbols defined by the disk-ide module
@@ -767,7 +767,7 @@ A41B5:  ld      d,a
 
 ; Identification string (not used)
 IFDEF BEER20
-Q41C1:  defb    " MSX-DOS IDE v2.01 based on SOLiD IDE v1.9    "
+Q41C1:  defb    " MSX-DOS IDE v2.0.3 based on SOLiD IDE v1.9   "
 ELSE
 Q41C1:  defb    " MSX-DOS ver. 2.2 Copyright 1984 by Microsoft "
 ENDIF
@@ -4881,7 +4881,7 @@ r283a:	push	bc			; copy some default DPBs for DOS2 to work properly
 	ld	(hl),d
 	inc	hl
 	push	hl
-	ld	hl,DEFDPB-1
+	ld	hl,DEFDPB		; (beer19: defdpb-1, label is changed in driver beer20)
 	ld	bc,15h
 	ldir
 	pop	hl
@@ -5031,7 +5031,7 @@ r283:	push	bc
 	ld	(hl),e
 	inc	hl
 	ld	(hl),d
-	ld	hl,DEFDPB-1		; 
+	ld	hl,DEFDPB		; (beer19: defdpb-1, label is changed in driver beer20)
 	ld	bc,15h
 	ldir				; Initialize DPB for drive, use default values
 r282:	pop	hl
@@ -5199,7 +5199,7 @@ A59ED:  call    A5C16                   ; initialize diskbasic
 A59F3:  ld      hl,A5B3A
         push    hl                      ; if quit anywhere start diskbasic
 IFDEF BEER20
-; Initialize the work environment again
+; Initialize the work environment again, this time check for errors
 	call	INIENV			; MasterBoot
 	ret	c
 ENDIF
