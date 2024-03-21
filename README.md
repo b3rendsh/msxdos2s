@@ -6,7 +6,7 @@ MSX DOS 2 sources:
 - Optional FAT16 kernel patch  
   
 BEER IDE sources:  
-- Experimental new driver version 2.0, compatible with DOS 2.2  
+- Driver version 2.0, compatible with DOS 2.2 and other disk systems  
 - DOS 1.03 disk system with integrated BEER 2.0 driver and disk kernel customization  
   
 Development:  
