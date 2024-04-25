@@ -1,0 +1,13 @@
+Id,Designator,Footprint,Quantity,Designation,Notes
+1,"C1,C2,C3,C4,C5",C_Disc_D4.7mm_W2.5mm_P5.00mm,5,100nF,
+2,C6,Capacitor electrolytic radial (lying),1,100uF,
+3,R1,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,1,330,
+4,D1,LED_D3.0mm,1,LED Green,
+5,U1,DIP-40_W15.24mm_Socket,1,8255A,
+6,U2,DIP-14_W7.62mm_Socket,1,74LS32,
+7,U3,DIP-14_W7.62mm_Socket,1,74LS30,
+8,U4,DIP-14_W7.62mm_Socket,1,74LS04,
+9,U5,DIP-28_W15.24mm_Socket,1,27C512,
+10,J1,JST_EH_S2B-EH_1x02_P2.50mm_Horizontal,1,Sound IN,Optional
+11,JP2,PinHeader_2x20_P2.54mm_Horizontal,1,PINHD-02x20,Alternative vertical
+12,JP3,PinHeader_1x03_P2.54mm_Vertical,1,PIN_1x3,
