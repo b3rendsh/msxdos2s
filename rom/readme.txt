@@ -1,52 +1,52 @@
 ROM Images
 ==========
 
-This folder contains the following ROM images. 
-See disk.inc in source folder for build options.
+This folder contains the following ROM images:
+
+BEER20_DISK.ROM
+---------------
+16K ROM with driver version 2.03 for the BEER IDE disk interface. It can be
+used on a BEER202 or BEER232 PCB. The included DOS version is 1.03 so it works
+on a MSX1 system with 64K RAM. With this ROM you can use the BEER IDE cartridge
+also together with other cartridges that contain higher DOS versions e.g. the
+SUNRISE IDE or a separate 32K EEPROM cartridge with a DOS v2.2 ROM below.
+Sources in mod-beer20 folder.
 
 
 MSXD22S.ROM
 -----------
-32K ROM version that is mostly the same as the original ASCII DOS v2.2.
-No optimization so this version may work with patch16.com (fat16 /r will fail).
-Kanji, rom mapper and self check code is removed to reduce rom size.
-MSX-2 check at init is removed so it may work on MSX-1 with ram mapper.
+32K ROM that is mostly the same as the original ASCII DOS v2.2 but without the
+use of a ROM mapper. It contains a dummy disk driver. This ROM can be used on
+a 32K EEPROM PCB together with other disk interfaces in the system e.g.
+internal floppy drive. The patch16.com can be applied to get FAT16 support but
+you can't undo it with patch16 /r. The MSX2 check at init is removed so it also
+works on a MSX1 with a 128K or more RAM mapper.
 Sources in mod-32k folder.
 
 
 MSXD22SX.ROM
 ------------
-32K ROM version that includes the FAT16 patch.
-This also means that format and ramdisk functions are disabled.
-The optimized code option is required to free space for the extra fat16 code.
-For FAT16 the command2.com must still be patched once with compatch.com.
+32K ROM same as the MSXD22S ROM with the FAT16 patch already applied.
+This also means that format and ramdisk functions are disabled. Some code is
+optimized to free space for the extra FAT16 code. For FAT16 the command2.com
+must still be patched once with compatch.com.
 Sources in mod-32k folder.
 
 
 MSXD22.ROM
 ----------
-Original ASCII ROM version 2.2 with DiskBasic 2.01 fixes.
+64K ROM with original ASCII DOS version 2.2 and DiskBasic 2.01 fixes.
+This ROM is only provided for historical reference and not to be used.
 KANJI bank 3 is mostly equal to HSH version, some source code is missing here.
 Sources in src-z80asm folder.
 
 
-BEER20_DISK.ROM
----------------
-New experimental driver version 2.0 for the BEER-IDE disk interface.
-The included DOS version is 1.03. 
-With this rom you can use the beer-ide together with higher DOS versions.
-Also the MS-DOS file system compatibility is improved.
-Sources in mod-beer20 folder.
-
-
 DEVELOPMENT
 -----------
-Newer development versions will not be provided as a ROM in this repository.
-There will be a build script so you can create the ROM from source code.
-You can choose the target build options that are most suitable for you.
+Newer development versions are not provided as a ROM in this repository. There
+is a build script (makefile) so you can create the binary ROM from source code
+with the Z88DK toolkit on a Windows PC or Linux PC. You can choose the target
+build options that are most suitable e.g. to create a ROM with DOS v2.2 that
+includes the BEER driver and FAT16 patch. The 32K ROM can be used on a BEER232
+PCB but not on a BEER202 PCB.
 Sources in dev-32k folder.
-
-
-
-
-
