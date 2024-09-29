@@ -5,7 +5,7 @@ This folder contains the following ROM images:
 
 BEER20_DISK.ROM
 ---------------
-16K ROM with driver version 2.03 for the BEER IDE disk interface. It can be
+16K ROM with driver version 2.0.x for the BEER IDE disk interface. It can be
 used on a BEER202 or BEER232 PCB. The included DOS version is 1.03 so it works
 on a MSX1 system with 64K RAM. With this ROM you can use the BEER IDE cartridge
 also together with other cartridges that contain higher DOS versions e.g. the
@@ -31,14 +31,6 @@ This also means that format and ramdisk functions are disabled. Some code is
 optimized to free space for the extra FAT16 code. For FAT16 the command2.com
 must still be patched once with compatch.com.
 Sources in mod-32k folder.
-
-
-MSXD22.ROM
-----------
-64K ROM with original ASCII DOS version 2.2 and DiskBasic 2.01 fixes.
-This ROM is only provided for historical reference and not to be used.
-KANJI bank 3 is mostly equal to HSH version, some source code is missing here.
-Sources in src-z80asm folder.
 
 
 DEVELOPMENT
