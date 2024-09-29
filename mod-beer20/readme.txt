@@ -29,6 +29,9 @@ and accessible primary partitions on the disk e.g. if there are 2 primary
 partitions on a disk then 2 drives are assigned not 4. This prevents
 the creation of phantom drive letters.
 
+The low level DSKIO routine is made compliant with OKEI's FAT16 22-bit 
+sector number parameter method with bits 16..22 in register C, to support
+larger than 32MB disks when used with MSX DOS 2.2 or Nextor.
 
 
 Limitations
@@ -43,22 +46,8 @@ assignment to internal floppy disks is no longer fixed to A and B but
 according to MSX-DOS default behaviour.
 
 
-Work in progress
-----------------
-1. Device based driver for Nextor.
-2. Improve standard disk format compatibility with MS-DOS.
-3. Hardware update BEER-202 with 32K DOS 2.2 and DOS1/DOS2 switch.
-4. DOS 2.2 BEER-IDE for MSX-1/64K without mapper (feasibility study).
-
-
 Disclaimer
 ----------
-This is an experimental driver for the BEER-IDE interface, it has been
-tested in OpenMSX and with a real BEER-202 card in a Philips VG8010
-MSX-1 and NMS8255 MSX-2 computer. It is provided freely and "as it is"
-in the hope that it will be useful, but without any warranty of any 
-kind, either expressed or implied. Use at own risk!
-
-
-
-
+The driver update is provided freely and "as it is" in the hope that it 
+will be useful, but without any warranty of any kind, either expressed 
+or implied. Use at own risk!
