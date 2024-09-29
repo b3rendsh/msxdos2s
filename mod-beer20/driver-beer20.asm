@@ -12,8 +12,7 @@
 
 		SECTION	DRIVER_BEER20
 
-; Symbols which are defined by the disk hardware driver
-
+		; Symbols which are defined by the disk hardware driver
 		PUBLIC	INIHRD
 		PUBLIC	DRIVES
 		PUBLIC	INIENV
@@ -31,8 +30,7 @@
 		; Additional routine defined by the beer-ide driver
 		PUBLIC	HDDBOOT		; Boot from HDD
 
-; Disk routines used by driver
-
+		; Disk routines used by driver
 		EXTERN	GETWRK		; Get address of disk driver's work area
 		EXTERN	GETSLT		; Get slot of this interface
 
@@ -97,10 +95,11 @@ ifs00:	dec	hl			; slight delay added...
 ;
 	ld	hl,0d000h
 	call	IDE_Info
-	ld	a,(0d006h)
-	ld	(0fd0ch),a
-	ld	a,(0d00ch)
-	ld	(0fd0bh),a 
+	; Mod: obsolete leftover code from BEER 1.8 CHS addressing
+	; ld	a,(0d006h)		; heads
+	; ld	(0fd0ch),a
+	; ld	a,(0d00ch)		; sectors
+	; ld	(0fd0bh),a
 ifs3:	call	OutputHDDLogo
 	ld	b,4			; .. and another delay to view the message
 ifs1:	ld	hl,00000h
@@ -290,8 +289,9 @@ ENDIF
 ;   Carry flag = clear ==> read, set ==> write
 ;   A  = drive number
 ;   B  = number of sectors to transfer
-;   C  = media descriptor byte
-;   DE = first logical sector number
+;   C  = if bit7 is set then media descriptor byte
+;        else first logical sector number bit 16..22
+;   DE = first logical sector number (bit 0..15)
 ;   HL = transfer address
 ; Output:
 ;   Carry flag = clear ==> successful, set ==> error
@@ -941,18 +941,28 @@ ReadMBR:
 
 ; ------------------------------------------
 ; Logical sector -> physical
-; CHS addressing used.
 ; ------------------------------------------
 SectorTrans:
 	push	hl
 	ex	de,hl
+IFDEF BEER19_OLD
+; Old BEER IDE method for 24-bit sector numbers
 	ld	a,h
 	and	l
-	inc	a
-	jr	nz,r901
-	ld	hl,(0fd0dh)
-	ld	de,(0fd0fh)
+	inc	a			; if sector number is 0ffffh then use 24-bit sector number
+	jr	nz,r901			; nz: use 16-bit sector number
+	ld	hl,(0fd0dh)		; 24-bit sector number bit 0..15
+	ld	de,(0fd0fh)		; 24-bit sector number bit 16..23
 	jr	r902
+ELSE
+; OKEI's FAT16 / Nextor method for 23-bit sector numbers
+; See also PhyDiskIO routine in the disk module
+	bit	7,c			; if bit 7 of media descriptor is 0 then use 23-bit sector number
+	jr	nz,r901			; nz if 16-bit sector number
+	ld	e,c			; bit 16-22 of sector number
+	ld	d,000h
+	jr	r902
+ENDIF
 r901:	ld	de,00000h
 r902:	ld	c,(ix+00h)
 	ld	b,(ix+01h)
@@ -1039,5 +1049,5 @@ PrintString:
 
 
 ; ------------------------------------------------------------------------------
-; Intentional no HDD inquiry table at address 7F80 as used by some other controllers. 
-; This is not a SCSI interface. 
+; Mod: intentional no HDD inquiry table at address 7F80 as used by some other
+; controllers. This is not a SCSI interface.

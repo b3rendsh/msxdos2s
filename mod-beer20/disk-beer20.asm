@@ -11,18 +11,18 @@
 ; compliant with MSX DOS 1 and 2 disk interface standards and guidelines.
 
 
-; Todo: description of beer-ide system variables:
-; 0FD0D ?
-; 0FD0F ?
+; beer-ide system variables:
+; 0FD09 FAT pointer
+; 0FD0D sector number (bit 0..15)
+; 0FD0F sector number (bit 16..23)
 ; 0FFD9 Current drive control byte
 ; 0FFDA FAT block# in buffer
-; 0FFDB	Common buffer
+; 0FFDB	Common buffer indicator
 
 
 		SECTION	DISK_BEER20
 
-; Symbols defined by the disk ide module
-
+		; Symbols defined by the disk ide module
 		PUBLIC	NewGetFAT
 		PUBLIC	NewPutFAT
 		PUBLIC	NewUpdateFAT
@@ -35,8 +35,7 @@
 		PUBLIC	A75E3
 		PUBLIC	A75F2
 
-; Disk routines used by the disk ide disk module
-
+		; Disk routines used by the disk ide disk module
 		EXTERN	GETFAT
 		EXTERN	GetFATbuf
 		EXTERN	DSK_abs_read
@@ -55,7 +54,7 @@ FAT_read:
 	ld 	a,h
   	or 	l
   	jp 	nz,GETFAT
-  	ld 	hl,(0fd09h)	; SLTWRK
+  	ld 	hl,(0fd09h)	; see FAT_write
   	ret
 
 NewGetFAT:
@@ -70,7 +69,7 @@ FAT_write:
 	ld	a,h
 	or	l
 	jr 	nz,NewPutFAT
-	ld 	(0fd09h),bc	; SLTWRK
+	ld 	(0fd09h),bc	; see FAT_read
 	ret
 
 NewPutFAT:
@@ -260,7 +259,7 @@ r579:	push	af
 	jr	nz,r579
 	ret
 
-;7555
+; ------------------------------------------
 A752B:	ld	a,(0FFD9h)
 	cp	(ix)
 	call	nz,SaveFATbuf
@@ -287,6 +286,8 @@ A757A:	ret	c
 A757F:	ld	a,h
 	cp	0ffh
 	jr	A757A
+
+; ------------------------------------------
 A7584:	push	de
 	ld	e,l
 	ld	d,h
@@ -314,6 +315,7 @@ A759D:	add	hl,hl
 	or	h
 	ret
 
+; ------------------------------------------
 A75A5:	ld	a,(ix+00fh)
 	cp	010h
 	jr	nc,A75B2
@@ -331,6 +333,8 @@ A75B6:	inc	c
 	ld	a,c
 	pop	bc
 	ret
+
+; ------------------------------------------
 A75BE:	ld	c,000h
 	dec	b
 	jr	z,A75C8
@@ -346,13 +350,14 @@ A75C8:	or	l
 	adc	a,000h
 	pop	bc
 	ret	z
-	ld	(0fd0dh),hl
+	ld	(0fd0dh),hl	; store 24-bit sector number bit 0..15
 	ld	l,a
 	ld	h,000h
-	ld	(0fd0fh),hl
-	ld	hl,0ffffh
+	ld	(0fd0fh),hl	; store 24-bit sector number bit 16..23
+	ld	hl,0ffffh	; indicator to use 24-bit sector number in DSKIO routine
 	ret
 
+; ------------------------------------------
 A75E3:	ld	a,e
 	and	d
 	inc	a
@@ -366,6 +371,7 @@ A75EF:	inc	a
 	scf
 	ret
 
+; ------------------------------------------
 A75F2:	jr	nc,A75F8
 	ld	a,d
 	and	e

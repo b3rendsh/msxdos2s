@@ -26,8 +26,7 @@
 	SECTION DISK 
         ORG     04000H
 
-; Routines which can be used by the disk hardware driver
-
+        ; Routines which can be used by the disk hardware driver
 	PUBLIC  PROMPT		; Prints a message for two drive emulation on a single drive.
 	PUBLIC  GETSLT		; Get disk driver's slot address.
 	PUBLIC  GETWRK		; Get address of disk driver's work area.
@@ -51,8 +50,7 @@ IFDEF BEER20
 	PUBLIC	OldPutFAT		; A4221+3 (PutFAT+3)
 ENDIF
 
-; Symbols which must be defined by the disk hardware driver
-
+        ; Symbols which must be defined by the disk hardware driver
 	EXTERN	INIHRD		; Initialize hardware
 	EXTERN	DRIVES		; Return number of drives in system
 	EXTERN	INIENV		; Initialize work area
@@ -767,7 +765,7 @@ A41B5:  ld      d,a
 
 ; Identification string (not used)
 IFDEF BEER20
-Q41C1:  defb    " MSX-DOS IDE v2.0.3 based on SOLiD IDE v1.9   "
+Q41C1:  defb    " MSX-DOS IDE v2.0.4 based on SOLiD IDE v1.9   "
 ELSE
 Q41C1:  defb    " MSX-DOS ver. 2.2 Copyright 1984 by Microsoft "
 ENDIF
@@ -6228,8 +6226,21 @@ WriteSector_all:
 
 ;A6055
 PhyDiskIO:
+IF BEER20 && !BEER19_OLD
+; Convert BEER IDE 24-bit sector number method to FAT16 / Nextor 23-bit sector number method
+	push    af
+	ld      a,d
+	and     e
+	inc     a
+	jr	nz,r60551		; sector number <> ffff is 16-bit
+	ld	de,(0fd0dh)		; load sector number bit 0..15
+	ld	a,(0fd0fh)		; load sector number bit 16..22
+	and	07fh			; make sure that 16-bit flag is reset
+	ld	c,a
+r60551: pop     af
+ENDIF
 	push    ix
-        push    iy
+	push    iy
         push    hl
         push    af
         call    A6086                   ; get diskdriverparameters
