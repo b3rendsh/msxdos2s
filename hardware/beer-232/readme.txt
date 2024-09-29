@@ -6,7 +6,7 @@ This hardware design is a modified version of the BEER-202 interface:
 The 16KB EPROM is replaced with a 64KB EPROM with a jumper to select 
 between 2 different 32K ROM images.
 
-It's intended use is to host a 32K MSXDOS2.2 + BEER 2.03 DRIVER DISK ROM.
+It's intended use is to host a 32K MSXDOS2.2 + BEER 2.0 DRIVER DISK ROM.
 You can select between two different versions of this ROM or use the 2nd 32K
 to host the 16K DOS 1.03 based BEER 2.03 ROM or legacy BEER 1.9 DISK ROM.
 
