@@ -33,6 +33,7 @@
 		; Disk routines used by driver
 		EXTERN	GETWRK		; Get address of disk driver's work area
 		EXTERN	GETSLT		; Get slot of this interface
+		EXTERN	XFER		; Helper routine to store data in ram page 1
 
 MYSIZE		EQU	22
 SECLEN		EQU	512
@@ -339,9 +340,22 @@ r582:	call	Wait_HDD
 	jr	c,A764A
 	pop	af
 	pop	de
+IFDEF BEER19_OLD
+; increase 16-bit sector number
 	inc	de
 	pop	bc
-	djnz	r582
+ELSE
+; increase 23-bit sector number 
+; note: 16-bit inc instruction 'inc de' doesn't set flags
+	pop	bc
+	inc	e
+	jr	nz,r583
+	inc	d			
+	jr	nz,r583
+	inc	c
+r583:
+ENDIF
+	djnz	r582			; next sector
 	xor	a
 	ret
 ;
@@ -413,7 +427,7 @@ r589:	ld	a,40h
 	ret	nz
 	ld	hl,(SSECBUF)
 	ld	bc,0200h		; sector size
-	call	0F1D9h			; Store data in RAM page 1 (swap RAM with the disk ROM)
+	call	XFER
 	ex	de,hl
 	or	a
 	ret
@@ -437,7 +451,7 @@ r590:	ex	(sp),hl
 	jr	nz,r591
 	ld	de,(SSECBUF)
 	ld	bc,0200h		; sector size
-	call	0F1D9h			; Get data from RAM page 1 (swap RAM with the disk ROM)
+	call	XFER
 	ld	hl,(SSECBUF)
 r591:	ld	c,30h
 	ld	d,0
@@ -690,22 +704,21 @@ OEMSTA:	scf
 ; from the routine above would be included as drive number.
 ; ------------------------------------------
 DEFAULT_DPB:
-	db	000h		; DRIVE		Drive number (beer19: C9)
-	db	0F9h		; MEDIA		Media type
-	dw	200h		; SECSIZ	Sector size
-	db	00Fh		; DIRMSK	Directory mask
-	db	004h		; DIRSHFT	Directory shift
-	db	003h		; CLUSMSK	Cluster mask
-	db	003h		; CLUSSFT	Cluster shift
-	dw	00001h		; FIRFAT	First FAT sector
-	db	002h		; FATCNT	Number of FATs
-	db	070h		; MAXENT	Number of directory entries
-	dw	00Eh		; FIRREC	First data sector
-	dw	02CAh		; MAXCLUS	Number of clusters+1
-	db	003h		; FATSIZ	Sectors per FAT
-	dw	00007h		; FIRDIR	First directory sector
-	db	0D0h		; ?
-	db	002h		; ?
+	db	000h		; +00 DRIVE	Drive number (beer19: C9)
+	db	0F9h		; +01 MEDIA	Media type
+	dw	00200h		; +02 SECSIZ	Sector size
+	db	00Fh		; +04 DIRMSK	Directory mask
+	db	004h		; +05 DIRSHFT	Directory shift
+	db	003h		; +06 CLUSMSK	Cluster mask
+	db	003h		; +07 CLUSSFT	Cluster shift
+	dw	00001h		; +08 FIRFAT	First FAT sector
+	db	002h		; +0A FATCNT	Number of FATs
+	db	070h		; +0B MAXENT	Number of directory entries
+	dw	0000Eh		; +0C FIRREC	First data sector
+	dw	002CAh		; +0E MAXCLUS	Number of clusters+1
+	db	003h		; +10 FATSIZ	Sectors per FAT
+	dw	00007h		; +11 FIRDIR	First directory sector
+	dw	002D0h		; +13 FATPTR	Pointer to FAT in RAM
 
 ; ------------------------------------------
 ; Wait for HDD ready
