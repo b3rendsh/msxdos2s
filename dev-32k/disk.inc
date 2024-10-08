@@ -14,12 +14,19 @@
 ; FAT16		
 ; Include FAT16 patch for the DOS 2 kernel
 ;
-; The BEER 2.0 driver will be included by default
+; The BEER IDE driver will be included by default
 
 
 IFDEF ROM
 	OPTM	EQU	0
 	MOD1	EQU	's'	; Small
+	MOD2	EQU	'i'	; Ide
+ENDIF
+
+IFDEF BEER232
+	DEFINE	FAT16
+	OPTM	EQU	1
+	MOD1	EQU	'x'	; eXtended
 	MOD2	EQU	'i'	; Ide
 ENDIF
 
