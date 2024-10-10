@@ -56,9 +56,11 @@ SNSMAT		EQU	$0141
 PHYDIO		EQU	$0144
 
 CURDRV		EQU	$f247		; default drive
+DOSVER 		EQU     $f313  		; DOS version of master disk system
 SSECBUF		EQU	$f34d		; pointer to sectorbuffer, can be used by the disk hardware driver
 SDIRBU		EQU	$f351		; pointer to directorysectorbuffer
 DRVTBL  	EQU     $fb21		; disk interface drive table
+
 
 ; ------------------------------------------------------------------------------
 ; *** DOS driver routines ***
@@ -300,10 +302,18 @@ PartitionType:	cp	$01		; FAT12
 		ret	z
 		cp	$04		; FAT16 (<=32MB)
 		ret	z
+		push	af
+		ld      a,(DOSVER)	; 15=BEER-DOS1
+		cp      $20		; Master disk system is DOS 2 or higher?
+		jr	c,r223
+		pop	af
 		cp	$06		; FAT16B (>32MB)
 		ret	z
 		cp	$0e		; FAT16B with LBA
 		ret
+r223:		pop	af
+		ret
+
 
 ; Validate extended partition type
 PartitionExt:	cp	$05		; Extended partition (CHS,LBA)
@@ -387,13 +397,13 @@ r400:		ld	e,a
 		add	hl,de
 		push	hl
 		pop	ix
+		pop	bc
+		pop	de
+		pop	hl
 		ld	a,(ix+$00)		; Test if partition exist (must have
 		or	(ix+$01)		; nonzero start cylinder)
 		or	(ix+$02)
 		or	(ix+$03)
-		pop	bc
-		pop	de
-		pop	hl
 		jr	z,r405
 
 		; translate logical to physical sector number
@@ -804,18 +814,21 @@ ideInfo:	call	ideWaitReady
 		call	ppideCommand
 		call	ideWaitData
 		jp 	nz,ideError
-		ld	de,IDE_DATA_READ		
-		ld	bc,IDE_IO_SECTOR
+		ld	a,PPI_IOA
+		ld	b,$00			; counter (decreases by 3 in loop)
+		ld	c,PPI_IOC
+		ld	d,IDE_READ
+		ld	e,IDE_IDLE
 		out	(c),e
-info_loop:	out	(c),d			; IDE read data
-		dec	c
-		dec	c
-		ini				; read low byte, increase bufferpointer
-		inc	c
-		ini				; read high byte, increase bufferpointer
-		inc	c
-		out	(c),e			; IDE idle
-		djnz	info_loop
+		; gross throughput: total 93 MSX T-states in loop, 3.580.000Hz/(93x256x2)=75KB/s
+info_loop:	out	(c),d			; 14T: IDE read
+		ld	c,a			; 05T: PPI port A
+		ini				; 18T: read low byte, increase bufferpointer, decrease counter
+		inc	c			; 05T: PPI port B
+		ini				; 18T: read high byte, increase bufferpointer, decrease counter
+		inc	c			; 05T; PPI port C
+		out	(c),e			; 14T: IDE idle
+		djnz	info_loop		; 14T; 768 MOD 3 = 0
 		xor	a
 		ret
 
@@ -840,17 +853,19 @@ ideReadSector:	ld 	a,IDE_CMD_READ
 		push	hl
 		jr	nz,rd01			; nz=yes, directly store data in destination
 		ld	hl,(SSECBUF)		; init temporary buffer pointer
-rd01:		ld	de,IDE_DATA_READ
-		ld	bc,IDE_IO_SECTOR
+rd01:		ld	a,PPI_IOA
+		ld	b,$00
+		ld	c,PPI_IOC
+		ld	d,IDE_READ
+		ld	e,IDE_IDLE
 		out	(c),e
-rd02:		out	(c),d			; IDE read data
-		dec	c
-		dec	c
-		ini				; read low byte, increase buffer pointer
+rd02:		out	(c),d
+		ld	c,a
+		ini
 		inc	c
-		ini				; read high byte, increase buffer pointer
+		ini
 		inc	c
-		out	(c),e			; IDE idle
+		out	(c),e
 		djnz	rd02
 		pop	de
 		pop	af
@@ -886,17 +901,19 @@ wr_wait:	ex	(sp),hl
 		ld	bc,$0200		; sector size
 		call	XFER
 		ld	hl,(SSECBUF)		; init buffer pointer
-wr01:		ld	de,IDE_DATA_WRITE
-		ld	bc,IDE_IO_SECTOR
+wr01:		ld	a,PPI_IOA
+		ld	b,$00
+		ld	c,PPI_IOC
+		ld	d,IDE_WRITE
+		ld	e,IDE_IDLE
 		out	(c),e
-wr02:		dec	c
-		dec	c
-		outi				; write low byte, increase buffer pointer
+wr02:		ld	c,a
+		outi
 		inc	c
-		outi				; write high byte, increase buffer pointer
+		outi
 		inc 	c
-		out	(c),d			; IDE write data
-		out	(c),e			; IDE idle
+		out	(c),d
+		out	(c),e
 		djnz	wr02
 		pop	hl
 		inc	h
@@ -969,12 +986,6 @@ ideError:	call	ppideError
 ; ------------------------------------------------------------------------------
 ; *** PPI 8255 <==> IDE routines ***
 ; ------------------------------------------------------------------------------
-; PPI 8255 I/O registers:
-; $30	A: IDE data low byte
-; $31	B: IDE data high byte
-; $32	C: IDE control
-; $33	PPI control
-;
 ; PPI control:
 ; $92 = Set PPI A+B to input
 ; $80 = Set PPI A+B to output
@@ -989,14 +1000,19 @@ ideError:	call	ppideError
 ; 6	/WR Write data
 ; 7	/RD Read data
 ; ------------------------------------------
+; PPI 8255 I/O registers:
+PPI_IOA		equ	$30		; A: IDE data low byte
+PPI_IOB		equ	$31		; B: IDE data high byte
+PPI_IOC		equ	$32		; C: IDE control
+PPI_CTL		equ	$33		; PPI control
+
 IDE_CMD_READ	equ	$20		; read sector
 IDE_CMD_WRITE	equ	$30		; write sector
 IDE_CMD_INFO	equ	$ec		; disk info
 
-IDE_DATA_READ	equ	$40c0		; 40=/read  c0=idle
-IDE_DATA_WRITE	equ	$80c0		; 80=/write c0=idle
-
-IDE_IO_SECTOR	equ	$0032		; 00=counter 32=port
+IDE_READ	equ	$40
+IDE_WRITE	equ	$80
+IDE_IDLE	equ	$c0
 
 ; ------------------------------------------
 ; PPI IDE set sector parameters
@@ -1004,49 +1020,49 @@ IDE_IO_SECTOR	equ	$0032		; 00=counter 32=port
 ; ------------------------------------------
 ppideParam:	call	ppideOutput
 		ld	a,$c2			; IDE register 2
-		out	($32),a
+		out	(PPI_IOC),a
 		ld	a,$01			; number of sectors is 1
-		out	($30),a
+		out	(PPI_IOA),a
 		ld	a,$82
-		out	($32),a
+		out	(PPI_IOC),a
 		ld	a,$c2
-		out	($32),a
+		out	(PPI_IOC),a
 
 		inc	a			; IDE register 3
-		out	($32),a
+		out	(PPI_IOC),a
 		ld	a,e			; bit 0..7
-		out	($30),a
+		out	(PPI_IOA),a
 		ld	a,$83
-		out	($32),a
+		out	(PPI_IOC),a
 		ld	a,$c3
-		out	($32),a
+		out	(PPI_IOC),a
 
 		inc	a			; IDE register 4
-		out	($32),a
+		out	(PPI_IOC),a
 		ld	a,d			; bit 8..15
-		out	($30),a
+		out	(PPI_IOA),a
 		ld	a,$84
-		out	($32),a
+		out	(PPI_IOC),a
 		ld	a,$c4
-		out	($32),a
+		out	(PPI_IOC),a
 
 		inc	a			; IDE register 5
-		out	($32),a
+		out	(PPI_IOC),a
 		ld	a,c			; bit 16..23
-		out	($30),a
+		out	(PPI_IOA),a
 		ld	a,$85
-		out	($32),a
+		out	(PPI_IOC),a
 		ld	a,$c5
-		out	($32),a
+		out	(PPI_IOC),a
 
 		inc	a			; IDE register 6
-		out	($32),a
+		out	(PPI_IOC),a
 		ld	a,$e0			; LBA mode
-		out	($30),a
+		out	(PPI_IOA),a
 		ld	a,$86
-		out	($32),a
+		out	(PPI_IOC),a
 		ld	a,$c6
-		out	($32),a
+		out	(PPI_IOC),a
 		ret
 
 ; ------------------------------------------
@@ -1056,26 +1072,26 @@ ppideParam:	call	ppideOutput
 ppideCommand:	call	ppideOutput
 		ex	af,af'
 		ld	a,$c7
-		out	($32),a
+		out	(PPI_IOC),a
 		ex	af,af'
-		out 	($30),a
+		out 	(PPI_IOA),a
 		ld 	a,$87
-		out 	($32),a
+		out 	(PPI_IOC),a
 		ld	a,$c7
-		out 	($32),a
+		out 	(PPI_IOC),a
 		ret
 
 ; ------------------------------------------
 ; PPI IDE read error register
 ; ------------------------------------------
 ppideError:	ld	a,$c1
-		out	($32),a
+		out	(PPI_IOC),a
 		ld 	a,$41
-		out 	($32),a
-		in 	a,($30)
+		out 	(PPI_IOC),a
+		in 	a,(PPI_IOA)
 		ex	af,af'
 		ld	a,$c1
-		out	($32),a
+		out	(PPI_IOC),a
 		ex	af,af'
 		ret
 
@@ -1083,13 +1099,13 @@ ppideError:	ld	a,$c1
 ; PPI IDE read status register
 ; ------------------------------------------
 ppideStatus:	ld	a,$c7
-		out	($32),a
+		out	(PPI_IOC),a
 		ld 	a,$47
-		out 	($32),a
-		in 	a,($30)
+		out 	(PPI_IOC),a
+		in 	a,(PPI_IOA)
 		ex	af,af'
 		ld 	a,$c7
-		out	($32),a
+		out	(PPI_IOC),a
 		ex 	af,af'
 		ret
 
@@ -1098,13 +1114,13 @@ ppideStatus:	ld	a,$c7
 ; ------------------------------------------
 ppideOutput:	ex	af,af'
 		ld	a,$80			; PPI A+B is output
-		out	($33),a			
+		out	(PPI_CTL),a
 		ex	af,af'
 		ret
 
 ppideInput:	ex	af,af'
 		ld	a,$92			; PPI A+B is input
-		out	($33),a
+		out	(PPI_CTL),a
 		ex	af,af'
 		ret
 
