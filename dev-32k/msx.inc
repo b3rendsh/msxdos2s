@@ -38,6 +38,7 @@ CKCNTC  EQU     00BDH   	; -C---
 ERAFNK  EQU     00CCH   	; -C---
 TOTEXT  EQU     00D2H   	; -C---
 SNSMAT  EQU     0141H   	; -C---
+PHYDIO	EQU	0144H
 KILBUF  EQU     0156H   	; ----I
 CALBAS  EQU     0159H   	; JC---
 DECSUB  EQU     268CH   	; -C---

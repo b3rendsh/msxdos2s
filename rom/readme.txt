@@ -12,11 +12,12 @@ also together with other cartridges that contain higher DOS versions e.g. the
 SUNRISE IDE or a separate 32K EEPROM cartridge with a DOS v2.2 ROM below.
 Sources in mod-beer20 folder.
 
-BEER232_DOS1.ROM
-----------------
-16K ROM with alternative driver for the BEER IDE disk interface. It contains the
-latest development features and supports MS-DOS extended partitions with up to 8 
-drives. This driver is a work in progress and may be changed without notice.
+BEER_DOS1.ROM
+--------------
+16K ROM with alternative IDE driver for the BEER (PPI 8255) disk interface.
+It contains the latest development features and supports MS-DOS extended 
+partitions with up to 8 drives. This driver is a work in progress and may be 
+changed without notice.
 Driver sources in dev-32k folder.
 
 MSXD22S.ROM

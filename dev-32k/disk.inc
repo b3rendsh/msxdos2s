@@ -1,6 +1,8 @@
 ; Target build options:
 ; ROM		Standard DOS 2.2 32K ROM
 ; TEST		Used for testing purposes
+; CFIDE		8-bit CF IDE driver
+; PPIDE		PPI 8255 IDE driver
 
 
 ; DOS2 compile options:
@@ -13,9 +15,6 @@
 ;
 ; FAT16		
 ; Include FAT16 patch for the DOS 2 kernel
-;
-; The BEER IDE driver will be included by default
-
 
 IFDEF ROM
 	OPTM	EQU	0
@@ -23,7 +22,7 @@ IFDEF ROM
 	MOD2	EQU	'i'	; Ide
 ENDIF
 
-IFDEF BEER232
+IF CFIDE || PPIDE
 	DEFINE	FAT16
 	OPTM	EQU	1
 	MOD1	EQU	'x'	; eXtended

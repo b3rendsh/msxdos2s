@@ -1932,11 +1932,6 @@ C58AF:  CALL    C6654			; check for BASIC character
 J58C7:  SRL     D
         RR      E
         JR      NC,J58CE
-
-; HSH V2 has
-;       LD      D,E
-; looks like a bit in EPROM was corrupted (013H vs 053H)
-
         INC     DE
 J58CE:  DJNZ    J58C7
         LD      A,E
@@ -1988,13 +1983,13 @@ C591A:  PUSH    DE
         LD      HL,VALTYP
         LD      A,(HL)
         LD      C,A
-        LD      (HL),02H        ; 2 
+        LD      (HL),02H
         LD      HL,DAC+2
-        CP      02H     ; 2 
+        CP      02H 
         JR      Z,J593E
-        CP      04H     ; 4 
+        CP      04H 
         JR      Z,J5932
-        CP      08H     ; 8 
+        CP      08H 
         JP      NZ,J6627		; type mismatch error
 J5932:  PUSH    BC
         LD      IX,DOCNVF
