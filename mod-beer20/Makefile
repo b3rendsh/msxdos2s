@@ -18,7 +18,7 @@ else
 endif 
 
 
-all:	oem beer20 ppide cfide
+all:	oem beer20
 
 oem:	
 	@echo Assembling oem rom..
@@ -38,30 +38,7 @@ beer20:
 	$(SEARCH) "DOS_" obj/BEER20.map > BEER20_entry_points.txt
 	@echo done
 
-ppide:
-	@echo Assembling 16k BEER ppide rom..
-	$(RMF) obj$(RMD)
-	$(RMF) dev-32k$(RMD)
-	@echo db $(QUOTE)$(shell $(GETDATE))$(QUOTE) > rdate.inc
-	z80asm -b -d -l -m -DBEER20 -DPPIDE -Oobj -o=PPIDE disk.asm disk-beer20.asm ../dev-32k/driver-ide.asm
-	z88dk-appmake +glue -b obj/PPIDE --filler 0x00 --clean
-	z88dk-appmake +rom -b obj/PPIDE__.bin -o BEER_DOS1.ROM -s 16384 --org 0 --filler 0x00
-	$(RMF) rdate.inc
-	@echo done
-
-cfide:
-	@echo Assembling 16k SODA cfide rom..
-	$(RMF) obj$(RMD)
-	$(RMF) dev-32k$(RMD)
-	@echo db $(QUOTE)$(shell $(GETDATE))$(QUOTE) > rdate.inc
-	z80asm -b -d -l -m -DBEER20 -DCFIDE -Oobj -o=CFIDE disk.asm disk-beer20.asm ../dev-32k/driver-ide.asm
-	z88dk-appmake +glue -b obj/CFIDE --filler 0x00 --clean
-	z88dk-appmake +rom -b obj/CFIDE__.bin -o SODA_DOS1.ROM -s 16384 --org 0 --filler 0x00
-	$(RMF) rdate.inc
-	@echo done
-
 clean:
 	$(RMF) obj$(RMD)
-	$(RMF) dev-32k$(RMD)
 	
 
