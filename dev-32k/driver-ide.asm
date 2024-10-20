@@ -1,5 +1,5 @@
 ; ------------------------------------------------------------------------------
-; DRIVER-IDE.ASM
+; driver-ide.asm
 ;
 ; Copyright (C) 2024 H.J. Berends*
 ; * Part of the code is based on the BEER-202 driver by SOLiD and other
@@ -9,13 +9,15 @@
 ; It is provided freely and "as it is" in the hope that it will be useful, 
 ; but without any warranty of any kind, either expressed or implied.
 ; ------------------------------------------------------------------------------
-; Universal IDE driver for MSX-DOS 2 and BEER MSX-DOS 1:
+; Universal IDE driver for MSX-DOS:
 ; + Can be used with PPI 8255 and CF IDE boards (BEER-232, BEER-202, SODA)
 ; + Extended partitions support
 ; + Up to 8 drives
-; + FAT16 drives up to 2GB (DOS 1 maximum 32MB)
+; + FAT16 drives up to 2GB (max 255 root directory entries in DOS 1)
+; + Boot menu
+; + IDE hardware detection, if not present act as dummy driver
 ;
-; Differences with BEER20 driver:
+; Some differences with BEER 2.0 driver:
 ; + Appr. 15% faster
 ; + Improved error handling
 ; + Separate DOS layer and PPI/IDE hardware layer
@@ -23,12 +25,6 @@
 ;
 ; Under construction:
 ; + 8-BIT CF IDE interface driver
-;
-; Wishlist:
-; + boot menu
-; + master/slave
-; + atapi/cdrom?
-; + diagnostics?
 ; ------------------------------------------------------------------------------
 
 	        INCLUDE "disk.inc"	; Assembler directives
@@ -51,8 +47,8 @@
 		PUBLIC	MYSIZE
 		PUBLIC	SECLEN
 
-		; Additional routine (for use with MSX-DOS 1) 
-		PUBLIC	HDDBOOT		; Boot from partition that is flagged active
+		; Additional routine 
+		PUBLIC	BOOTMENU	; Boot from partition that is flagged active
 
 		; Disk routines used by driver
 		EXTERN	GETWRK		; Get address of disk driver's work area
@@ -97,9 +93,9 @@ INIHRD:		ld	a,$06
 		call	SNSMAT			; Check if CTRL key is pressed
 		di				
 		and	2
-		jr	z,r103			; z=yes: exit disk init
+		jr	z,r104			; z=yes: exit disk init
 		call	ideInit
-		jr	c,r103
+		jr	nz,r103			; nz=ide hardware not detected
 		ld	hl,$d000
 		call	ideInfo
 		jr	c,r103			; c=time-out
@@ -111,9 +107,9 @@ r102:		dec	hl
 		or	l
 		jr	nz,r102
 		djnz	r101
-		xor	a
+r103:		xor	a
 		ret
-r103:		inc	sp
+r104:		inc	sp
 		inc	sp
 		ret
 
@@ -123,7 +119,7 @@ r103:		inc	sp
 ; Input:
 ;   F = The zero flag is reset if one physical drive must act as two logical drives.
 ; Output:
-;   L = Number of drives connected. A value of 0 is not allowed.
+;   L = Number of drives connected. A value of 0 is not allowed for DOS 1.
 ; May corrupt: F,HL,IX,IY
 ;
 ; The DRIVES routine will also initialize the work environment
@@ -137,15 +133,6 @@ r103:		inc	sp
 DRIVES:		push	af
 		push	bc
 		push	de
-		ld	hl,$9000	; Buffer address
-		call	ReadMBR
-		jr	c,r206
-		ld	a,($91fe)	; Validate boot signature (AA 55)
-		cp	$55
-		jr	nz,r206
-		ld	a,($91ff)
-		cp	$aa
-		jr	nz,r206
 
 		; initialize work buffer
 		call	GETWRK		; HL and IX point to work buffer
@@ -156,8 +143,21 @@ DRIVES:		push	af
 		ld	(hl),$00
 		ld	bc,MYSIZE-1
 		ldir
-		pop	de		; DE now points to work bufer filled with zeros
 
+		; probe hardware and validate MBR
+		call	ideInit
+		jr	nz,r207		; nz=ide hardware not detected
+		ld	hl,$9000	; Buffer address
+		call	ReadMBR
+		jr	c,r207
+		ld	a,($91fe)	; Validate boot signature (AA 55)
+		cp	$55
+		jr	nz,r207
+		ld	a,($91ff)
+		cp	$aa
+		jr	nz,r207
+
+		pop	de		; Pointer to work bufer, initialided with zeros
 		ld	hl,$91be	; Start of partition table
 		ld	b,$04		; max 4 primary partitions
 r201:		ld	c,(hl)		; Save status byte (active/inactive)
@@ -200,16 +200,22 @@ r204:		ld	a,(ix+$2a)
 		cp	$08		; Maximum partitions processed?
 		jr	nc,r205
 		djnz	r201		; process next primary partition
-
 r205:		ld	a,(ix+$2a)
+IFDEF IDEDOS1
 		or	a
-		jr	nz,r207
-r206:		ld	a,$01		; minimum is 1
-r207:		ld	l,a		; set number of drives
+		jr	nz,r206
+		inc	a		; Return value of 0 drives is not allowed in DOS 1
+r206:
+ENDIF
+		ld	l,a		; set number of drives
 		pop	de
 		pop	bc
 		pop	af
 		ret
+
+; Hardware not detected or MBR not valid
+r207:		pop	hl
+		jr	r205
 
 ; Process extended partitions
 xpart:		ld	($9400),de	; save pointer to next partition in workarea
@@ -301,13 +307,15 @@ r222:		ld	a,($93d2)	; Partition type of 2nd entry
 ; Validate partition type
 PartitionType:	cp	$01		; FAT12
 		ret	z
-		cp	$04		; FAT16 (<=32MB)
-		ret	z
+IFNDEF FAT16DOS1
 		push	af
 		ld      a,(DOSVER)	; 15=BEER-DOS1
 		cp      $20		; Master disk system is DOS 2 or higher?
 		jr	c,r223
 		pop	af
+ENDIF
+		cp	$04		; FAT16 (<=32MB)
+		ret	z
 		cp	$06		; FAT16B (>32MB)
 		ret	z
 		cp	$0e		; FAT16B with LBA
@@ -329,6 +337,9 @@ PartitionExt:	cp	$05		; Extended partition (CHS,LBA)
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ; ------------------------------------------
 INIENV:		call	GETWRK		; HL and IX point to work buffer
+		xor	a
+		or	(ix+$2a)	; number of drives 0?
+		ret	z
 		ld	(ix+$28),$ff	; Init current drive
 		call	GETSLT
 		ld 	hl,DRVTBL
@@ -393,7 +404,7 @@ r400:		ld	e,a
 		add	a,a
 		add	a,a
 		add	a,e
-		ld	e,a
+		ld	e,a			; a * 5
 		ld	d,$00
 		add	hl,de
 		push	hl
@@ -401,10 +412,8 @@ r400:		ld	e,a
 		pop	bc
 		pop	de
 		pop	hl
-		ld	a,(ix+$00)		; Test if partition exist (must have
-		or	(ix+$01)		; nonzero start cylinder)
-		or	(ix+$02)
-		or	(ix+$03)
+		xor	a
+		or	(ix+$04)		; Test if partition exists (must have nonzero partition type)
 		jr	z,r405
 
 		; translate logical to physical sector number
@@ -534,7 +543,7 @@ r501:		ld	b,$FF		; changed
 ;   A  = Drive number
 ;   B  = First byte of FAT
 ;   C  = Media descriptor
-;   HL = Base address of BPB
+;   HL = Base address of DPB
 ; Output:
 ;   [HL+1] .. [HL+18] = DPB fo the specified drive
 ; ------------------------------------------
@@ -584,14 +593,15 @@ r602:		add	hl,de
 		add	hl,hl
 		add	hl,hl
 		add	hl,hl
-		add	hl,hl
+		add	hl,hl			; 16 directory entries per sector
 		ld	l,h
 		ld	h,$00
 		ex	de,hl
-		jr	z,r603
-		ld	a,$ff			; Max 255 directory entries
-		jr	r604
-r603:		ld	a,(iy+$11)
+		or	a			; number of directory entries < 256?
+		jr	z,r603			; z=yes
+		ld	a,$ff			; et max 255 directory entries
+		jr	r604 
+r603:		ld	a,(ix+$11)		; set max directory entries to directory entries low byte
 r604:		ld	(iy+$0b),a		; MAXENT - Max directory entries
 		add	hl,de
 		ld	(iy+$0c),l		; FIRREC - first data sector
@@ -630,10 +640,9 @@ r608:		inc	hl
 ; Input : None
 ; Output: HL = pointer to string, terminated by 0
 ; ------------------------------------------
-CHOICE:		xor	a
-		ld	l,a
-		ld	h,a
+CHOICE:		ld	hl,choice_txt
 		ret
+choice_txt:	db	$00
 
 ; ------------------------------------------
 ; DSKFMT - Format not implemented
@@ -670,39 +679,74 @@ DEFDPB:		db	$00		; +00 DRIVE	Drive number
 		dw	$02ca		; +0E MAXCLUS	Number of clusters+1
 		db	$03		; +10 FATSIZ	Sectors per FAT
 		dw	$0007		; +11 FIRDIR	First directory sector
+		dw	$0000		; +12 FATPTR	FAT pointer
 
 ; ------------------------------------------
-; Boot MSX-DOS from HDD 
-; For use in a modified MSX-DOS 1 boot routine
+; Boot MSX-DOS from selected partition, to be used in a modified MSX-DOS boot process.
+; The boot menu time-out is appr. 4 seconds in a MSX/3.58Mhz machine.
+; MSX-DOS 1:
+; 	The default boot drive is the last primary partition that is flagged active.
+;	If DOS1 can't boot from the specified drive the machine will restart or start BASIC.
+; MSX-DOS 2:
+; 	The default boot drive is the first drive with a valid MSX-DOS 2 boot loader.
+;	If DOS2 can't boot from the  specified drive the machine will boot from the first drive or start BASIC.
 ; ------------------------------------------
-HDDBOOT:	di
-		ld	a,$07
-		call	SNSMAT
-		and	$40		; If [SELECT] key pressed then do not boot 
-		scf
-		ret	z
+BOOTMENU:	ei
 		call	GETWRK
+		xor	a
+		or	(ix+$2a)		; are there any IDE drives?
+IFDEF IDEDOS1
+		ret	z			; z=no IDE drives
 		ld	a,(ix+$29)
-		ld	($f247),a	; Default drive in MSX-DOS 1
-
-		; todo: boot menu
-		;call	PrintMsg
-		;db	"Boot  : ",0
-		;ld	a,($f247)
-		;add	a,'A'
-		;rst	$18
-		;call	PrintCRLF
-		;prompt boot choice with countdown 3 seconds
-		;input in a
-		;ld	($f247),a
-		
-		ld	bc,$01f8	; B=Number of sectors (1), C=Media ID (F8)
-		ld	hl,(SDIRBUF)	; Begin address in memory
-		ld	de,$0000	; Begin sector (0 is boot sector)
-		or	a		; Reset carry flag for read
-		call	PHYDIO		; Get the data from disk 
-		ld	hl,(SDIRBUF)
-		ret
+		ld	(CURDRV),a		
+ELSE
+		ld	a,(CUR_DRV)
+		ret	z			; z=no IDE drives
+		dec	a
+ENDIF
+		push	af
+		call	PrintMsg
+		db	"Boot  : ",0
+		pop	af
+		add	a,'A'
+		rst	$18
+		call	PrintMsg
+		db	13,10,13,10,"Press drive key or [ESC] to cancel.. ",0
+		ld	hl,$7800		; appr. 4 seconds
+boot_r1:	push	hl
+		call	SelectDrive
+		pop	hl
+		ret	c
+		push	hl
+		ld	hl,SNUMDR		; Number of drives in the system
+		cp	(hl)
+		pop	hl
+		jr	c,boot_valid
+		dec	hl
+		ld	a,h
+		or	l
+		jr	nz,boot_r1
+IFDEF IDEDOS1
+		ld	a,(CURDRV)
+boot_valid:	ld	(CURDRV),a
+ELSE
+		ld	a,(CUR_DRV)
+		dec	a
+boot_valid:	inc	a
+		ld	(CUR_DRV),a
+ENDIF
+		push	af
+		ld	a,$0c			; clear screen
+		rst	$18
+		ld	hl,$1000		; wait until boot key is released
+boot_r2:	dec	hl
+		ld	a,h
+		or	l
+		jr	nz,boot_r2
+		call	KILBUF			; clear keyboard buffer
+		pop	af
+		or	a			; clear carry flag
+		ret	
 
 ; ------------------------------------------------------------------------------
 ; *** Driver subroutines ***
@@ -721,7 +765,7 @@ IFDEF PPIDE
 ELSE
 		db	"SODA  : CF IDE "
 ENDIF
-IFDEF BEER20
+IFDEF IDEDOS1
 		db	"DOS 1",13,10,0
 ELSE
 		db	"DOS 2",13,10,0
@@ -811,9 +855,8 @@ dosError:	ld	l,a
 		scf
 		ret
 
-
 ; ------------------------------------------------------------------------------
-; *** Print subroutines ***
+; *** Print and input subroutines ***
 ; ------------------------------------------------------------------------------
 PrintMsg:	ex      (sp),hl
 	        call    PrintString
@@ -871,6 +914,33 @@ r735:		dec	b
 		jr	z,r734
 		ret
 
+; -----------------------------------------
+; Get drive character from keyboard
+; Output: A=0..7 or ff if no key pressed
+;         carry flag if ESC is pressed
+; -----------------------------------------
+SelectDrive:	call	CHSNS		; check keyboard buffer
+		jr	z,nokey		; z=empty
+		ld	a,$01
+	        ld	(REPCNT),a	; not to wait until repeat
+		call	CHGET           ; get a character (if exists)
+		cp	$1b		; [ESC]
+		scf
+		ret	z
+		cp	'A'
+		jr	c,nokey
+		cp	'I'
+		jr	c,setdrive
+		cp	'a'
+		jr	c,nokey
+		cp	'i'
+		jr	nc,nokey
+		sub	$20
+setdrive:	sub	'A'
+		ret
+nokey:		or	$ff
+		ret
+
 ; ------------------------------------------------------------------------------
 ; *** IDE hardware interface ***
 ;
@@ -888,10 +958,6 @@ r735:		dec	b
 ;
 ; Uses routine:
 ; dosError		DOS driver error handler
-;
-; Todo:
-; + probe for PPI 8255 IDE and 8-BIT CF IDE interface
-; + if possible include both PPIDE and CFIDE code in the same ROM image
 ; ------------------------------------------------------------------------------
 IDE_CMD_READ	equ	$20		; read sector
 IDE_CMD_WRITE	equ	$30		; write sector
@@ -916,10 +982,10 @@ CFIO_FEATURE	equ	CFIO_BASE+$01
 CFIO_STATUS	equ	CFIO_BASE+$07
 CFIO_COMMAND	equ	CFIO_BASE+$07
 
+IFDEF PPIDE
 ; ------------------------------------------------------------------------------
 ; *** PPI/IDE routines ***
 ; ------------------------------------------------------------------------------
-IFDEF PPIDE
 
 ; PPI control:
 ; $92 = Set PPI A+B to input
@@ -938,8 +1004,13 @@ IFDEF PPIDE
 ; ------------------------------------------
 ; Initialize disk
 ; ------------------------------------------
-ideInit:	xor	a
-		ret
+ideInit:	; probe for PPI 8255 hardware
+		call	ppideOutput
+		ld	hl,$00a5	; register=0 value=a5
+		call	ppideSetReg
+		in	a,(PPI_IOA)
+		cp	$a5
+		ret	
 
 ; ------------------------------------------
 ; Get IDE device information 
@@ -1154,20 +1225,33 @@ ppideInput:	ex	af,af'
 		ex	af,af'
 		ret
 
-ENDIF ; PPIDE
+; END PPIDE
 
+ELIFDEF CFIDE
 ; ------------------------------------------------------------------------------
 ; *** Compact Flash 8-BIT IDE routines ***
 ;
 ; To do: 
 ; + Test/optimize CFIDE
 ; ------------------------------------------------------------------------------
-IFDEF CFIDE
 
 ; ------------------------------------------
 ; Initialize disk
 ; ------------------------------------------
-ideInit:	call	ideWaitReady
+ideInit:	; probe for CF IDE hardware
+		ld	a,$aa
+		out	(CFIO_BASE),a
+		ld	a,$55
+		out	(CFIO_BASE+1),a
+		in	a,(CFIO_BASE)
+		cp	$aa
+		ret	nz
+		in	a,(CFIO_BASE+1)
+		cp	$55
+		ret	nz
+
+		; Set IDE feature to 8-bit
+		call	ideWaitReady
 		ret	c			; time-out
 		ld	a,$01			; enable 8-bit
 		ld	(CFIO_FEATURE),a
@@ -1280,13 +1364,31 @@ ideWaitData:	in	a,(CFIO_STATUS)
 ideError:	in	a,(CFIO_ERROR)
 		jp	dosError
 
-ENDIF ; CFIDE
+; END CFIDE
+
+ELSE
+; ------------------------------------------------------------------------------
+; *** Dummy driver routines ***
+; ------------------------------------------------------------------------------
+ideInit:	xor	a
+		inc	a	; nz=no hardware
+ideInfo:
+ideSetSector:
+ideCmdRead:
+ideReadSector:
+ideCmdWrite:
+ideWriteSector:
+ideWaitReady:
+ideWaitData:
+ideError:	ret
+
+
+ENDIF 
 
 ; ------------------------------------------------------------------------------
 ; *** IDE hardware driver jump table ***
 ; Todo: 
 ; + find specs for SCSI jump table
-; + free unused rom space
 ; ------------------------------------------------------------------------------
 
 IFDEF ATAPI_TABLE

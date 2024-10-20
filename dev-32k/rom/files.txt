@@ -1,0 +1,30 @@
+Source:
+https://github.com/b3rendsh/msxdos2s
+
+Files:
+beer_64k.img	64K EEPROM image for BEER-232 PPI IDE cartridge
+soda_64k.img	64K EEPROM image for SODA CF IDE cartridge
+dummy_16k.rom	16K Dummy rom
+beer_dos1.rom	16K BEER / PPI IDE DOS 1 rom (for BEER-202 cartridge)
+beer_dos2.rom	32K BEER / PPI IDE DOS 2 rom
+soda_dos1.rom	16K SODA / CF IDE DOS 1 rom 
+soda_dos2.rom	32K SODA / CF IDE DOS 2 rom
+
+BEER DOS2 in openMSX v20:
+Copy dummy_16k.rom to openMSX/share/extensions/hddrom.rom
+Cartridge Slot A: beer_dos2.rom
+Cartridge Slot B: SOLiD Beer IDE extension
+
+BEER DOS1 in openMSX v20:
+Copy beer_dos1.rom to openMSX/share/extensions/hddrom.rom
+Cartridge Slot A: SOLiD Beer IDE extension
+
+Works with disks that have a Master Boot Record.
+A compatible disk image can be created with openMSX disk manipulator:
+- type is Nextor
+- define at least 2 partitions
+
+FAT16 DOS 1 limitations:
+The maximum number of files in the root directory is 255, in FAT16 
+partitions this is typically set to 512. Directory entries (files)
+higher than 255 won't be visible/accessible in DOS 1.

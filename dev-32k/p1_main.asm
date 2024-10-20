@@ -56,6 +56,11 @@ S_ORG0	EQU	04000H		; Offset for current address: $ calculations
 	EXTERN	SECLEN		; Maximum sector size for media supported by this driver (512).
 	EXTERN	DEFDPB		; Base address of an 18 byte "default" DPB for this driver.
 
+IF PPIDE || CFIDE
+	; Additional symbol defined by the ide driver module
+	EXTERN	BOOTMENU
+ENDIF
+
 	; Routine used in the paging helper module
 	PUBLIC	C4B68
 
@@ -934,7 +939,6 @@ J4E5E:  SBC     HL,DE
 J4E63:  CCF
         JR      J4E4F
 
-;**************************************
 ; -------------------------------------
 ; BDOS 016H ENTRY
 ;
@@ -942,15 +946,154 @@ J4E63:  CCF
 DOS_CREATE:
 L461D:  LD      C,016H
         JP      J4F54
+; -------------------------------------
 
-;
+; Subroutine add spaces
+C60C3:  LD      A,' '
+        INC     C
+J60C6:  DEC     C
+        RET     Z
+        LD      (DE),A
+        INC     DE
+        JR      J60C6
+
+J60CC:  POP     AF			; store string released
+        POP     HL			; restore address of variable
+        POP     BC			; restore size of string, size of field
+        EX      (SP),HL			; store address of variable, restore string descriptor
+        EX      DE,HL
+        JR      NZ,J60E0		; string not released, skip allocation
+        PUSH    BC			; store size of string, size of field
+        LD      A,B
+        LD      IX,STRINI
+        CALL    C664F			; allocate temp string
+        CALL    C6107
+        POP     BC			; restore size of string, size of field
+J60E0:  EX      (SP),HL			; store , restore address of variable
+        PUSH    BC			; store size of string, size of field
+        PUSH    HL			; store address of variable
+        JP      J6079			; continue
+
+; Subroutine make integer (H_MKI)
+C60E6:  LD      A,2			; size of string = 2
+        DEFB    001H
+
+; Subroutine make single float (H_MKS)
+C60E9:  LD      A,4			; size of string = 4
+        DEFB    001H
+
+; Subroutine make double float (H_MKD)
+C60EC:  LD      A,8			; size of string = 8
+        CALL    C6888			; take control from hook caller
+        PUSH    AF			; store size of string
+        LD      IX,DOCNVF
+        CALL    C664F			; convert DAC to other type
+        POP     AF			; restore size of string
+        LD      IX,STRINI
+        CALL    C664F			; allocate temp string
+        LD      HL,(DSCTMP+1)		; pointer to string
+        CALL    VMOVMF			; copy variable content from DAC
+
+; Subroutine 
+C6107:  LD      DE,DSCTMP
+        LD      HL,(TEMPPT)
+        LD      (DAC+2),HL
+        LD      A,3
+        LD      (VALTYP),A
+        CALL    VMOVE			; copy string descriptor
+        LD      DE,FRETOP
+        RST    	R_DCOMPR
+        LD      (TEMPPT),HL
+        JP      Z,J6624			; string formula too complex error
+        RET
+
+; Subroutine convert to integer (H_CVI)
+C6123:  LD      A,2-1			; target size -1
+        DEFB    001H
+
+; Subroutine convert to single float (H_CVS)
+C6126:  LD      A,4-1			; target size -1
+        DEFB    001H
+
+; Subroutine convert to double float (H_CVD)
+C6129:  LD      A,8-1			; target size -1
+        CALL    C6888			; take control from hook caller
+        PUSH    AF			; store target size -1
+        LD      IX,FRESTR
+        CALL    C664F			; free temporary string descriptor
+        POP     AF			; resture target size -1
+        CP      (HL)			; field size to small ?
+        JP      NC,J662D		; yep, illegal function call error
+        INC     A			; target size
+        INC     HL
+        LD      C,(HL)
+        INC     HL
+        LD      H,(HL)
+        LD      L,C			; pointer to string
+        LD      (VALTYP),A		; target type
+        JP      VMOVFM			; copy variable content to DAC
+
+; -------------------------------------
 ; BDOS 02FH ENTRY
 ;
         DEFS    046BAH-$-S_ORG0,0C9H
 DOS_ABSREA:
 L46BA:  LD      C,02FH
         JP      J4F54
+; -------------------------------------
 
+; Subroutine end of file (H_EOF)
+C61C8:  CALL    C6888			; take control from hook caller
+        PUSH    HL
+        CALL    C5B60			; get character from i/o channel
+        LD      HL,0
+        JR      NC,J61D5		; not end of file, result = 0
+        DEC     HL			; end of file, result = -1
+J61D5:  PUSH    AF
+        CALL    MAKINT
+        POP     AF
+        POP     HL
+        INC     HL
+        INC     HL
+        INC     HL			; +3
+        LD      (HL),A			; update backup character
+        RET
+
+; Subroutine remove file (H_KILL)
+C6303:  CALL    C6888			; take control from hook caller
+        CALL    C6350			; evaluate file expression and check if disk drive
+        CALL    C665E			; get BASIC character
+        RET     NZ
+        PUSH    HL
+        CALL    C59D1			; execute find first entry (normal attributes)
+        LD      C,4DH			; function = delete file or subdirectory
+        JR      J632E
+
+; Subroutine rename file (H_NAME)
+C6315:  CALL    C6888			; take control from hook caller
+        CALL    C6350			; evaluate file expression and check if disk drive
+        PUSH    HL
+        CALL    C59D1			; execute find first entry (normal attributes)
+        POP     HL
+        CALL    C6654			; check for BASIC character
+        DEFB    "A"
+        CALL    C6654			; check for BASIC character
+        DEFB    "S"
+        CALL    C6350			; evaluate file expression and check if disk drive
+        PUSH    HL
+        LD      C,4EH			; function = rename file or subdirectory
+J632E:  PUSH    BC
+        LD      DE,BUF+10
+        LD      HL,(PATHNAM)
+        CALL    C655D			; execute BDOS function (handle error)
+        CALL    C59D8
+        POP     BC
+        JR      NC,J632E
+        CALL    C6343			; flush disk buffers
+        POP     HL
+        RET
+
+; *************************************
 ;
 ; BDOS 030H ENTRY
 ;
@@ -1015,7 +1158,7 @@ DOS_ZWRITE:
 L47D1:  LD      C,028H
         JP      J4F54
 ; -------------------------------------
-;**************************************
+; *************************************
 
 ; regain control from MSX BASIC initialization
 
@@ -1065,12 +1208,12 @@ J49AE:  LD      (HL),0C9H
         DJNZ    J49AE			; initialize AUX device hooks
         LD      A,0CDH
         LD      HL,SDOSON
-        LD      (PRTBUF+0),A
-        LD      (PRTBUF+1),HL
+        LD      (SPRTBUF+0),A
+        LD      (SPRTBUF+1),HL
         LD      A,0C3H
         LD      HL,C53AC
-        LD      (PRTBUF+3),A
-        LD      (PRTBUF+4),HL		; initialize PRTBUF subroutine
+        LD      (SPRTBUF+3),A
+        LD      (SPRTBUF+4),HL		; initialize PRTBUF subroutine
         LD      HL,I4109
         LD      (SERR_M),HL		; address of copy error message subroutine
         LD      HL,I4D32
@@ -1195,7 +1338,12 @@ J4AC1:  LD      HL,J4B1B
         LD      DE,BOT32K
         RST    	R_DCOMPR		; at least 32 Kb RAM ?
         RET     NZ			; nope, start DiskBASIC
+IF CFIDE || PPIDE 
+	CALL	BOOTMENU		; boot menu which sets current drive
+	RET	C			; If c-flag is set then start DiskBASIC
+ELSE
         LD      A,(CUR_DRV)		; current drive
+ENDIF
         LD      HL,I4B18		; empty command line
         JR      J4ADF			; start MSXDOS
 
@@ -1209,7 +1357,7 @@ J4ADF:  LD      SP,TMPSTK		; switch to temporary stack
         EX      (SP),HL			; start DiskBASIC when failed
         PUSH    AF			; store drive id
         LD      A,0FFH
-        LD      (DOSFLG),A		; MSXDOS enviroment = enabled
+        LD      (DOSFLG),A		; MSXDOS environment = enabled
         POP     AF			; restore drive id
         CALL    C68B3			; prepare for MSXDOS, try to start MSXDOS2
         CALL    C694A			; get valid boot loader
@@ -2913,6 +3061,8 @@ L55FF:  LD      C,2EH
 ; -------------------------------------
 ; *************************************
 
+; **** No more DOS entry points below this point ****
+
 ; Subroutine BSAVE
 
 C5CF2:  PUSH    DE			; store device code
@@ -3458,7 +3608,7 @@ C6026:  SCF				; LSET flag
         EX      DE,HL
         LD      HL,(FRETOP)
         RST    	R_DCOMPR
-        JR      C,J60CC
+        JP      C,J60CC
         POP     AF			; restore string released
 J6079:  LD      A,C			; size of field
         LD      IX,GETSPA
@@ -3519,101 +3669,7 @@ J60BE:  CALL    C,C60C3			; LSET, add spaces (after)
         POP     HL
         RET
 
-; Subroutine add spaces
-
-C60C3:  LD      A,' '
-        INC     C
-J60C6:  DEC     C
-        RET     Z
-        LD      (DE),A
-        INC     DE
-        JR      J60C6
-
-J60CC:  POP     AF			; store string released
-        POP     HL			; restore address of variable
-        POP     BC			; restore size of string, size of field
-        EX      (SP),HL			; store address of variable, restore string descriptor
-        EX      DE,HL
-        JR      NZ,J60E0		; string not released, skip allocation
-        PUSH    BC			; store size of string, size of field
-        LD      A,B
-        LD      IX,STRINI
-        CALL    C664F			; allocate temp string
-        CALL    C6107
-        POP     BC			; restore size of string, size of field
-J60E0:  EX      (SP),HL			; store , restore address of variable
-        PUSH    BC			; store size of string, size of field
-        PUSH    HL			; store address of variable
-        JP      J6079			; continue
-
-; Subroutine make integer (H_MKI)
-
-C60E6:  LD      A,2			; size of string = 2
-        DEFB    001H
-
-; Subroutine make single float (H_MKS)
-
-C60E9:  LD      A,4			; size of string = 4
-        DEFB    001H
-
-; Subroutine make double float (H_MKD)
-
-C60EC:  LD      A,8			; size of string = 8
-        CALL    C6888			; take control from hook caller
-        PUSH    AF			; store size of string
-        LD      IX,DOCNVF
-        CALL    C664F			; convert DAC to other type
-        POP     AF			; restore size of string
-        LD      IX,STRINI
-        CALL    C664F			; allocate temp string
-        LD      HL,(DSCTMP+1)		; pointer to string
-        CALL    VMOVMF			; copy variable content from DAC
-
-; Subroutine 
-
-C6107:  LD      DE,DSCTMP
-        LD      HL,(TEMPPT)
-        LD      (DAC+2),HL
-        LD      A,3
-        LD      (VALTYP),A
-        CALL    VMOVE			; copy string descriptor
-        LD      DE,FRETOP
-        RST    	R_DCOMPR
-        LD      (TEMPPT),HL
-        JP      Z,J6624			; string formula too complex error
-        RET
-
-; Subroutine convert to integer (H_CVI)
-
-C6123:  LD      A,2-1			; target size -1
-        DEFB    001H
-
-; Subroutine convert to single float (H_CVS)
-
-C6126:  LD      A,4-1			; target size -1
-        DEFB    001H
-
-; Subroutine convert to double float (H_CVD)
-
-C6129:  LD      A,8-1			; target size -1
-        CALL    C6888			; take control from hook caller
-        PUSH    AF			; store target size -1
-        LD      IX,FRESTR
-        CALL    C664F			; free temporary string descriptor
-        POP     AF			; resture target size -1
-        CP      (HL)			; field size to small ?
-        JP      NC,J662D		; yep, illegal function call error
-        INC     A			; target size
-        INC     HL
-        LD      C,(HL)
-        INC     HL
-        LD      H,(HL)
-        LD      L,C			; pointer to string
-        LD      (VALTYP),A		; target type
-        JP      VMOVFM			; copy variable content to DAC
-
 ; Subroutine convert DAC to 32 bit integer
-
 C6147:  LD      IX,GETYPR
         CALL    C664F			; get DAC type
         JP      M,J61B3			; integer,
@@ -3668,26 +3724,7 @@ J61B3:  LD      BC,(DAC+2)		; integer in DAC
 
 I61C0:  DEFB	045H,065H,053H,060H,0,0,0,0
 
-; Subroutine end of file (H_EOF)
-
-C61C8:  CALL    C6888			; take control from hook caller
-        PUSH    HL
-        CALL    C5B60			; get character from i/o channel
-        LD      HL,0
-        JR      NC,J61D5		; not end of file, result = 0
-        DEC     HL			; end of file, result = -1
-J61D5:  PUSH    AF
-        CALL    MAKINT
-        POP     AF
-        POP     HL
-        INC     HL
-        INC     HL
-        INC     HL			; +3
-        LD      (HL),A			; update backup character
-        RET
-
 ; Subroutine (H_FILE)
-
 C61E0:  CALL    C6888			; take control from hook caller
         CALL    C665E			; get BASIC character
         JR      Z,J61F1
@@ -3772,11 +3809,9 @@ J627A:  POP     HL			; restore BASIC pointer
         JP      C664F			; output back to screen
 
 ; Subroutine 
-
 C6282:  JR      NC,J62A4
 
 ; Subroutine 
-
 C6284:  LD      DE,BUF+11
         LD      HL,(PATHNAM)
         LD      C,5CH			; function = parse filename
@@ -3791,7 +3826,6 @@ J629B:  RST    	R_OUTDO
         LD      B,03H   ; 3 
 
 ; Subroutine 
-
 C629E:  LD      A,(HL)
         RST    	R_OUTDO
         INC     HL
@@ -3853,42 +3887,6 @@ C62FC:  LD      A,(HL)
         RET     Z
         RST    	R_OUTDO
         JR      C62FC
-
-; Subroutine remove file (H_KILL)
-
-C6303:  CALL    C6888			; take control from hook caller
-        CALL    C6350			; evaluate file expression and check if disk drive
-        CALL    C665E			; get BASIC character
-        RET     NZ
-        PUSH    HL
-        CALL    C59D1			; execute find first entry (normal attributes)
-        LD      C,4DH			; function = delete file or subdirectory
-        JR      J632E
-
-; Subroutine rename file (H_NAME)
-
-C6315:  CALL    C6888			; take control from hook caller
-        CALL    C6350			; evaluate file expression and check if disk drive
-        PUSH    HL
-        CALL    C59D1			; execute find first entry (normal attributes)
-        POP     HL
-        CALL    C6654			; check for BASIC character
-        DEFB    "A"
-        CALL    C6654			; check for BASIC character
-        DEFB    "S"
-        CALL    C6350			; evaluate file expression and check if disk drive
-        PUSH    HL
-        LD      C,4EH			; function = rename file or subdirectory
-J632E:  PUSH    BC
-        LD      DE,BUF+10
-        LD      HL,(PATHNAM)
-        CALL    C655D			; execute BDOS function (handle error)
-        CALL    C59D8
-        POP     BC
-        JR      NC,J632E
-        CALL    C6343			; flush disk buffers
-        POP     HL
-        RET
 
 ; Subroutine flush disk buffers
 

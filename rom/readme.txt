@@ -12,13 +12,6 @@ also together with other cartridges that contain higher DOS versions e.g. the
 SUNRISE IDE or a separate 32K EEPROM cartridge with a DOS v2.2 ROM below.
 Sources in mod-beer20 folder.
 
-BEER_DOS1.ROM
---------------
-16K ROM with alternative IDE driver for the BEER (PPI 8255) disk interface.
-It contains the latest development features and supports MS-DOS extended 
-partitions with up to 8 drives. This driver is a work in progress and may be 
-changed without notice.
-Driver sources in dev-32k folder.
 
 MSXD22S.ROM
 -----------
@@ -40,12 +33,18 @@ must still be patched once with compatch.com.
 Sources in mod-32k folder.
 
 
+BEER_AND_SODA.ZIP
+-----------------
+ZIP archive with ROM and EEPROM images for the BEER and SODA IDE interfaces.
+The ROM images include the latest DOS enhancements and IDE disk drivers.
+Sources in dev-32k folder.
+
+
 DEVELOPMENT
 -----------
-Newer development versions are not provided as a ROM in this repository. There
-is a build script (makefile) so you can create the binary ROM from source code
-with the Z88DK toolkit on a Windows PC or Linux PC. You can choose the target
-build options that are most suitable e.g. to create a ROM with DOS v2.2 that
-includes the BEER driver and FAT16 patch. The 32K ROM can be used on a BEER232
-PCB but not on a BEER202 PCB.
+There is a build script (Makefile) so you can create a custom ROM with the
+latest changes from source with the Z88DK toolkit on a Windows PC or Linux PC.
 Sources in dev-32k folder.
+
+
+
