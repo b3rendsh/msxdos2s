@@ -30,7 +30,8 @@ The 16K ROM is based on MSX DOS 1.03 and contains the driver 2.0 for the BEER ID
 3. It can be used as the disk ROM with the BEER-202 or BEER-232 hardware. 
 4. Works on a MSX1 system with 64K RAM. 
 5. Supports one IDE disk typically a CF card with use of a 40 pin CF adapter.
-6. The disk system supports up to 4 partitions of 32MB. 
+6. The disk system supports up to 4 FAT12 or FAT16 partitions.
+7. The number of root directory entries (files) in DOS 1 is limited to 255.
 
 ## Hardware 
 [BEER-232 IDE interface](hardware/beer-232/)  
