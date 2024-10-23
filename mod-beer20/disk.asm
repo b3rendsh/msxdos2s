@@ -765,7 +765,7 @@ A41B5:  ld      d,a
 
 ; Identification string (not used)
 IFDEF BEER20
-Q41C1:  defb    " MSX-DOS IDE v2.0.4a based on SOLiD IDE v1.9  "
+Q41C1:  defb    " MSX-DOS IDE v2.0.5 based on SOLiD IDE v1.9   "
 ELSE
 Q41C1:  defb    " MSX-DOS ver. 2.2 Copyright 1984 by Microsoft "
 ENDIF

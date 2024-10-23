@@ -579,7 +579,7 @@ r597:	add	hl,de
 	djnz	r597
 	ld	(iy+11h),l		; FIRDIR - First directory sector
 	ld	(iy+12h),h
-	ld	a,(ix+12h)		; Number of directory entries (high byte)
+	ld	a,(ix+12h)		; Number of directory entries (high byte) *** see bugfix below ***
 	ex	de,hl
 	ld	h,a
 	ld	l,(ix+11h)		; Number of directory entries (low byte)
@@ -590,12 +590,26 @@ r597:	add	hl,de
 	add	hl,hl
 	add	hl,hl
 	ld	l,h
-	ld	h,000h
-	ex	de,hl
+	ld	h,000h			; hl = number of sectors reserved for directory entries
+	ex	de,hl			; a directory entry is 32 bytes so 16 entries per sector.
+IFDEF BEER19_OLD
+	; max directories in the DPB is always set to 255 even if it is lower in the disk structure
+	; this will result in directory or file corruptions if data in the first file / data sectors
+	; on disk contains a 0 or e5 in one of the 32 byte offsets (at position 0,32,64,etc.)
 	jr	z,r598
 	ld	a,0ffh			; Max 255 directory entries
 	jr	r599
 r598:	ld	a,(iy+011h)
+ELSE
+	; bugfix: if directory entries high byte = 0 then set MAXENT to low byte else set MAXENT to 255.
+	; limitation: in a FAT16 disk with 512 root directory entries only the top 255 entries are visible.
+	or	a			; number of directory entries < 256?
+	jr	z,r598			; z=yes
+	ld	a,0ffh			; Max 255 directory entries
+	jr	r599
+r598:	ld	a,(ix+011h)		; another bugfix: ix not iy
+ENDIF
+
 r599:	ld	(iy+00bh),a		; MAXENT - Max directory entries
 	add	hl,de
 IFDEF BEER19_OLD
