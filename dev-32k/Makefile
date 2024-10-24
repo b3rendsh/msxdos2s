@@ -10,6 +10,7 @@ ifdef ComSpec
 	RMF	:= del /f /q
 	RMD	:=
 	SEARCH	:= find
+	CP	:= copy /b
 	GETDATE	:= powershell get-date -format "{yyyyMMdd}" 
 	QUOTE	:= "
 	/	:= $(strip \)
@@ -17,6 +18,7 @@ else
 	RMF	:= rm -f 
 	RMD	:= /*
 	SEARCH	:= grep
+	CP	:= cp
 	GETDATE	:= date +'%Y%m%d'
 	QUOTE	:= '"'
 	/	:= /
@@ -25,7 +27,7 @@ endif
 # Note: the rom folder must be an existing folder
 ROM 	:= .$/rom
 
-all:	ppide1 cfide1 ppide2 cfide2
+all:	ppide1 cfide1 ppide2 cfide2 taste
 
 rdate:
 	@echo db $(QUOTE)$(shell $(GETDATE))$(QUOTE) > rdate.inc
@@ -61,6 +63,13 @@ cfide2:	rdate
 	z88dk-appmake +glue -b obj/soda_dos2 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/soda_dos2__.bin -o $(ROM)/soda_dos2.rom -s 32768 --org 0
 	@echo done
+
+taste:
+	@echo Assembling taste program..
+	z80asm -b -Oobj -o=taste.com taste.asm
+	$(CP) obj$/taste.com $(ROM)$/TASTE.COM
+	@echo done
+
 
 img:	
 	@echo Creating BEER and SODA EEPROM images..

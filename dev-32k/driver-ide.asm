@@ -18,7 +18,7 @@
 ; + IDE hardware detection, if not present act as dummy driver
 ;
 ; Some differences with BEER 2.0 driver:
-; + Appr. 15% faster
+; + Appr. 20% faster
 ; + Improved error handling
 ; + Separate DOS layer and PPI/IDE hardware layer
 ; x Removed BEER 1.9 legacy dependencies
@@ -91,7 +91,6 @@ SECLEN		EQU	512
 ; ------------------------------------------
 INIHRD:		ld	a,$06
 		call	SNSMAT			; Check if CTRL key is pressed
-		di				
 		and	2
 		jr	z,r104			; z=yes: exit disk init
 		call	ideInit
@@ -599,7 +598,7 @@ r602:		add	hl,de
 		ex	de,hl
 		or	a			; number of directory entries < 256?
 		jr	z,r603			; z=yes
-		ld	a,$ff			; et max 255 directory entries
+		ld	a,$ff			; set max 255 directory entries
 		jr	r604 
 r603:		ld	a,(ix+$11)		; set max directory entries to directory entries low byte
 r604:		ld	(iy+$0b),a		; MAXENT - Max directory entries
@@ -755,8 +754,7 @@ boot_r2:	dec	hl
 ; ------------------------------------------
 ; IDE disk logo output
 ; ------------------------------------------
-OutputLogo:	di
-		push	af
+OutputLogo:	push	af
 		push	hl
 		call	PrintMsg
 		db	12
@@ -802,7 +800,7 @@ r721:		call	MakeDec
 		rst	$18
 		call PrintMsg
 		db	13,10,"        ",0
-		ld	hl,$d02e
+		ld	hl,$d036			; $d02e=firmware $d036=model
 		ld	b,$0a
 r722:		inc	hl
 		ld	a,(hl)
@@ -1064,12 +1062,14 @@ ideCmdRead:	ld 	a,IDE_CMD_READ
 ; Input: HL = transfer address
 ; ------------------------------------------
 ideReadSector:	ld	a,PPI_IOA
-		ld	b,$00			; counter (decreases by 3 in loop)
+		ld	b,$80			; counter (decreases by 5 in 4-byte loop)
 		ld	c,PPI_IOC
 		ld	d,IDE_READ
 		ld	e,IDE_IDLE
 		out	(c),e
-		; gross throughput: total 93 MSX T-states in loop, 3.580.000Hz/(93x256x2)=75KB/s
+		; gross throughput optimization: 
+		; total  93 MSX T-states in 2-byte read loop, 3.580.000Hz/( 93x256x2)=75KB/s
+		; total 172 MSX T-states in 4-byte read loop, 3.580.000Hz/(172x128x2)=81KB/s
 rdsec_loop:	out	(c),d			; 14T: IDE read
 		ld	c,a			; 05T: PPI port A
 		ini				; 18T: read low byte, increase bufferpointer, decrease counter
@@ -1077,7 +1077,16 @@ rdsec_loop:	out	(c),d			; 14T: IDE read
 		ini				; 18T: read high byte, increase bufferpointer, decrease counter
 		inc	c			; 05T; PPI port C
 		out	(c),e			; 14T: IDE idle
-		djnz	rdsec_loop		; 14T; 768 MOD 3 = 0
+		; repeat 2-byte read before looping to increase throughput:
+		; saves 128x14 T-states with 11 extra bytes of code
+		out	(c),d			; 14T
+		ld	c,a			; 05T
+		ini				; 18T
+		inc	c			; 05T
+		ini				; 18T
+		inc	c			; 05T
+		out	(c),e			; 14T
+		djnz	rdsec_loop		; 14T: 640 MOD 5 = 0
 		ret
 
 ; ------------------------------------------
@@ -1101,12 +1110,20 @@ wr_wait:	ex	(sp),hl
 ; Input: HL = transfer address
 ; ------------------------------------------
 ideWriteSector:	ld	a,PPI_IOA
-		ld	b,$00
+		ld	b,$80			; counter: 128x4=512 bytes
 		ld	c,PPI_IOC
 		ld	d,IDE_WRITE
 		ld	e,IDE_IDLE
 		out	(c),e
 wrsec_loop:	ld	c,a
+		outi
+		inc	c
+		outi
+		inc 	c
+		out	(c),d
+		out	(c),e
+		; repeat 2-byte write to increase throughput
+		ld	c,a
 		outi
 		inc	c
 		outi
@@ -1240,13 +1257,13 @@ ELIFDEF CFIDE
 ; ------------------------------------------
 ideInit:	; probe for CF IDE hardware
 		ld	a,$aa
-		out	(CFIO_BASE),a
+		out	(CFIO_BASE+3),a
 		ld	a,$55
-		out	(CFIO_BASE+1),a
-		in	a,(CFIO_BASE)
+		out	(CFIO_BASE+4),a
+		in	a,(CFIO_BASE+3)
 		cp	$aa
 		ret	nz
-		in	a,(CFIO_BASE+1)
+		in	a,(CFIO_BASE+4)
 		cp	$55
 		ret	nz
 
@@ -1254,7 +1271,9 @@ ideInit:	; probe for CF IDE hardware
 		call	ideWaitReady
 		ret	c			; time-out
 		ld	a,$01			; enable 8-bit
-		ld	(CFIO_FEATURE),a
+		out	(CFIO_FEATURE),a
+		ld	a,$e0			; LBA mode / device 0
+		out	(CFIO_BASE+6),a
 		ld	a,IDE_CMD_FEATURE
 		out	(CFIO_COMMAND),a
 		xor	a
@@ -1301,10 +1320,13 @@ ideCmdRead:	ld 	a,IDE_CMD_READ
 ; IDE Read Sector
 ; Input: HL = transfer address
 ; ------------------------------------------
-ideReadSector:	ld	b,$00
+ideReadSector:	ld	b,$20		; counter: 32x16=512 bytes
 		ld	c,CFIO_DATA
-		inir
-		inir
+rdsec_loop:	
+		REPT 16			; repeat: read 16 bytes
+		ini			; 16x ini in a loop is appr.20% faster than inir
+		ENDR
+		djnz	rdsec_loop
 		ret
 
 ; ------------------------------------------
@@ -1318,10 +1340,13 @@ ideCmdWrite:	ld 	a,IDE_CMD_WRITE
 ; IDE Write Sector
 ; Input: HL = transfer address
 ; ------------------------------------------
-ideWriteSector:	ld	b,$00
+ideWriteSector:	ld	b,$20
 		ld	c,CFIO_DATA
-		otir
-		otir
+wrsec_loop:	
+		REPT 16
+		outi
+		ENDR
+		djnz	wrsec_loop
 		ret
 
 ; ------------------------------------------
@@ -1387,8 +1412,6 @@ ENDIF
 
 ; ------------------------------------------------------------------------------
 ; *** IDE hardware driver jump table ***
-; Todo: 
-; + find specs for SCSI jump table
 ; ------------------------------------------------------------------------------
 
 IFDEF ATAPI_TABLE
