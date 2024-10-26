@@ -54,7 +54,7 @@
 		EXTERN	GETWRK		; Get address of disk driver's work area
 		EXTERN	GETSLT		; Get slot of this interface
 
-MYSIZE		EQU	44
+MYSIZE		EQU	46
 SECLEN		EQU	512
 
 ; ------------------------------------------------------------------------------
@@ -82,33 +82,23 @@ SECLEN		EQU	512
 ; +41 	 $29	Boot partition
 ; +42	 $2a	Number of drives on disk
 ; +43	 $2b	Read/write flag
+; +44	 $2c	IDE IO data address
+; +45	 $2d	IDE IO control address
 
 ; ------------------------------------------
-; INIHRD - Initialize the disk / output message
+; INIHRD - Initialize the disk
 ; Input : None
 ; Output: None
-; May corrupt: AF,BC,DE,HL,IX,IY 
+; May corrupt: AF,BC,DE,HL,IX,IY
+; Note: the workbuffer is not available yet so most of the initialization is moved to the DRIVES routine.
 ; ------------------------------------------
 INIHRD:		ld	a,$06
 		call	SNSMAT			; Check if CTRL key is pressed
 		and	2
-		jr	z,r104			; z=yes: exit disk init
-		call	ideInit
-		jr	nz,r103			; nz=ide hardware not detected
-		ld	hl,$d000
-		call	ideInfo
-		jr	c,r103			; c=time-out
-		call	OutputLogo
-		ld	b,$04			; delay loop to view the message
-r101:		ld	hl,$0000
-r102:		dec	hl
-		ld	a,h
-		or	l
-		jr	nz,r102
-		djnz	r101
-r103:		xor	a
+		jr	z,r101			; z=yes: exit disk init
+		xor	a
 		ret
-r104:		inc	sp
+r101:		inc	sp
 		inc	sp
 		ret
 
@@ -123,7 +113,7 @@ r104:		inc	sp
 ;
 ; The DRIVES routine will also initialize the work environment
 ; Temporary RAM variables:
-; $9000,$0200	Copy of Master Boot Record
+; $9000,$0200	Copy of disk info / Master Boot Record
 ; $9200,$0200	Copy of extended partition boot record
 ; $9400,$0002	Pointer to next partition in work area
 ; $9402,$0002	Extended partition sector offset low word
@@ -143,9 +133,13 @@ DRIVES:		push	af
 		ld	bc,MYSIZE-1
 		ldir
 
-		; probe hardware and validate MBR
+		; probe hardware, display info and validate MBR
 		call	ideInit
 		jr	nz,r207		; nz=ide hardware not detected
+		ld	hl,$9000	; Buffer address
+		call	ideInfo
+		jr	c,r207		; c=time-out
+		call	PrintDiskInfo
 		ld	hl,$9000	; Buffer address
 		call	ReadMBR
 		jr	c,r207
@@ -365,6 +359,14 @@ r301:		ld	a,(hl)
 		add	a,'0'
 		rst	$18
 		call	PrintCRLF
+		; delay loop to view the driver info
+		ld	b,$04			
+r302:		ld	hl,$0000
+r303:		dec	hl
+		ld	a,h
+		or	l
+		jr	nz,r303
+		djnz	r302
 		ret
 
 ; ------------------------------------------
@@ -392,13 +394,11 @@ DSKIO:		ei
 		cp	$08			; Max 8 drives (partitions) supported
 		jr	nc,r404
 		call	GETWRK			; base address of workarea in hl and ix
-		push	hl
-		pop	iy			; save copy of workarea base address
 		pop	af
 		jr	c,write_flag
-		ld	(iy+$2b),$00
+		ld	(ix+$2b),$00
 		jr	r400
-write_flag:	ld	(iy+$2b),$01
+write_flag:	ld	(ix+$2b),$01
 r400:		ld	e,a
 		add	a,a
 		add	a,a
@@ -407,12 +407,12 @@ r400:		ld	e,a
 		ld	d,$00
 		add	hl,de
 		push	hl
-		pop	ix
+		pop	iy
 		pop	bc
 		pop	de
 		pop	hl
 		xor	a
-		or	(ix+$04)		; Test if partition exists (must have nonzero partition type)
+		or	(iy+$04)		; Test if partition exists (must have nonzero partition type)
 		jr	z,r405
 
 		; translate logical to physical sector number
@@ -425,12 +425,12 @@ r400:		ld	e,a
 		ld	d,$00
 		jr	r402
 r401:		ld	de,$0000
-r402:		ld	c,(ix+$00)
-		ld	b,(ix+$01)
+r402:		ld	c,(iy+$00)
+		ld	b,(iy+$01)
 		add	hl,bc
 		ex	de,hl			; LBA address: de=00..15
-		ld	c,(ix+$02)
-		ld	b,(ix+$03)
+		ld	c,(iy+$02)
+		ld	b,(iy+$03)
 		adc	hl,bc
 		ld	c,l			; LBA address: c=16..23
 		pop	hl			; restore transfer address
@@ -464,7 +464,7 @@ r405:		ld	a,$04			; Error 4 = Data (CRC) error (abort,retry,ignore message)
 		scf
 		ret
 
-rw_sector:	ld	a,(iy+$2b)		; get read/write flag
+rw_sector:	ld	a,(ix+$2b)		; get read/write flag
 		or	a
 		jr	nz,dosWriteSector
 
@@ -752,9 +752,10 @@ boot_r2:	dec	hl
 ; ------------------------------------------------------------------------------
 
 ; ------------------------------------------
-; IDE disk logo output
+; Print IDE disk information
+; Input: $9000 = info record
 ; ------------------------------------------
-OutputLogo:	push	af
+PrintDiskInfo:	push	af
 		push	hl
 		call	PrintMsg
 		db	12
@@ -775,8 +776,8 @@ ENDIF
 		call	PrintMsg
 		db	"Master: ",0
 		ld	c,$4d
-		ld	hl,($d079)
-		ld	a,($d07b)
+		ld	hl,($9079)
+		ld	a,($907b)
 		srl	a
 		rr	h
 		rr	l
@@ -800,7 +801,7 @@ r721:		call	MakeDec
 		rst	$18
 		call PrintMsg
 		db	13,10,"        ",0
-		ld	hl,$d036			; $d02e=firmware $d036=model
+		ld	hl,$9036			; $902e=firmware $9036=model
 		ld	b,$0a
 r722:		inc	hl
 		ld	a,(hl)
@@ -956,40 +957,47 @@ nokey:		or	$ff
 ;
 ; Uses routine:
 ; dosError		DOS driver error handler
+;
+; The IX register must point to the driver work buffer for all these routines
 ; ------------------------------------------------------------------------------
 IDE_CMD_READ	equ	$20		; read sector
 IDE_CMD_WRITE	equ	$30		; write sector
+IDE_CMD_DIAG	equ	$90		; diagnostic test
 IDE_CMD_INFO	equ	$ec		; disk info
 IDE_CMD_FEATURE	equ	$ef		; set feature
 
-IDE_READ	equ	$40
-IDE_WRITE	equ	$80
-IDE_IDLE	equ	$c0
+IDE_READ	equ	$40		; /rd=0 /wr=1 /cs=0
+IDE_WRITE	equ	$80		; /rd=1 /wr=0 /cs=0
+IDE_IDLE	equ	$e7		; /rd=1 /wr=1 /cs=1 reg=7
 
 ; PPI 8255 I/O registers:
-PPI_IOA		equ	$30		; A: IDE data low byte
-PPI_IOB		equ	$31		; B: IDE data high byte
-PPI_IOC		equ	$32		; C: IDE control
-PPI_CTL		equ	$33		; PPI control
+PPI_IOA		equ	$00		; A: IDE data low byte
+PPI_IOB		equ	$01		; B: IDE data high byte
+PPI_IOC		equ	$02		; C: IDE control
+PPI_CTL		equ	$03		; PPI control
 
-; CF IDE I/O ports:
-CFIO_BASE	equ	$30
-CFIO_DATA	equ	CFIO_BASE+$00
-CFIO_ERROR	equ	CFIO_BASE+$01
-CFIO_FEATURE	equ	CFIO_BASE+$01
-CFIO_STATUS	equ	CFIO_BASE+$07
-CFIO_COMMAND	equ	CFIO_BASE+$07
+; PPI 8255 settings:
+PPI_INPUT	equ	$92		; Set PPI A+B to input
+PPI_OUTPUT	equ	$80		; Set PPI A+B to output
+
+; IDE registers:
+REG_DATA	equ	$00	; r/w
+REG_ERROR	equ	$01	; r
+REG_FEATURE	equ	$01	; w
+REG_COUNT	equ	$02	; r/w
+REG_LBA0	equ	$03	; r/w
+REG_LBA1	equ	$04	; r/w
+REG_LBA2	equ	$05	; r/w
+REG_LBA3	equ	$06	; r/w
+REG_STATUS	equ	$07	; r
+REG_COMMAND	equ	$07	; w
+REG_CONTROL	equ	$07	; r/w
 
 IFDEF PPIDE
 ; ------------------------------------------------------------------------------
-; *** PPI/IDE routines ***
+; *** PPI 8255 IDE routines ***
 ; ------------------------------------------------------------------------------
-
-; PPI control:
-; $92 = Set PPI A+B to input
-; $80 = Set PPI A+B to output
-;
-; IDE control bit:
+; PPI IDE control bit:
 ; 0	IDE register bit 0
 ; 1	IDE register bit 1
 ; 2	IDE register bit 2
@@ -1001,14 +1009,43 @@ IFDEF PPIDE
 
 ; ------------------------------------------
 ; Initialize disk
+; Output: Z-flag set if hardware detected
 ; ------------------------------------------
 ideInit:	; probe for PPI 8255 hardware
-		call	ppideOutput
-		ld	hl,$00a5	; register=0 value=a5
-		call	ppideSetReg
-		in	a,(PPI_IOA)
+		ld	hl,idePorts
+ideProbe:	ld	a,(hl)
+		cp	$ff
+		jr	z,ideNotDetected
+		call	ideInit1
+		ret	z
+		inc	hl
+		jr	ideProbe
+
+ideInit1:	add	a,PPI_CTL
+		ld	c,a
+		ld	a,PPI_OUTPUT		; PPI A+B is output
+		out	(c),a
+		dec	c			; PPI_IOC
+		ld	a,IDE_IDLE
+		out	(c),a
+		ld	c,(hl)			; PPI_IOA
+		ld	a,$a5			; set test pattern: 1010 0101
+		out	(c),a
+		in	a,(c)			; read back test pattern
 		cp	$a5
-		ret	
+		ret	nz
+		ld	(ix+$2c),c		; set PPI IDE IO data address
+		inc	c
+		inc	c
+		ld	(ix+$2d),c		; set PPI IDE IO control address
+		xor	a			; z=detected
+		ret
+
+ideNotDetected:	or	a			; nz=not detected
+		ret
+
+; List of ports that are probed, end with $ff
+idePorts:	db	$30,$10,$ff
 
 ; ------------------------------------------
 ; Get IDE device information 
@@ -1029,70 +1066,96 @@ ideInfo:	call	ideWaitReady
 ; ------------------------------------------
 ideSetSector:	call	ideWaitReady
 		ret	c
-		call	ppideOutput
 		push	hl
-		ld	h,$02			; IDE register 2
-		ld	l,$01			; number of sectors is 1
-		call	ppideSetReg
-		inc	h			; IDE register 3
-		ld	l,e			; bit 0..7
-		call	ppideSetReg
-		inc	h			; IDE register 4
-		ld	l,d			; bit 8..15
-		call	ppideSetReg
-		inc	h			; IDE register 5
-		ld	l,c			; bit 16..23
-		call	ppideSetReg
-		inc	h			; IDE register 6
+		push	bc
+		ld	l,c			; set l to bit 16..23
+		call	ppideOutput
+
+		ld	b,IDE_WRITE+$02		; IDE register 2
+		ld	a,$01			; number of sectors is 1
+		ld	c,(ix+$2c)
+		out 	(c),a
+		ld	c,(ix+$2d)
+		ld	h,c			; save 
+		out 	(c),b
+		ld	a,IDE_IDLE
+		out 	(c),a
+
+		inc	b			; IDE register 3
+		ld	c,(ix+$2c)
+		out	(c),e			; bit 0..7
+		ld	c,h
+		out 	(c),b
+		out	(c),a
+
+		inc	b			; IDE register 4
+		ld	c,(ix+$2c)
+		out	(c),d			; bit 8..15
+		ld	c,h
+		out 	(c),b
+		out	(c),a
+
+		inc	b			; IDE register 5
+		ld	c,(ix+$2c)
+		out	(c),l			; bit 16..23
+		ld	c,h
+		out 	(c),b
+		out	(c),a
+
+		inc	b			; IDE register 6
+		ld	c,(ix+$2c)
 		ld	l,$e0			; LBA mode
-		call	ppideSetReg
+		out	(c),l			
+		ld	c,h
+		out 	(c),b
+		out	(c),a
+
+		pop	bc
 		pop	hl
-		xor	a
 		ret
 
 ; ------------------------------------------
 ; IDE set command read sector
 ; ------------------------------------------
-ideCmdRead:	ld 	a,IDE_CMD_READ
+ideCmdRead:	push	bc
+		ld 	a,IDE_CMD_READ
 		call	ppideCommand
-		jp	ideWaitData
+		call	ideWaitData
+		pop	bc
+		ret
 
 ; ------------------------------------------
 ; IDE Read Sector
 ; Input: HL = transfer address
 ; ------------------------------------------
-ideReadSector:	ld	a,PPI_IOA
+ideReadSector:	ld	a,(ix+$2c)
 		ld	b,$80			; counter (decreases by 5 in 4-byte loop)
-		ld	c,PPI_IOC
+		ld	c,(ix+$2d)
 		ld	d,IDE_READ
 		ld	e,IDE_IDLE
+rdsec_loop:	out	(c),d			; IDE read
+		ld	c,a			; PPI port A
+		ini				; read low byte, increase bufferpointer, decrease counter
+		inc	c			; PPI port B
+		ini				; read high byte, increase bufferpointer, decrease counter
+		inc	c			; PPI port C
+		out	(c),e			; IDE idle
+		; repeat 2-byte read
+		out	(c),d
+		ld	c,a
+		ini
+		inc	c
+		ini
+		inc	c
 		out	(c),e
-		; gross throughput optimization: 
-		; total  93 MSX T-states in 2-byte read loop, 3.580.000Hz/( 93x256x2)=75KB/s
-		; total 172 MSX T-states in 4-byte read loop, 3.580.000Hz/(172x128x2)=81KB/s
-rdsec_loop:	out	(c),d			; 14T: IDE read
-		ld	c,a			; 05T: PPI port A
-		ini				; 18T: read low byte, increase bufferpointer, decrease counter
-		inc	c			; 05T: PPI port B
-		ini				; 18T: read high byte, increase bufferpointer, decrease counter
-		inc	c			; 05T; PPI port C
-		out	(c),e			; 14T: IDE idle
-		; repeat 2-byte read before looping to increase throughput:
-		; saves 128x14 T-states with 11 extra bytes of code
-		out	(c),d			; 14T
-		ld	c,a			; 05T
-		ini				; 18T
-		inc	c			; 05T
-		ini				; 18T
-		inc	c			; 05T
-		out	(c),e			; 14T
-		djnz	rdsec_loop		; 14T: 640 MOD 5 = 0
+		djnz	rdsec_loop		; 640 MOD 5 = 0
 		ret
 
 ; ------------------------------------------
 ; IDE set command write sector
 ; ------------------------------------------
-ideCmdWrite:	ld	a,IDE_CMD_WRITE
+ideCmdWrite:	push	bc
+		ld	a,IDE_CMD_WRITE
 		call	ppideCommand
 
 		; hardware design flaw: the control signals between ppi and ide should be inverted
@@ -1103,18 +1166,19 @@ wr_wait:	ex	(sp),hl
 		ex	(sp),hl
 		djnz	wr_wait
 		xor	a
+
+		pop	bc
 		ret
 
 ; ------------------------------------------
 ; IDE Write Sector
 ; Input: HL = transfer address
 ; ------------------------------------------
-ideWriteSector:	ld	a,PPI_IOA
+ideWriteSector:	ld	a,(ix+$2c)
 		ld	b,$80			; counter: 128x4=512 bytes
-		ld	c,PPI_IOC
+		ld	c,(ix+$2d)
 		ld	d,IDE_WRITE
 		ld	e,IDE_IDLE
-		out	(c),e
 wrsec_loop:	ld	c,a
 		outi
 		inc	c
@@ -1122,7 +1186,7 @@ wrsec_loop:	ld	c,a
 		inc 	c
 		out	(c),d
 		out	(c),e
-		; repeat 2-byte write to increase throughput
+		; repeat 2-byte write
 		ld	c,a
 		outi
 		inc	c
@@ -1172,73 +1236,62 @@ waitdata_1:	call	ppideStatus
 ; ------------------------------------------
 ; IDE error handling
 ; ------------------------------------------
-ideError:	ld	a,$c1
-		out	(PPI_IOC),a
-		ld 	a,$41
-		out 	(PPI_IOC),a
-		in 	a,(PPI_IOA)
-		ex	af,af'
-		ld	a,$c1
-		out	(PPI_IOC),a
-		ex	af,af'
+ideError:	ld	a,IDE_READ+REG_ERROR
+		call	ppideReadReg
 		jp	dosError
+
+; ------------------------------------------
+; PPI IDE read status register
+; ------------------------------------------
+ppideStatus:	ld	a,IDE_READ+REG_STATUS
+ppideReadReg:	ld	c,(ix+$2d)
+		out	(c),a
+		ld	c,(ix+$2c)
+		in	a,(c)
+		ex	af,af'
+		ld	a,IDE_IDLE
+		ld	c,(ix+$2d)
+		out	(c),a
+		ex	af,af'
+		ret
+
 
 ; ------------------------------------------
 ; PPI IDE set command
 ; Input:  A = command
 ; ------------------------------------------
 ppideCommand:	call	ppideOutput
-		push	hl
-		ld	h,$07
-		ld	l,a
-		call	ppideSetReg
-		pop	hl
-		ret
-
-; ------------------------------------------
-; PPI IDE set register
-; Input:  H = register
-;         L = value
-; ------------------------------------------
-ppideSetReg:	ld	a,$c0
-		add	a,h
-		out	(PPI_IOC),a
-		ld	a,l
-		out 	(PPI_IOA),a
-		ld 	a,$80
-		add	a,h
-		out 	(PPI_IOC),a
-		ld	a,$c0
-		add	a,h
-		out 	(PPI_IOC),a
-		ret
-
-; ------------------------------------------
-; PPI IDE read status register
-; ------------------------------------------
-ppideStatus:	ld	a,$c7
-		out	(PPI_IOC),a
-		ld 	a,$47
-		out 	(PPI_IOC),a
-		in 	a,(PPI_IOA)
-		ex	af,af'
-		ld 	a,$c7
-		out	(PPI_IOC),a
-		ex 	af,af'
+		ld	c,(ix+$2c)
+		out	(c),a
+		ld	c,(ix+$2d)
+		ld	a,IDE_WRITE+REG_COMMAND
+		out	(c),a
+		ld	a,IDE_IDLE
+		out	(c),a
 		ret
 
 ; ------------------------------------------
 ; PPI IDE set data direction
 ; ------------------------------------------
-ppideOutput:	ex	af,af'
-		ld	a,$80			; PPI A+B is output
-		out	(PPI_CTL),a
+ppideInput:	ex	af,af'
+		ld	c,(ix+$2d)
+		inc	c			; PPI_CTL
+		ld	a,PPI_INPUT		; PPI A+B is input
+		out	(c),a
+		ld	a,IDE_IDLE
+		dec	c			; PPIO_IOC
+		out	(c),a
 		ex	af,af'
 		ret
 
-ppideInput:	ex	af,af'
-		ld	a,$92			; PPI A+B is input
-		out	(PPI_CTL),a
+ppideOutput:	ex	af,af'
+		ld	c,(ix+$2d)
+		inc	c			; PPI_CTL
+		ld	a,PPI_OUTPUT		; PPI A+B is output
+		out	(c),a
+		ld	a,IDE_IDLE
+		dec	c			; PPI_IOC
+		out	(c),a
 		ex	af,af'
 		ret
 
@@ -1247,37 +1300,67 @@ ppideInput:	ex	af,af'
 ELIFDEF CFIDE
 ; ------------------------------------------------------------------------------
 ; *** Compact Flash 8-BIT IDE routines ***
-;
-; To do: 
-; + Test/optimize CFIDE
 ; ------------------------------------------------------------------------------
 
 ; ------------------------------------------
 ; Initialize disk
+; Output: Z-flag set if hardware detected
 ; ------------------------------------------
 ideInit:	; probe for CF IDE hardware
+		ld	hl,idePorts
+ideProbe:	ld	a,(hl)
+		cp	$ff
+		jr	z,ideNotDetected
+		call	ideInit1
+		ret	z
+		inc	hl
+		jr	ideProbe
+
+ideInit1:	add	a,$03
+		ld	c,a
 		ld	a,$aa
-		out	(CFIO_BASE+3),a
+		out	(c),a
 		ld	a,$55
-		out	(CFIO_BASE+4),a
-		in	a,(CFIO_BASE+3)
-		cp	$aa
-		ret	nz
-		in	a,(CFIO_BASE+4)
+		inc	c
+		out	(c),a
+		in	a,(c)
 		cp	$55
 		ret	nz
+		dec	c
+		in	a,(c)
+		cp	$aa
+		ret	nz
+
+		ld	a,(hl)
+		ld	(ix+$2c),a		; CF IDE IO Data
+		add	a,REG_CONTROL
+		ld	(ix+$2d),a		; CF IDE IO Command/Status
+
 
 		; Set IDE feature to 8-bit
 		call	ideWaitReady
 		ret	c			; time-out
-		ld	a,$01			; enable 8-bit
-		out	(CFIO_FEATURE),a
+		ld	a,(ix+$2c)
+		add	a,REG_FEATURE
+		ld	c,a
+		ld	a,$01
+		out	(c),a
+		ld	a,(ix+$2c)
+		add	a,REG_LBA3
+		ld	c,a
 		ld	a,$e0			; LBA mode / device 0
-		out	(CFIO_BASE+6),a
+		out	(c),a
 		ld	a,IDE_CMD_FEATURE
-		out	(CFIO_COMMAND),a
-		xor	a
+		ld	c,(ix+$2d)
+		out	(c),a
+		xor	a			; z=detected
 		ret
+
+ideNotDetected:	or	a			; nz=not detected
+		ret
+
+; List of ports that are probed, end with $ff
+idePorts:	db	$30,$38,$10,$ff
 
 ; ------------------------------------------
 ; Get IDE device information 
@@ -1285,10 +1368,13 @@ ideInit:	; probe for CF IDE hardware
 ideInfo:	call	ideWaitReady
 		ret	c			; time-out
 		ld	a,IDE_CMD_INFO
-		out	(CFIO_COMMAND),a
+		ld	c,(ix+$2d)
+		out	(c),a
 		call	ideWaitData
 		jp 	nz,ideError
-		jp	ideReadSector
+		call	ideReadSector
+		xor	a
+		ret
 
 ; ------------------------------------------
 ; IDE set sector start address and number of sectors
@@ -1296,32 +1382,46 @@ ideInfo:	call	ideWaitReady
 ; ------------------------------------------
 ideSetSector:	call	ideWaitReady
 		ret	c
+		push	hl
+		push	bc
+		ld	a,c
+		ex	af,af'
+		ld	a,(ix+$2c)
+		add	a,$02			; IDE register 2
+		ld	c,a
 		ld	a,$01			; number of sectors is 1
-		out	(CFIO_BASE+2),a
-		ld	a,e			; bit 0..7
-		out	(CFIO_BASE+3),a
-		ld	a,d			; bit 8..15
-		out	(CFIO_BASE+4),a
-		ld	a,c			; bit 16..23
-		out	(CFIO_BASE+5),a
+		out	(c),a
+		ex	af,af'
+		inc	c			; IDE register 3
+		out	(c),e			; bit 0..7
+		inc	c			; IDE register 4
+		out	(c),d			; bit 8..15
+		inc	c			; IDE register 5
+		out	(c),a			; bit 16..23
+		inc	c			; IDE register 6
 		ld	a,$e0			; LBA mode
-		out	(CFIO_BASE+6),a
-		xor	a
+		out	(c),a
+		pop	bc
+		pop	hl
 		ret
 
 ; ------------------------------------------
 ; IDE set command read sector
 ; ------------------------------------------
-ideCmdRead:	ld 	a,IDE_CMD_READ
-		out	(CFIO_COMMAND),a
-		jp	ideWaitData
+ideCmdRead:	push	bc
+		ld 	a,IDE_CMD_READ
+		ld	c,(ix+$2d)
+		out	(c),a
+		call	ideWaitData
+		pop	bc
+		ret
 
 ; ------------------------------------------
 ; IDE Read Sector
 ; Input: HL = transfer address
 ; ------------------------------------------
 ideReadSector:	ld	b,$20		; counter: 32x16=512 bytes
-		ld	c,CFIO_DATA
+		ld	c,(ix+$2c)	; IO port
 rdsec_loop:	
 		REPT 16			; repeat: read 16 bytes
 		ini			; 16x ini in a loop is appr.20% faster than inir
@@ -1332,16 +1432,20 @@ rdsec_loop:
 ; ------------------------------------------
 ; IDE set command write sector
 ; ------------------------------------------
-ideCmdWrite:	ld 	a,IDE_CMD_WRITE
-		out	(CFIO_COMMAND),a
-		jp	ideWaitData
+ideCmdWrite:	push	bc
+		ld 	a,IDE_CMD_WRITE
+		ld	c,(ix+$2d)
+		out	(c),a
+		call	ideWaitData
+		pop	bc
+		ret
 
 ; ------------------------------------------
 ; IDE Write Sector
 ; Input: HL = transfer address
 ; ------------------------------------------
 ideWriteSector:	ld	b,$20
-		ld	c,CFIO_DATA
+		ld	c,(ix+$2c)
 wrsec_loop:	
 		REPT 16
 		outi
@@ -1356,7 +1460,8 @@ ideWaitReady:	push	hl
 		push	bc
 		ld	b,$14			; time-out after 20 seconds
 wait_1:		ld	hl,$4000		; wait loop appr. 1 sec for MSX/3.58Mhz
-wait_2:		in	a,(CFIO_STATUS)
+wait_2:		ld	c,(ix+$2d)
+		in	a,(c)
 		and	%11000000
 		cp	%01000000		; BUSY=0 RDY=1 ?
 		jr	z,wait_end		; z=yes
@@ -1373,7 +1478,8 @@ wait_end:	pop	bc
 ; ------------------------------------------
 ; Wait for IDE data read/write request
 ; ------------------------------------------
-ideWaitData:	in	a,(CFIO_STATUS)
+ideWaitData:	ld	c,(ix+$2d)
+		in	a,(c)
 		bit	7,a			; IDE busy?
 		jr	nz,ideWaitData		; nz=yes
 		bit	0,a			; IDE error?
@@ -1384,10 +1490,14 @@ ideWaitData:	in	a,(CFIO_STATUS)
 		ret
 
 ; ------------------------------------------
-; CF IDE error handling
+; IDE error handling
 ; ------------------------------------------
-ideError:	in	a,(CFIO_ERROR)
+ideError:	ld	a,(ix+$2c)
+		add	a,REG_ERROR
+		ld	c,a
+		in	a,(c)
 		jp	dosError
+
 
 ; END CFIDE
 
@@ -1406,7 +1516,6 @@ ideWriteSector:
 ideWaitReady:
 ideWaitData:
 ideError:	ret
-
 
 ENDIF 
 
