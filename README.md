@@ -1,6 +1,6 @@
 # msxdos2s
 - MSX DOS 2.2 in a 32K ROM package
-- BEER-IDE driver 2.0 that is compatible with MSX DOS 2.2 and other disk systems
+- BEER and SODA IDE driver that is compatible with MSX DOS 2.2 and other disk systems
 - Disk hardware interface
 
 ## 32K MSX DOS 2.2
@@ -17,8 +17,22 @@ The binaries can be created from source with the z88dk tools.
  3. The original 64K ROM came on a cartridge with a ROM mapper. To use that version you need a small logic circuit e.g. a 74LS138 and 74LS74 in addition to a 64K EPROM. With the 32K version this circuit is no longer needed. 
  4. The ROM works with msxdos2.sys and command2.com version 2.20 or compatible loaded from disk media such as a floppy or IDE disk / compact flash card. 
 
+## BEER and SODA IDE
+[BEER and SODA ROM package](https://github.com/b3rendsh/msxdos2s/blob/main/rom/beer_and_soda.zip)  
 [Development](dev-32k/)  
-This folder contains the latest source code of this project. It is possible to create a 32K ROM that optionally contains the FAT16 patch and/or BEER-IDE 2.0 driver with support for FAT16 partitions. 
+This folder contains the latest source code of this project.
+
+You can build a 16K MSX DOS 1 ROM or 32K MSX DOS 2.2 ROM with a BEER or SODA IDE driver.  
+Following DOS enhancements are included:
+
+1. Large disks with a standard Master Boot Record
+2. Maximum of 4 primary partitions and/or 1 or more extended partitions.
+3. Maximum of 8 partitions
+4. FAT12 and FAT16 file systems*
+5. Boot drive selection (boot menu)
+6. Standard DOS 2 or Nextor partitions / disk format*
+   
+*The number of root directory entries (files) in DOS 1 is limited to 255.
 
 ## BEER-IDE 2.0
 [16K BEER-IDE 2.0 ROM](https://github.com/b3rendsh/msxdos2s/blob/main/rom/BEER20_DISK.ROM)  
@@ -36,6 +50,9 @@ The 16K ROM is based on MSX DOS 1.03 and contains the driver 2.0 for the BEER ID
 ## Hardware 
 [BEER-232 IDE interface](hardware/beer-232/)  
 The BEER-232 cartridge is derived from the BEER-202 and supports 2x 32K disk ROM  instead of a  single 16K ROM.
+
+[SODA IDE interface](https://github.com/Danjovic/Soda-IDE)  
+The SODA IDE cartridge design is based on a RCBus Compact Flash module. Danjovic adapted this design for MSX and made the PCB layout.  
 
 ## Limitations
 The source files are provided and modified for study only and the ROM files are provided for testing only. This repository contains mostly a re-composition of the creative work of ASCII, SOLiD, OKEI and maybe others. It is provided freely and "as it is" in the hope that it will be useful, but without any warranty of any kind, either expressed or implied. Use at own risk!  
