@@ -32,15 +32,40 @@ main:		ld	ix,iobase		; workbuffer for dynamic IO addresses
 		ld	de,t_header
 		call	PrintText
 
-		call	cfideInit		; probe cf interface first
+		; check for interface parameter 
+                ld      a,($005d)		; first character of commandline parameters:
+		cp	' '
+		jp	z,autodetect
+		cp	'S'			; S = soda interface
+		jr	nz,check1
+		call	cfideInit
+		ld	a,$01
+		jr	z,main_2
+		jr	notdetected
+
+check1:		cp	'B'			; B = beer interface
+		jr	nz,help
+		call	ppideInit
+		ld	a,$02
+		jr	z,main_2
+		jr	notdetected
+
+help:		ld	de,t_help
+		call	PrintText
+		jr	main_exit		
+
+autodetect:	call	cfideInit		; probe cf interface first
+		ld	a,$01
 		jr	z,main_2
 		call	ppideInit
+		ld	a,$02
 		jr	z,main_2
-		ld	de,t_notdetected
+notdetected:	ld	de,t_notdetected
 		call	PrintText
 		jr	main_exit
 
-main_2:		ld      de,cf_info	 	; point to jump table
+main_2:		ld	(itype),a
+		ld      de,cf_info	 	; point to jump table
                 ld      bc,9*3			; number of entries
                 ldir				; copy hardware interface routines table
 		call	info
@@ -63,7 +88,12 @@ t_header:	db	12
 		db	"----------------------------------",13,10,13,10,"$"
 t_notdetected:	db	"IDE hardware not detected",13,10,"$"
 t_error:	db	13,10,"IDE error $"
-
+t_help:		db	"Usage: TASTE [option]",13,10
+		db	"Autodetect the interface type",13,10
+		db	"if no option is specified.",13,10
+		db	"Option:",13,10
+		db	"  S = SODA interface",13,10
+		db	"  B = BEER interface",13,10,"$"
 
 ; ------------------------------------------------------------------------------
 ; Compact Flash information
@@ -71,6 +101,19 @@ t_error:	db	13,10,"IDE error $"
 info:		ld	hl,secbuf
 		call	cf_info
 		ret	c
+
+		ld	de,t_interface
+		call	PrintText
+		ld	a,(iobase)
+		call	PrintHexByte
+		ld	a,(itype)
+		cp	1
+		jr	z,isoda
+		ld	de,t_beer
+		jr	iprint
+isoda:		ld	de,t_soda
+iprint:		call	PrintText
+		call	PrintCRLF
 
 		ld	de,t_model
 		call	PrintText
@@ -107,6 +150,9 @@ info:		ld	hl,secbuf
 		call	PrintCRLF
 		ret
 
+t_interface:	db	"Interface: $"
+t_beer:		db	" BEER IDE $"
+t_soda:		db	" SODA IDE $"
 t_model:	db  	"Model    : $"
 t_serial:	db	"Serial   : $"
 t_firmware:	db	"Firmware : $"
@@ -921,11 +967,12 @@ cfideError:	ld	a,(ix+0)
 ; *** Dynamic variables ***
 ; ------------------------------------------------------------------------------
 
-		ALIGN	$100
-
-secbuf:		ds	512
 shex:		ds	6
 sinfo:		ds	30
 starttime:	ds	2
 america:	ds	1
 iobase:		ds	2
+itype:		ds	1
+
+		ALIGN	$100
+secbuf:		ds	512
