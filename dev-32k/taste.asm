@@ -233,8 +233,6 @@ speedtest1:	ld	de,t_speed
 		call	PrintText
 		ld	hl,(cf_readoptm+1)
 		ld	(cf_readsector+1),hl
-		call	diskread
-		ret
 
 diskread:	ld	hl,(JIFFY)
 		ld	(starttime),hl
@@ -242,7 +240,6 @@ diskread:	ld	hl,(JIFFY)
 		ld	hl,$0800	; read 2048 sectors = 1024 KB
 		ld	de,$0000	; start sector bit 0..15
 		ld	c,$00		; start sector bit 16..23
-		ld	b,$01		; sector count
 
 read_loop:	call	cf_setsector
 		ret	c
@@ -558,6 +555,7 @@ ppideSetSector:	call	ppideWaitReady
 		ld	c,(ix+0)
 		out 	(c),a
 		ld	c,(ix+1)
+		ld	h,c			; save 
 		out 	(c),b
 		ld	a,IDE_IDLE
 		out 	(c),a
@@ -565,21 +563,21 @@ ppideSetSector:	call	ppideWaitReady
 		inc	b			; IDE register 3
 		ld	c,(ix+0)
 		out	(c),e			; bit 0..7
-		ld	c,(ix+1)
+		ld	c,h
 		out 	(c),b
 		out	(c),a
 
 		inc	b			; IDE register 4
 		ld	c,(ix+0)
 		out	(c),d			; bit 8..15
-		ld	c,(ix+1)
+		ld	c,h
 		out 	(c),b
 		out	(c),a
 
 		inc	b			; IDE register 5
 		ld	c,(ix+0)
 		out	(c),l			; bit 16..23
-		ld	c,(ix+1)
+		ld	c,h
 		out 	(c),b
 		out	(c),a
 
@@ -587,7 +585,7 @@ ppideSetSector:	call	ppideWaitReady
 		ld	c,(ix+0)
 		ld	l,$e0			; LBA mode
 		out	(c),l			
-		ld	c,(ix+1)
+		ld	c,h
 		out 	(c),b
 		out	(c),a
 
@@ -826,6 +824,7 @@ cfide_tab:	jp	cfideInfo
 		jp	cfideReadOptm
 		jp	cfideWaitReady
 		jp	cfideWaitData
+		jp	cfideError
 
 ; ------------------------------------------
 ; Get IDE device information 

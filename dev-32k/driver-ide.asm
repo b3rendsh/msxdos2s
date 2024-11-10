@@ -22,9 +22,6 @@
 ; + Improved error handling
 ; + Separate DOS layer and PPI/IDE hardware layer
 ; x Removed BEER 1.9 legacy dependencies
-;
-; Under construction:
-; + 8-BIT CF IDE interface driver
 ; ------------------------------------------------------------------------------
 
 	        INCLUDE "disk.inc"	; Assembler directives
@@ -54,37 +51,28 @@
 		EXTERN	GETWRK		; Get address of disk driver's work area
 		EXTERN	GETSLT		; Get slot of this interface
 
-MYSIZE		EQU	46
-SECLEN		EQU	512
+MYSIZE		equ	46
+SECLEN		equ	512
 
 ; ------------------------------------------------------------------------------
 ; *** DOS driver routines ***
 ; ------------------------------------------------------------------------------
-;
-; Structure of disk interface work area:
-; +00,4  $00	First absolute sector of partition #1
-; +04	 $04	Partition type of partition #1
-; +05,4	 $05	First absolute sector of partition #2
-; +09	 $09	Partition type of partition #2
-; +10,4	 $0a	First absolute sector of partition #3
-; +14	 $0e	Partition type of partition #3
-; +15,4	 $0f	First absolute sector of partition #4
-; +19 	 $13	Partition type of partition #4
-; +20,4	 $14	First absolute sector of partition #5
-; +24	 $18	Partition type of partition #1
-; +25,4	 $19	First absolute sector of partition #6
-; +29	 $1d	Partition type of partition #2
-; +30,4	 $1e	First absolute sector of partition #7
-; +34	 $22	Partition type of partition #3
-; +35,4	 $23	First absolute sector of partition #8
-; +39 	 $27	Partition type of partition #4
-; +40 	 $28	Current drive
-; +41 	 $29	Boot partition
-; +42	 $2a	Number of drives on disk
-; +43	 $2b	Read/write flag
-; +44	 $2c	IDE IO data address
-; +45	 $2d	IDE IO control address
 
+; Structure of disk interface work area:
+; $00	First absolute sector of partition #1
+; $04	Partition type of partition #1
+; ...
+; $23	First absolute sector of partition #8
+; $27	Partition type of partition #8
+; 
+; $28 - $2d work variables:
+W_CURDRV	equ	$28	; Current drive
+W_BOOTDRV	equ	$29	; Boot drive (partition)
+W_DRIVES	equ	$2a	; Number of drives (partitions) on disk
+W_RWFLAG	equ	$2b	; Read/Write flag
+W_IODATA	equ	$2c	; IDE IO data port/register
+W_IOCTL		equ	$2d	; IODE IO control port/register
+	
 ; ------------------------------------------
 ; INIHRD - Initialize the disk
 ; Input : None
@@ -124,7 +112,7 @@ DRIVES:		push	af
 		push	de
 
 		; initialize work buffer
-		call	GETWRK		; HL and IX point to work buffer
+		call	GETWRK			; HL and IX point to work buffer
 		push	hl
 		ld	d,h
 		ld	e,l
@@ -135,72 +123,72 @@ DRIVES:		push	af
 
 		; probe hardware, display info and validate MBR
 		call	ideInit
-		jr	nz,r207		; nz=ide hardware not detected
-		ld	hl,$9000	; Buffer address
+		jr	nz,r207			; nz=ide hardware not detected
+		ld	hl,$9000		; Buffer address
 		call	ideInfo
-		jr	c,r207		; c=time-out
+		jr	c,r207			; c=time-out
 		call	PrintDiskInfo
-		ld	hl,$9000	; Buffer address
+		ld	hl,$9000		; Buffer address
 		call	ReadMBR
 		jr	c,r207
-		ld	a,($91fe)	; Validate boot signature (AA 55)
+		ld	a,($91fe)		; Validate boot signature (AA 55)
 		cp	$55
 		jr	nz,r207
 		ld	a,($91ff)
 		cp	$aa
 		jr	nz,r207
 
-		pop	de		; Pointer to work bufer, initialided with zeros
-		ld	hl,$91be	; Start of partition table
-		ld	b,$04		; max 4 primary partitions
-r201:		ld	c,(hl)		; Save status byte (active/inactive)
+		pop	de			; Pointer to work bufer, initialided with zeros
+		ld	hl,$91be		; Start of partition table
+		ld	b,$04			; max 4 primary partitions
+r201:		ld	c,(hl)			; Save status byte (active/inactive)
 		push	bc
-		inc	hl		; Skip CHS address information of first sector
+		inc	hl			; Skip CHS address information of first sector
 		inc	hl
 		inc	hl
 		inc	hl
-		ld	a,(hl)		; Load partition type
+		ld	a,(hl)			; Load partition type
 		call	PartitionType
 		jr	z,r202
 		call	PartitionExt
 		call	z,xpart
 		ld	bc,$000c
-		add	hl,bc		; Move to next partition
+		add	hl,bc			; Move to next partition
 		pop	bc
 		jr	r204
-r202:		inc	hl		; Skip CHS address information of last sector
+r202:		inc	hl			; Skip CHS address information of last sector
 		inc	hl
 		inc	hl
 		inc	hl
-		ldi			; Get LBA - first absolute sector in partition (4 bytes)
+		ldi				; Get LBA - first absolute sector in partition (4 bytes)
 		ldi
 		ldi
 		ldi
-		ld	(de),a		; Partition type
+		ld	(de),a			; Partition type
 		inc	de
-		inc	hl		; Skip LBA number of sectors (4 bytes) / move to next partition
+		inc	hl			; Skip LBA number of sectors (4 bytes) / move to next partition
 		inc	hl
 		inc	hl
 		inc	hl
 		pop	bc
-		ld	a,c		; Restore status byte
-		cp	$80		; Is active partition (and valid type)?
+		ld	a,c			; Restore status byte
+		cp	$80			; Is active partition (and valid type)?
 		jr	nz,r203
-		ld	a,(ix+$2a)
-		ld	(ix+$29),a	; Update boot drive
-r203:		inc	(ix+$2a)	; Increase partition count
-r204:		ld	a,(ix+$2a)
-		cp	$08		; Maximum partitions processed?
+		ld	a,(ix+W_DRIVES)
+		ld	(ix+W_BOOTDRV),a	; Update boot drive
+r203:		inc	(ix+W_DRIVES)		; Increase partition count
+r204:		ld	a,(ix+W_DRIVES)
+		cp	$08			; Maximum partitions processed?
 		jr	nc,r205
-		djnz	r201		; process next primary partition
-r205:		ld	a,(ix+$2a)
+		djnz	r201			; process next primary partition
+r205:		ld	a,(ix+W_DRIVES)
 IFDEF IDEDOS1
 		or	a
 		jr	nz,r206
-		inc	a		; Return value of 0 drives is not allowed in DOS 1
+		inc	a			; Return value of 0 drives is not allowed in DOS 1
 r206:
 ENDIF
-		ld	l,a		; set number of drives
+		ld	l,a			; set number of drives
 		pop	de
 		pop	bc
 		pop	af
@@ -211,7 +199,7 @@ r207:		pop	hl
 		jr	r205
 
 ; Process extended partitions
-xpart:		ld	($9400),de	; save pointer to next partition in workarea
+xpart:		ld	($9400),de		; save pointer to next partition in workarea
 		push	af
 		push	hl
 		inc	hl
@@ -226,27 +214,27 @@ xpart:		ld	($9400),de	; save pointer to next partition in workarea
 		inc	hl
 		ld	b,(hl)
 		call	xpart1
-		ld	de,($9400)	; Load pointer to next partition in workarea
+		ld	de,($9400)		; Load pointer to next partition in workarea
 		pop	hl
 		pop	af
 		ret
 
-xpart1:		ld	($9402),de	; save extended partition sector offset
-		ld	($9404),bc	; " 
-		ld	hl,$9200	; set extended partition boot record buffer
+xpart1:		ld	($9402),de		; save extended partition sector offset
+		ld	($9404),bc		; " 
+		ld	hl,$9200		; set extended partition boot record buffer
 		call	ReadBootRec
 		ret	c
-		ld	a,($93fe)	; Validate boot signature (AA 55)
+		ld	a,($93fe)		; Validate boot signature (AA 55)
 		cp	$55
 		ret	nz
 		ld	a,($93ff)
 		cp	$aa
 		ret	nz
-		ld	a,($93c2)	; Partition type of first entry
+		ld	a,($93c2)		; Partition type of first entry
 		call	PartitionType
 		jr	nz,r222
-r221:		ld	hl,$93c6	; First sector in partition
-		ld	de,($9400)	; Load pointer to next partition in workarea
+r221:		ld	hl,$93c6		; First sector in partition
+		ld	de,($9400)		; Load pointer to next partition in workarea
 		ld	a,($9402)
 		add	a,(hl)
 		ld	(de),a
@@ -266,18 +254,18 @@ r221:		ld	hl,$93c6	; First sector in partition
 		adc	a,(hl)
 		ld	(de),a
 		inc	de
-		ld	a,($93c2)	; load partition type
+		ld	a,($93c2)		; load partition type
 		ld	(de),a		
 		inc	de
-		ld	($9400),de	; Save pointer to next partition in workarea
-		inc	(ix+$2a)	; Increase partition counter
-		ld	a,(ix+$2a)
-		cp	$08		; Maximum partitions processed?
-		ret	z		; z=yes
-r222:		ld	a,($93d2)	; Partition type of 2nd entry
+		ld	($9400),de		; Save pointer to next partition in workarea
+		inc	(ix+W_DRIVES)		; Increase partition counter
+		ld	a,(ix+W_DRIVES)
+		cp	$08			; Maximum partitions processed?
+		ret	z			; z=yes
+r222:		ld	a,($93d2)		; Partition type of 2nd entry
 		call	PartitionExt
-		ret	nz		; End of chain
-		ld	hl,$93d6	; pointer to sector number of next extended partition
+		ret	nz			; End of chain
+		ld	hl,$93d6		; pointer to sector number of next extended partition
 		ld	de,($9402)
 		ld	bc,($9404)
 		ld	a,(hl)
@@ -298,29 +286,29 @@ r222:		ld	a,($93d2)	; Partition type of 2nd entry
 		jr	xpart1
 
 ; Validate partition type
-PartitionType:	cp	$01		; FAT12
+PartitionType:	cp	$01			; FAT12
 		ret	z
 IFNDEF FAT16DOS1
 		push	af
-		ld      a,(DOSVER)	; 15=BEER-DOS1
-		cp      $20		; Master disk system is DOS 2 or higher?
+		ld      a,(DOSVER)		; 15=BEER-DOS1
+		cp      $20			; Master disk system is DOS 2 or higher?
 		jr	c,r223
 		pop	af
 ENDIF
-		cp	$04		; FAT16 (<=32MB)
+		cp	$04			; FAT16 (<=32MB)
 		ret	z
-		cp	$06		; FAT16B (>32MB)
+		cp	$06			; FAT16B (>32MB)
 		ret	z
-		cp	$0e		; FAT16B with LBA
+		cp	$0e			; FAT16B with LBA
 		ret
 r223:		pop	af
 		ret
 
 
 ; Validate extended partition type
-PartitionExt:	cp	$05		; Extended partition (CHS,LBA)
+PartitionExt:	cp	$05			; Extended partition (CHS,LBA)
 		ret	z
-		cp	$0f		; Extended partition (LBA)
+		cp	$0f			; Extended partition (LBA)
 		ret
 	
 ; ------------------------------------------
@@ -329,14 +317,14 @@ PartitionExt:	cp	$05		; Extended partition (CHS,LBA)
 ; Output: None
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ; ------------------------------------------
-INIENV:		call	GETWRK		; HL and IX point to work buffer
+INIENV:		call	GETWRK			; HL and IX point to work buffer
 		xor	a
-		or	(ix+$2a)	; number of drives 0?
+		or	(ix+W_DRIVES)		; number of drives 0?
 		ret	z
-		ld	(ix+$28),$ff	; Init current drive
+		ld	(ix+W_CURDRV),$ff	; Init current drive
 		call	GETSLT
 		ld 	hl,DRVTBL
-		ld	b,a		; B = this disk interface slot number
+		ld	b,a			; B = this disk interface slot number
 		ld	c,$00
 r301:		ld	a,(hl)
 		add	a,c
@@ -344,18 +332,18 @@ r301:		ld	a,(hl)
 		inc	hl
 		ld	a,(hl)
 		inc	hl
-		cp	b		; this interface?
-		jr	nz,r301		; nz=no
+		cp	b			; this interface?
+		jr	nz,r301			; nz=no
 		dec	hl
 		dec	hl
 		ld	a,c
 		sub	(hl)
-		ld	b,(ix+$29)	; Get boot drive
+		ld	b,(ix+W_BOOTDRV)	; Get boot drive
 		add	a,b
-		ld	(ix+$29),a	; Set boot drive
+		ld	(ix+W_BOOTDRV),a	; Set boot drive
 		call	PrintMsg
 		db	"Drives: ",0
-		ld	a,(ix+$2a)
+		ld	a,(ix+W_DRIVES)
 		add	a,'0'
 		rst	$18
 		call	PrintCRLF
@@ -396,9 +384,9 @@ DSKIO:		ei
 		call	GETWRK			; base address of workarea in hl and ix
 		pop	af
 		jr	c,write_flag
-		ld	(ix+$2b),$00
+		ld	(ix+W_RWFLAG),$00
 		jr	r400
-write_flag:	ld	(ix+$2b),$01
+write_flag:	ld	(ix+W_RWFLAG),$01
 r400:		ld	e,a
 		add	a,a
 		add	a,a
@@ -464,7 +452,7 @@ r405:		ld	a,$04			; Error 4 = Data (CRC) error (abort,retry,ignore message)
 		scf
 		ret
 
-rw_sector:	ld	a,(ix+$2b)		; get read/write flag
+rw_sector:	ld	a,(ix+W_RWFLAG)		; get read/write flag
 		or	a
 		jr	nz,dosWriteSector
 
@@ -524,14 +512,14 @@ wr01:		call	ideWriteSector
 DSKCHG:		push	af
 		call	GETWRK
 		pop	af
-		cp	(ix+$28)	; current drive
-		ld	(ix+$28),a
+		cp	(ix+W_CURDRV)		; current drive
+		ld	(ix+W_CURDRV),a
 		jr	nz,r501
-		ld	b,$01		; unchanged
+		ld	b,$01			; unchanged
 		xor	a
 		ret
 
-r501:		ld	b,$FF		; changed
+r501:		ld	b,$FF			; changed
 		xor	a
 		ret
 
@@ -693,10 +681,10 @@ DEFDPB:		db	$00		; +00 DRIVE	Drive number
 BOOTMENU:	ei
 		call	GETWRK
 		xor	a
-		or	(ix+$2a)		; are there any IDE drives?
+		or	(ix+W_DRIVES)		; are there any IDE drives?
 IFDEF IDEDOS1
 		ret	z			; z=no IDE drives
-		ld	a,(ix+$29)
+		ld	a,(ix+W_BOOTDRV)
 		ld	(CURDRV),a		
 ELSE
 		ld	a,(CUR_DRV)
@@ -771,7 +759,7 @@ ELSE
 ENDIF
 		call	PrintMsg
 		db	"Rev.  : "
-		INCLUDE	"rdate.inc"	; Revision date
+		INCLUDE	"rdate.inc"		; Revision date
 		db	13,10,0
 		call	PrintMsg
 		db	"Master: ",0
@@ -801,7 +789,7 @@ r721:		call	MakeDec
 		rst	$18
 		call PrintMsg
 		db	13,10,"        ",0
-		ld	hl,$9036			; $902e=firmware $9036=model
+		ld	hl,$9036		; $902e=firmware $9036=model
 		ld	b,$0a
 r722:		inc	hl
 		ld	a,(hl)
@@ -823,7 +811,7 @@ r722:		inc	hl
 ReadMBR:	xor	a
 		ld	e,a
 		ld	d,a
-		ld	c,a		; sector address = 0 (24 bits) 
+		ld	c,a			; sector address = 0 (24 bits) 
 
 ReadBootRec:	call	ideSetSector
 		ret	c
@@ -866,7 +854,7 @@ PrintString:	ld      a,(hl)
 	        inc     hl
         	and     a
 	        ret     z
-        	rst	$18		; print character
+        	rst	$18			; print character
 	        jr      PrintString
 
 ; Print CR+LF
@@ -907,7 +895,7 @@ r733:		and	$0f
 		jr	z,r735
 r734:		ld	b,$01
 		add	a,$30
-		rst	$18		; print character
+		rst	$18			; print character
 		ret
 r735:		dec	b
 		jr	z,r734
@@ -918,12 +906,12 @@ r735:		dec	b
 ; Output: A=0..7 or ff if no key pressed
 ;         carry flag if ESC is pressed
 ; -----------------------------------------
-SelectDrive:	call	CHSNS		; check keyboard buffer
-		jr	z,nokey		; z=empty
+SelectDrive:	call	CHSNS			; check keyboard buffer
+		jr	z,nokey			; z=empty
 		ld	a,$01
-	        ld	(REPCNT),a	; not to wait until repeat
-		call	CHGET           ; get a character (if exists)
-		cp	$1b		; [ESC]
+	        ld	(REPCNT),a		; not to wait until repeat
+		call	CHGET           	; get a character (if exists)
+		cp	$1b			; [ESC]
 		scf
 		ret	z
 		cp	'A'
@@ -1034,10 +1022,10 @@ ideInit1:	add	a,PPI_CTL
 		in	a,(c)			; read back test pattern
 		cp	$a5
 		ret	nz
-		ld	(ix+$2c),c		; set PPI IDE IO data address
+		ld	(ix+W_IODATA),c		; set PPI IDE IO data address
 		inc	c
 		inc	c
-		ld	(ix+$2d),c		; set PPI IDE IO control address
+		ld	(ix+W_IOCTL),c		; set PPI IDE IO control address
 		xor	a			; z=detected
 		ret
 
@@ -1073,37 +1061,37 @@ ideSetSector:	call	ideWaitReady
 
 		ld	b,IDE_WRITE+$02		; IDE register 2
 		ld	a,$01			; number of sectors is 1
-		ld	c,(ix+$2c)
+		ld	c,(ix+W_IODATA)
 		out 	(c),a
-		ld	c,(ix+$2d)
+		ld	c,(ix+W_IOCTL)
 		ld	h,c			; save 
 		out 	(c),b
 		ld	a,IDE_IDLE
 		out 	(c),a
 
 		inc	b			; IDE register 3
-		ld	c,(ix+$2c)
+		ld	c,(ix+W_IODATA)
 		out	(c),e			; bit 0..7
 		ld	c,h
 		out 	(c),b
 		out	(c),a
 
 		inc	b			; IDE register 4
-		ld	c,(ix+$2c)
+		ld	c,(ix+W_IODATA)
 		out	(c),d			; bit 8..15
 		ld	c,h
 		out 	(c),b
 		out	(c),a
 
 		inc	b			; IDE register 5
-		ld	c,(ix+$2c)
+		ld	c,(ix+W_IODATA)
 		out	(c),l			; bit 16..23
 		ld	c,h
 		out 	(c),b
 		out	(c),a
 
 		inc	b			; IDE register 6
-		ld	c,(ix+$2c)
+		ld	c,(ix+W_IODATA)
 		ld	l,$e0			; LBA mode
 		out	(c),l			
 		ld	c,h
@@ -1128,9 +1116,9 @@ ideCmdRead:	push	bc
 ; IDE Read Sector
 ; Input: HL = transfer address
 ; ------------------------------------------
-ideReadSector:	ld	a,(ix+$2c)
+ideReadSector:	ld	a,(ix+W_IODATA)
 		ld	b,$80			; counter (decreases by 5 in 4-byte loop)
-		ld	c,(ix+$2d)
+		ld	c,(ix+W_IOCTL)
 		ld	d,IDE_READ
 		ld	e,IDE_IDLE
 rdsec_loop:	out	(c),d			; IDE read
@@ -1174,9 +1162,9 @@ wr_wait:	ex	(sp),hl
 ; IDE Write Sector
 ; Input: HL = transfer address
 ; ------------------------------------------
-ideWriteSector:	ld	a,(ix+$2c)
+ideWriteSector:	ld	a,(ix+W_IODATA)
 		ld	b,$80			; counter: 128x4=512 bytes
-		ld	c,(ix+$2d)
+		ld	c,(ix+W_IOCTL)
 		ld	d,IDE_WRITE
 		ld	e,IDE_IDLE
 wrsec_loop:	ld	c,a
@@ -1244,13 +1232,13 @@ ideError:	ld	a,IDE_READ+REG_ERROR
 ; PPI IDE read status register
 ; ------------------------------------------
 ppideStatus:	ld	a,IDE_READ+REG_STATUS
-ppideReadReg:	ld	c,(ix+$2d)
+ppideReadReg:	ld	c,(ix+W_IOCTL)
 		out	(c),a
-		ld	c,(ix+$2c)
+		ld	c,(ix+W_IODATA)
 		in	a,(c)
 		ex	af,af'
 		ld	a,IDE_IDLE
-		ld	c,(ix+$2d)
+		ld	c,(ix+W_IOCTL)
 		out	(c),a
 		ex	af,af'
 		ret
@@ -1261,9 +1249,9 @@ ppideReadReg:	ld	c,(ix+$2d)
 ; Input:  A = command
 ; ------------------------------------------
 ppideCommand:	call	ppideOutput
-		ld	c,(ix+$2c)
+		ld	c,(ix+W_IODATA)
 		out	(c),a
-		ld	c,(ix+$2d)
+		ld	c,(ix+W_IOCTL)
 		ld	a,IDE_WRITE+REG_COMMAND
 		out	(c),a
 		ld	a,IDE_IDLE
@@ -1272,9 +1260,12 @@ ppideCommand:	call	ppideOutput
 
 ; ------------------------------------------
 ; PPI IDE set data direction
+; Changing the mode on a 8255 will reset ports A,B and C to 0. 
+; The IDE control lines are re-initialized to IDLE in the ppiInput and ppiOutput routines 
+; so you don't have to do this before every IDE register read/write.
 ; ------------------------------------------
 ppideInput:	ex	af,af'
-		ld	c,(ix+$2d)
+		ld	c,(ix+W_IOCTL)
 		inc	c			; PPI_CTL
 		ld	a,PPI_INPUT		; PPI A+B is input
 		out	(c),a
@@ -1285,7 +1276,7 @@ ppideInput:	ex	af,af'
 		ret
 
 ppideOutput:	ex	af,af'
-		ld	c,(ix+$2d)
+		ld	c,(ix+W_IOCTL)
 		inc	c			; PPI_CTL
 		ld	a,PPI_OUTPUT		; PPI A+B is output
 		out	(c),a
@@ -1332,26 +1323,26 @@ ideInit1:	add	a,$03
 		ret	nz
 
 		ld	a,(hl)
-		ld	(ix+$2c),a		; CF IDE IO Data
+		ld	(ix+W_IODATA),a		; CF IDE IO Data
 		add	a,REG_CONTROL
-		ld	(ix+$2d),a		; CF IDE IO Command/Status
+		ld	(ix+W_IOCTL),a		; CF IDE IO Command/Status
 
 
 		; Set IDE feature to 8-bit
 		call	ideWaitReady
 		ret	c			; time-out
-		ld	a,(ix+$2c)
+		ld	a,(ix+W_IODATA)
 		add	a,REG_FEATURE
 		ld	c,a
 		ld	a,$01
 		out	(c),a
-		ld	a,(ix+$2c)
+		ld	a,(ix+W_IODATA)
 		add	a,REG_LBA3
 		ld	c,a
 		ld	a,$e0			; LBA mode / device 0
 		out	(c),a
 		ld	a,IDE_CMD_FEATURE
-		ld	c,(ix+$2d)
+		ld	c,(ix+W_IOCTL)
 		out	(c),a
 		xor	a			; z=detected
 		ret
@@ -1368,7 +1359,7 @@ idePorts:	db	$30,$38,$10,$ff
 ideInfo:	call	ideWaitReady
 		ret	c			; time-out
 		ld	a,IDE_CMD_INFO
-		ld	c,(ix+$2d)
+		ld	c,(ix+W_IOCTL)
 		out	(c),a
 		call	ideWaitData
 		jp 	nz,ideError
@@ -1386,7 +1377,7 @@ ideSetSector:	call	ideWaitReady
 		push	bc
 		ld	a,c
 		ex	af,af'
-		ld	a,(ix+$2c)
+		ld	a,(ix+W_IODATA)
 		add	a,$02			; IDE register 2
 		ld	c,a
 		ld	a,$01			; number of sectors is 1
@@ -1410,7 +1401,7 @@ ideSetSector:	call	ideWaitReady
 ; ------------------------------------------
 ideCmdRead:	push	bc
 		ld 	a,IDE_CMD_READ
-		ld	c,(ix+$2d)
+		ld	c,(ix+W_IOCTL)
 		out	(c),a
 		call	ideWaitData
 		pop	bc
@@ -1420,13 +1411,13 @@ ideCmdRead:	push	bc
 ; IDE Read Sector
 ; Input: HL = transfer address
 ; ------------------------------------------
-ideReadSector:	ld	b,$20		; counter: 32x16=512 bytes
-		ld	c,(ix+$2c)	; IO port
+ideReadSector:	ld	b,$20			; counter: 32x16=512 bytes (decreases by 17 in 16 byte loop)
+		ld	c,(ix+W_IODATA)		; IO port
 rdsec_loop:	
-		REPT 16			; repeat: read 16 bytes
-		ini			; 16x ini in a loop is appr.20% faster than inir
+		REPT 16				; repeat: read 16 bytes
+		ini				; 16x ini in a loop is appr.20% faster than inir
 		ENDR
-		djnz	rdsec_loop
+		djnz	rdsec_loop		; 2x256+32 = 32x17 (32 and 256+32 are not divisible by 17)
 		ret
 
 ; ------------------------------------------
@@ -1434,7 +1425,7 @@ rdsec_loop:
 ; ------------------------------------------
 ideCmdWrite:	push	bc
 		ld 	a,IDE_CMD_WRITE
-		ld	c,(ix+$2d)
+		ld	c,(ix+W_IOCTL)
 		out	(c),a
 		call	ideWaitData
 		pop	bc
@@ -1445,7 +1436,7 @@ ideCmdWrite:	push	bc
 ; Input: HL = transfer address
 ; ------------------------------------------
 ideWriteSector:	ld	b,$20
-		ld	c,(ix+$2c)
+		ld	c,(ix+W_IODATA)
 wrsec_loop:	
 		REPT 16
 		outi
@@ -1460,7 +1451,7 @@ ideWaitReady:	push	hl
 		push	bc
 		ld	b,$14			; time-out after 20 seconds
 wait_1:		ld	hl,$4000		; wait loop appr. 1 sec for MSX/3.58Mhz
-wait_2:		ld	c,(ix+$2d)
+wait_2:		ld	c,(ix+W_IOCTL)
 		in	a,(c)
 		and	%11000000
 		cp	%01000000		; BUSY=0 RDY=1 ?
@@ -1478,7 +1469,7 @@ wait_end:	pop	bc
 ; ------------------------------------------
 ; Wait for IDE data read/write request
 ; ------------------------------------------
-ideWaitData:	ld	c,(ix+$2d)
+ideWaitData:	ld	c,(ix+W_IOCTL)
 		in	a,(c)
 		bit	7,a			; IDE busy?
 		jr	nz,ideWaitData		; nz=yes
@@ -1492,7 +1483,7 @@ ideWaitData:	ld	c,(ix+$2d)
 ; ------------------------------------------
 ; IDE error handling
 ; ------------------------------------------
-ideError:	ld	a,(ix+$2c)
+ideError:	ld	a,(ix+W_IODATA)
 		add	a,REG_ERROR
 		ld	c,a
 		in	a,(c)
