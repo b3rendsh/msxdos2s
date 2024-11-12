@@ -956,13 +956,14 @@ IDE_CMD_FEATURE	equ	$ef		; set feature
 
 IDE_READ	equ	$40		; /rd=0 /wr=1 /cs=0
 IDE_WRITE	equ	$80		; /rd=1 /wr=0 /cs=0
+IDE_SET		equ	$c0		; /rd=1 /wr=1 /cs=0 
 IDE_IDLE	equ	$e7		; /rd=1 /wr=1 /cs=1 reg=7
 
 ; PPI 8255 I/O registers:
-PPI_IOA		equ	$00		; A: IDE data low byte
-PPI_IOB		equ	$01		; B: IDE data high byte
-PPI_IOC		equ	$02		; C: IDE control
-PPI_CTL		equ	$03		; PPI control
+PPI_IOA		equ	$30		; A: IDE data low byte
+PPI_IOB		equ	$31		; B: IDE data high byte
+PPI_IOC		equ	$32		; C: IDE control
+PPI_CTL		equ	$33		; PPI control
 
 ; PPI 8255 settings:
 PPI_INPUT	equ	$92		; Set PPI A+B to input
@@ -998,42 +999,18 @@ IFDEF PPIDE
 ; ------------------------------------------
 ; Initialize disk
 ; Output: Z-flag set if hardware detected
+; probe for PPI 8255 hardware on fixed IO port
 ; ------------------------------------------
-ideInit:	; probe for PPI 8255 hardware
-		ld	hl,idePorts
-ideProbe:	ld	a,(hl)
-		cp	$ff
-		jr	z,ideNotDetected
-		call	ideInit1
-		ret	z
-		inc	hl
-		jr	ideProbe
-
-ideInit1:	add	a,PPI_CTL
-		ld	c,a
-		ld	a,PPI_OUTPUT		; PPI A+B is output
-		out	(c),a
-		dec	c			; PPI_IOC
-		ld	a,IDE_IDLE
-		out	(c),a
-		ld	c,(hl)			; PPI_IOA
-		ld	a,$a5			; set test pattern: 1010 0101
-		out	(c),a
-		in	a,(c)			; read back test pattern
+ideInit:	ld	a,PPI_IOA
+		ld	(ix+W_IODATA),a
+		ld	a,PPI_CTL
+		ld	(ix+W_IOCTL),a
+		call	ppideOutput
+		ld	hl,$00a5		; register=0 value=a5
+		call	ppideSetReg
+		in	a,(PPI_IOA)
 		cp	$a5
-		ret	nz
-		ld	(ix+W_IODATA),c		; set PPI IDE IO data address
-		inc	c
-		inc	c
-		ld	(ix+W_IOCTL),c		; set PPI IDE IO control address
-		xor	a			; z=detected
 		ret
-
-ideNotDetected:	or	a			; nz=not detected
-		ret
-
-; List of ports that are probed, end with $ff
-idePorts:	db	$30,$10,$ff
 
 ; ------------------------------------------
 ; Get IDE device information 
@@ -1054,52 +1031,25 @@ ideInfo:	call	ideWaitReady
 ; ------------------------------------------
 ideSetSector:	call	ideWaitReady
 		ret	c
-		push	hl
-		push	bc
-		ld	l,c			; set l to bit 16..23
 		call	ppideOutput
-
-		ld	b,IDE_WRITE+$02		; IDE register 2
-		ld	a,$01			; number of sectors is 1
-		ld	c,(ix+W_IODATA)
-		out 	(c),a
-		ld	c,(ix+W_IOCTL)
-		ld	h,c			; save 
-		out 	(c),b
-		ld	a,IDE_IDLE
-		out 	(c),a
-
-		inc	b			; IDE register 3
-		ld	c,(ix+W_IODATA)
-		out	(c),e			; bit 0..7
-		ld	c,h
-		out 	(c),b
-		out	(c),a
-
-		inc	b			; IDE register 4
-		ld	c,(ix+W_IODATA)
-		out	(c),d			; bit 8..15
-		ld	c,h
-		out 	(c),b
-		out	(c),a
-
-		inc	b			; IDE register 5
-		ld	c,(ix+W_IODATA)
-		out	(c),l			; bit 16..23
-		ld	c,h
-		out 	(c),b
-		out	(c),a
-
-		inc	b			; IDE register 6
-		ld	c,(ix+W_IODATA)
+		push	hl
+		ld	h,$02			; IDE register 2
+		ld	l,$01			; number of sectors is 1
+		call	ppideSetReg
+		inc	h			; IDE register 3
+		ld	l,e			; bit 0..7
+		call	ppideSetReg
+		inc	h			; IDE register 4
+		ld	l,d			; bit 8..15
+		call	ppideSetReg
+		inc	h			; IDE register 5
+		ld	l,c			; bit 16..23
+		call	ppideSetReg
+		inc	h			; IDE register 6
 		ld	l,$e0			; LBA mode
-		out	(c),l			
-		ld	c,h
-		out 	(c),b
-		out	(c),a
-
-		pop	bc
+		call	ppideSetReg 
 		pop	hl
+		xor	a
 		ret
 
 ; ------------------------------------------
@@ -1116,11 +1066,12 @@ ideCmdRead:	push	bc
 ; IDE Read Sector
 ; Input: HL = transfer address
 ; ------------------------------------------
-ideReadSector:	ld	a,(ix+W_IODATA)
+ideReadSector:	ld	a,PPI_IOA
 		ld	b,$80			; counter (decreases by 5 in 4-byte loop)
-		ld	c,(ix+W_IOCTL)
+		ld	c,PPI_IOC
 		ld	d,IDE_READ
-		ld	e,IDE_IDLE
+		ld	e,IDE_SET
+		out	(c),e
 rdsec_loop:	out	(c),d			; IDE read
 		ld	c,a			; PPI port A
 		ini				; read low byte, increase bufferpointer, decrease counter
@@ -1162,11 +1113,12 @@ wr_wait:	ex	(sp),hl
 ; IDE Write Sector
 ; Input: HL = transfer address
 ; ------------------------------------------
-ideWriteSector:	ld	a,(ix+W_IODATA)
+ideWriteSector:	ld	a,PPI_IOA
 		ld	b,$80			; counter: 128x4=512 bytes
-		ld	c,(ix+W_IOCTL)
+		ld	c,PPI_IOC
 		ld	d,IDE_WRITE
-		ld	e,IDE_IDLE
+		ld	e,IDE_SET
+		out	(c),e
 wrsec_loop:	ld	c,a
 		outi
 		inc	c
@@ -1224,65 +1176,68 @@ waitdata_1:	call	ppideStatus
 ; ------------------------------------------
 ; IDE error handling
 ; ------------------------------------------
-ideError:	ld	a,IDE_READ+REG_ERROR
+ideError:	ld	a,IDE_SET+REG_ERROR
 		call	ppideReadReg
 		jp	dosError
 
 ; ------------------------------------------
 ; PPI IDE read status register
 ; ------------------------------------------
-ppideStatus:	ld	a,IDE_READ+REG_STATUS
-ppideReadReg:	ld	c,(ix+W_IOCTL)
-		out	(c),a
-		ld	c,(ix+W_IODATA)
-		in	a,(c)
+ppideStatus:	ld	a,IDE_SET+REG_STATUS
+ppideReadReg:	out	(PPI_IOC),a
+		res	7,a			; /rd=0
+		out	(PPI_IOC),a
+		in	a,(PPI_IOA)		; read register
 		ex	af,af'
 		ld	a,IDE_IDLE
-		ld	c,(ix+W_IOCTL)
-		out	(c),a
+		out	(PPI_IOC),a
 		ex	af,af'
 		ret
-
 
 ; ------------------------------------------
 ; PPI IDE set command
 ; Input:  A = command
 ; ------------------------------------------
 ppideCommand:	call	ppideOutput
-		ld	c,(ix+W_IODATA)
-		out	(c),a
-		ld	c,(ix+W_IOCTL)
-		ld	a,IDE_WRITE+REG_COMMAND
-		out	(c),a
-		ld	a,IDE_IDLE
-		out	(c),a
+		push	hl
+		ld	h,REG_COMMAND
+		ld	l,a
+		call	ppideSetReg
+		pop	hl
 		ret
 
 ; ------------------------------------------
+; PPI IDE set register
+; Input:  H = register
+;         L = value
+; ------------------------------------------
+ppideSetReg:	ld	a,IDE_SET
+		add	a,h
+		out	(PPI_IOC),a
+		ld	a,l
+		out 	(PPI_IOA),a
+		ld 	a,IDE_WRITE
+		add	a,h
+		out 	(PPI_IOC),a
+		ld	a,IDE_IDLE
+		out 	(PPI_IOC),a
+		ret 
+
+; ------------------------------------------
 ; PPI IDE set data direction
-; Changing the mode on a 8255 will reset ports A,B and C to 0. 
-; The IDE control lines are re-initialized to IDLE in the ppiInput and ppiOutput routines 
-; so you don't have to do this before every IDE register read/write.
+; Changing the mode on a 8255 will reset ports A,B and C to 0.
+; After channging direction the control lines on PPI Port C 
+; must be set before any read/write to IDE registers.
 ; ------------------------------------------
 ppideInput:	ex	af,af'
-		ld	c,(ix+W_IOCTL)
-		inc	c			; PPI_CTL
 		ld	a,PPI_INPUT		; PPI A+B is input
-		out	(c),a
-		ld	a,IDE_IDLE
-		dec	c			; PPIO_IOC
-		out	(c),a
+		out	(PPI_CTL),a
 		ex	af,af'
 		ret
 
 ppideOutput:	ex	af,af'
-		ld	c,(ix+W_IOCTL)
-		inc	c			; PPI_CTL
 		ld	a,PPI_OUTPUT		; PPI A+B is output
-		out	(c),a
-		ld	a,IDE_IDLE
-		dec	c			; PPI_IOC
-		out	(c),a
+		out	(PPI_CTL),a
 		ex	af,af'
 		ret
 

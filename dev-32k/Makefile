@@ -66,7 +66,7 @@ cfide2:	rdate
 
 taste:
 	@echo Assembling taste program..
-	z80asm -b -Oobj -o=taste.com taste.asm
+	z80asm -b -m -Oobj -o=taste.com taste.asm
 	$(CP) obj$/taste.com $(ROM)$/TASTE.COM
 	@echo done
 

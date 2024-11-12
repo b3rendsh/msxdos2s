@@ -9,6 +9,7 @@
 ; ------------------------------------------------------------------------------
 ; MSX disk info and test for use with BEER or SODA IDE interface.
 
+; DEFINE DEBUG	
 
 		INCLUDE	"msx.inc"
 
@@ -26,6 +27,7 @@ cf_readoptm:	jp	0
 cf_waitready:	jp	0
 cf_waitdata:	jp	0
 cf_error:	jp	0
+cf_readx:	jp	0
 
 main:		ld	ix,iobase		; workbuffer for dynamic IO addresses
 
@@ -66,7 +68,7 @@ notdetected:	ld	de,t_notdetected
 
 main_2:		ld	(itype),a
 		ld      de,cf_info	 	; point to jump table
-                ld      bc,9*3			; number of entries
+                ld      bc,10*3			; number of entries
                 ldir				; copy hardware interface routines table
 		call	info
 		jr	c,ide_error
@@ -88,12 +90,14 @@ t_header:	db	12
 		db	"----------------------------------",13,10,13,10,"$"
 t_notdetected:	db	"IDE hardware not detected",13,10,"$"
 t_error:	db	13,10,"IDE error $"
-t_help:		db	"Usage: TASTE [option]",13,10
+t_help:		db	"Usage: TASTE [option][X]",13,10
 		db	"Autodetect the interface type",13,10
 		db	"if no option is specified.",13,10
 		db	"Option:",13,10
 		db	"  S = SODA interface",13,10
-		db	"  B = BEER interface",13,10,"$"
+		db	"  B = BEER interface",13,10
+		db	"  X = include block read test",13,10,"$"
+
 
 ; ------------------------------------------------------------------------------
 ; Compact Flash information
@@ -229,20 +233,59 @@ speedtest1:	ld	de,t_speed
 		call	PrintText
 		call	diskread
 		ret	c
+
 		ld	de,t_optimized
 		call	PrintText
 		ld	hl,(cf_readoptm+1)
 		ld	(cf_readsector+1),hl
+		call	diskread
+		ret	c
+
+                ld      a,($005e)		; 2nd character of commandline parameters
+		cp	'X'
+		ret	nz
+
+		ld	de,t_block16k
+		call	PrintText
+		ld	hl,diskreadsec+1
+		ld	(hl),$40		; read 64 blocks of 16K = 1024k
+		inc	hl
+		ld	(hl),$00
+		ld	hl,(cf_readx+1)
+		ld	(cf_readsector+1),hl
+		ld	a,$20			; read 32 sectors
+		ld	(ppideNsector+1),a
+		ld	(cfideNsector+1),a
+		ld	(ppideReadX+1),a
+		ld	(cfideReadX+1),a
+		call	diskread
+		ret	c
+
+		ld	de,t_block5s
+		call	PrintText
+		ld	hl,diskreadsec+1
+		ld	(hl),$9A		; read 410 blocks of 2.5K = 1025k 
+		inc	hl
+		ld	(hl),$01
+		ld	a,$05			; read 5 sectors
+		ld	(ppideNsector+1),a
+		ld	(cfideNsector+1),a
+		ld	(ppideReadX+1),a
+		ld	(cfideReadX+1),a
 
 diskread:	ld	hl,(JIFFY)
 		ld	(starttime),hl
 
-		ld	hl,$0800	; read 2048 sectors = 1024 KB
+diskreadsec:	ld	hl,$0800	; read 2048 sectors = 1024 KB
 		ld	de,$0000	; start sector bit 0..15
 		ld	c,$00		; start sector bit 16..23
 
 read_loop:	call	cf_setsector
 		ret	c
+IFDEF DEBUG
+		ld	a,'.'
+		call	PrintC
+ENDIF
 		call	cf_cmdread
 		jp	nz,cf_error
 		push	hl
@@ -290,6 +333,8 @@ t_speed:	db	13,10,"Disk read speed (KB/s "
 t_speedHz:	db	"50Hz)",13,10,13,10
 		db	"Baseline : $"
 t_optimized:	db	"Optimized: $"
+t_block16k:	db	"block 16k: $"
+t_block5s:	db	"5 sectors: $"
 
 div_ac_de:	ld	hl,0
 		ld	b, 16
@@ -421,13 +466,14 @@ IDE_CMD_FEATURE	equ	$ef		; set feature
 
 IDE_READ	equ	$40		; /rd=0 /wr=1 /cs=0
 IDE_WRITE	equ	$80		; /rd=1 /wr=0 /cs=0
+IDE_SET		equ	$c0		; /rd=1 /wr=1 /cs=0
 IDE_IDLE	equ	$e7		; /rd=1 /wr=1 /cs=1 reg=7
 
 ; PPI 8255 I/O registers:
-PPI_IOA		equ	$00		; A: IDE data low byte
-PPI_IOB		equ	$01		; B: IDE data high byte
-PPI_IOC		equ	$02		; C: IDE control
-PPI_CTL		equ	$03		; PPI control
+PPI_IOA		equ	$30		; A: IDE data low byte
+PPI_IOB		equ	$31		; B: IDE data high byte
+PPI_IOC		equ	$32		; C: IDE control
+PPI_CTL		equ	$33		; PPI control
 
 ; PPI 8255 settings:
 PPI_INPUT	equ	$92		; Set PPI A+B to input
@@ -462,48 +508,19 @@ REG_CONTROL	equ	$07	; r/w
 ; ------------------------------------------
 ; Initialize disk
 ; Output: Z-flag set if hardware detected
+; probe for PPI 8255 hardware on fixed IO port
 ; ------------------------------------------
-ppideInit:	; probe for PPI 8255 hardware
-		ld	hl,ppidePorts
-ppideProbe:	ld	a,(hl)
-		cp	$ff
-		jr	z,ppideNotDetected
-		call	ppideInit1
-		ret	z
-		inc	hl
-		jr	ppideProbe
-
-ppideInit1:	add	a,PPI_CTL
-		ld	c,a
-		ld	a,PPI_OUTPUT		; PPI A+B is output
-		out	(c),a
-		dec	c			; PPI_IOC
-		ld	a,IDE_IDLE
-		out	(c),a
-		ld	c,(hl)			; PPI_IOA
-		ld	a,$a5			; set test pattern: 1010 0101
-		out	(c),a
-		in	a,(c)			; read back test pattern
-		cp	$a5			
-		ret	nz
-		ld	a,c
-		ld	(ix+0),a		; set PPI IDE IO data address
-		ld	(patch1+1),a
-		inc	a
-		inc	a
-		ld	(ix+1),a		; set PPI IDE IO control addres
-		ld	(patch2+1),a
-		ld	(patch3+1),a
-		xor	a			; z=detected
+ppideInit:	ld	a,PPI_IOA
+		ld	(ix+0),a
+		ld	a,PPI_CTL
+		ld	(ix+1),a
+		call	ppideOutput
+		ld	hl,$00a5		; register=0 value=a5
+		call	ppideSetReg
+		in	a,(PPI_IOA)
+		cp	$a5
 		ld	hl,ppide_tab
 		ret
-
-ppideNotDetected:
-		or	a			; nz=not detected
-		ret
-
-; List of ports that are probed, end with $ff
-ppidePorts:	db	$30,$10,$ff
 
 ppide_tab:	jp	ppideInfo
 		jp	ppideDiag
@@ -514,6 +531,7 @@ ppide_tab:	jp	ppideInfo
 		jp	ppideWaitReady
 		jp	ppideWaitData
 		jp	ppideError
+		jp	ppideReadX
 
 ; ------------------------------------------
 ; Get IDE device information 
@@ -545,52 +563,25 @@ ppideDiag:	call	ppideWaitReady
 ; ------------------------------------------
 ppideSetSector:	call	ppideWaitReady
 		ret	c
-		push	hl
-		push	bc
-		ld	l,c			; set l to bit 16..23
 		call	ppideOutput
-
-		ld	b,IDE_WRITE+$02		; IDE register 2
-		ld	a,$01			; number of sectors is 1
-		ld	c,(ix+0)
-		out 	(c),a
-		ld	c,(ix+1)
-		ld	h,c			; save 
-		out 	(c),b
-		ld	a,IDE_IDLE
-		out 	(c),a
-
-		inc	b			; IDE register 3
-		ld	c,(ix+0)
-		out	(c),e			; bit 0..7
-		ld	c,h
-		out 	(c),b
-		out	(c),a
-
-		inc	b			; IDE register 4
-		ld	c,(ix+0)
-		out	(c),d			; bit 8..15
-		ld	c,h
-		out 	(c),b
-		out	(c),a
-
-		inc	b			; IDE register 5
-		ld	c,(ix+0)
-		out	(c),l			; bit 16..23
-		ld	c,h
-		out 	(c),b
-		out	(c),a
-
-		inc	b			; IDE register 6
-		ld	c,(ix+0)
+		push	hl
+		ld	h,$02			; IDE register 2
+ppideNsector:	ld	l,$01			; number of sectors is N
+		call	ppideSetReg
+		inc	h			; IDE register 3
+		ld	l,e			; bit 0..7
+		call	ppideSetReg
+		inc	h			; IDE register 4
+		ld	l,d			; bit 8..15
+		call	ppideSetReg
+		inc	h			; IDE register 5
+		ld	l,c			; bit 16..23
+		call	ppideSetReg
+		inc	h			; IDE register 6
 		ld	l,$e0			; LBA mode
-		out	(c),l			
-		ld	c,h
-		out 	(c),b
-		out	(c),a
-
-		pop	bc
+		call	ppideSetReg 
 		pop	hl
+		xor	a
 		ret
 
 ; ------------------------------------------
@@ -609,19 +600,18 @@ ppideCmdRead:	push	bc
 ; ------------------------------------------
 
 ; Copy of BEER 1.9 code
-; Ports are patched at runtime
 ppideReadSector:
-patch1:		ld	c,PPI_IOA
+		ld	c,PPI_IOA
 		ld	d,0
 ppi_rd_loop:	ld	a,IDE_READ
 		ld	b,005h
-patch2:		out	(PPI_IOC),a
+		out	(PPI_IOC),a
 		ini
 		inc	c
 		ini
 		dec	c
 		ld	a,IDE_IDLE
-patch3:		out	(PPI_IOC),a
+		out	(PPI_IOC),a
 		dec	d
 		jr	nz,ppi_rd_loop
 		ret
@@ -631,11 +621,12 @@ patch3:		out	(PPI_IOC),a
 ; total  93 MSX T-states in 2-byte read loop, 3.580.000Hz/( 93x256x2)=75KB/s
 ; total 172 MSX T-states in 4-byte read loop, 3.580.000Hz/(172x128x2)=81KB/s
 ppideReadOptm:
-		ld	a,(ix+0)
+		ld	a,PPI_IOA
 		ld	b,$80
-		ld	c,(ix+1)
+		ld	c,PPI_IOC
 		ld	d,IDE_READ
-		ld	e,IDE_IDLE
+		ld	e,IDE_SET
+		out	(c),e
 ppi_opt_loop:	out	(c),d			; 14T
 		ld	c,a			; 05T
 		ini				; 18T
@@ -653,6 +644,42 @@ ppi_opt_loop:	out	(c),d			; 14T
 		inc	c
 		out	(c),e
 		djnz	ppi_opt_loop		; 14T
+		ret
+
+; ------------------------------------------
+ppideReadX:	ld	b,$20
+ppi_outer:	call	ppideWaitData
+		ret	nz
+		push	bc
+		ld	a,PPI_IOA
+		ld	b,$80
+		ld	c,PPI_IOC
+		ld	d,IDE_READ
+		ld	e,IDE_SET
+		out	(c),e
+ppi_inner:	out	(c),d
+		ld	c,a
+		ini	
+		inc	c
+		ini
+		inc	c
+		out	(c),e
+		; repeat
+		out	(c),d
+		ld	c,a
+		ini
+		inc	c
+		ini
+		inc	c
+		out	(c),e
+		djnz	ppi_inner
+IFDEF DEBUG
+		ld	a,'-'
+		call	PrintC
+ENDIF
+		pop	bc
+		djnz	ppi_outer
+		xor	a
 		ret
 
 ; ------------------------------------------
@@ -681,7 +708,11 @@ ppi_wait_end:	pop	bc
 ; Wait for IDE data read/write request
 ; ------------------------------------------
 ppideWaitData:	call 	ppideInput
-ppi_waitdata_1:	call	ppideStatus
+ppi_waitdata_1:	
+IFDEF DEBUG
+		call	ppi_dumpreg		; debug
+ENDIF
+		call	ppideStatus
 		bit	7,a			; IDE busy?
 		jr	nz,ppi_waitdata_1	; nz=yes
 		bit	0,a			; IDE error?
@@ -691,24 +722,44 @@ ppi_waitdata_1:	call	ppideStatus
 		xor	a			; no error
 		ret
 
+; debug: dump registers
+ppi_dumpreg:	ld	a,IDE_SET+1
+		call	ppideReadReg
+		ld	(ppireg),a
+		ld	a,IDE_SET+2
+		call	ppideReadReg
+		ld	(ppireg+1),a
+		ld	a,IDE_SET+3
+		call	ppideReadReg
+		ld	(ppireg+2),a
+		ld	a,IDE_SET+4
+		call	ppideReadReg
+		ld	(ppireg+3),a
+		ld	a,IDE_SET+5
+		call	ppideReadReg
+		ld	(ppireg+4),a
+		ld	a,IDE_SET+6
+		call	ppideReadReg
+		ld	(ppireg+5),a
+		ret
+
 ; ------------------------------------------
 ; IDE error handling
 ; ------------------------------------------
-ppideError:	ld	a,IDE_READ+REG_ERROR
+ppideError:	ld	a,IDE_SET+REG_ERROR
 		jr	ppideReadReg
 
 ; ------------------------------------------
 ; PPI IDE read status register
 ; ------------------------------------------
-ppideStatus:	ld	a,IDE_READ+REG_STATUS
-ppideReadReg:	ld	c,(ix+1)
-		out	(c),a
-		ld	c,(ix+0)
-		in	a,(c)
+ppideStatus:	ld	a,IDE_SET+REG_STATUS
+ppideReadReg:	out	(PPI_IOC),a
+		res	7,a			; /rd=0
+		out	(PPI_IOC),a
+		in	a,(PPI_IOA)		; read register
 		ex	af,af'
 		ld	a,IDE_IDLE
-		ld	c,(ix+1)
-		out	(c),a
+		out	(PPI_IOC),a
 		ex	af,af'
 		ret
 
@@ -717,37 +768,42 @@ ppideReadReg:	ld	c,(ix+1)
 ; Input:  A = command
 ; ------------------------------------------
 ppideCommand:	call	ppideOutput
-		ld	c,(ix+0)
-		out	(c),a
-		ld	c,(ix+1)
-		ld	a,IDE_WRITE+REG_COMMAND
-		out	(c),a
-		ld	a,IDE_IDLE
-		out	(c),a
+		push	hl
+		ld	h,REG_COMMAND
+		ld	l,a
+		call	ppideSetReg
+		pop	hl
 		ret
+
+; ------------------------------------------
+; PPI IDE set register
+; Input:  H = register
+;         L = value
+; ------------------------------------------
+ppideSetReg:	ld	a,IDE_SET
+		add	a,h
+		out	(PPI_IOC),a
+		ld	a,l
+		out 	(PPI_IOA),a
+		ld 	a,IDE_WRITE
+		add	a,h
+		out 	(PPI_IOC),a
+		ld	a,IDE_IDLE
+		out 	(PPI_IOC),a
+		ret 
 
 ; ------------------------------------------
 ; PPI IDE set data direction
 ; ------------------------------------------
 ppideInput:	ex	af,af'
-		ld	c,(ix+1)
-		inc	c			; PPI_CTL
 		ld	a,PPI_INPUT		; PPI A+B is input
-		out	(c),a
-		ld	a,IDE_IDLE
-		dec	c			; PPIO_IOC
-		out	(c),a
+		out	(PPI_CTL),a
 		ex	af,af'
 		ret
 
 ppideOutput:	ex	af,af'
-		ld	c,(ix+1)
-		inc	c			; PPI_CTL
 		ld	a,PPI_OUTPUT		; PPI A+B is output
-		out	(c),a
-		ld	a,IDE_IDLE
-		dec	c			; PPI_IOC
-		out	(c),a
+		out	(PPI_CTL),a
 		ex	af,af'
 		ret
 
@@ -825,6 +881,7 @@ cfide_tab:	jp	cfideInfo
 		jp	cfideWaitReady
 		jp	cfideWaitData
 		jp	cfideError
+		jp	cfideReadX
 
 ; ------------------------------------------
 ; Get IDE device information 
@@ -865,7 +922,7 @@ cfideSetSector:	call	cfideWaitReady
 		ld	a,(ix+0)
 		add	a,$02			; IDE register 2
 		ld	c,a
-		ld	a,$01			; number of sectors is 1
+cfideNsector:	ld	a,$01			; number of sectors is 1
 		out	(c),a
 		ex	af,af'
 		inc	c			; IDE register 3
@@ -915,6 +972,23 @@ cfopt_loop:
 		ini			; 16x ini in a loop is faster than inir
 		ENDR
 		djnz	cfopt_loop
+		ret
+
+; ------------------------------------------
+; Block read
+cfideReadX:	ld	b,$20
+cf_outer:	call	cfideWaitData
+		ret	nz
+		push	bc
+		ld	b,$20		; counter: 32x16=512 bytes
+		ld	c,(ix+0)
+cf_inner:
+		REPT 16			; repeat: read 16 bytes
+		ini			; 16x ini in a loop is faster than inir
+		ENDR
+		djnz	cf_inner
+		pop	bc
+		djnz	cf_outer
 		ret
 
 ; ------------------------------------------
@@ -972,6 +1046,7 @@ starttime:	ds	2
 america:	ds	1
 iobase:		ds	2
 itype:		ds	1
+ppireg:		ds	6
 
 		ALIGN	$100
 secbuf:		ds	512
