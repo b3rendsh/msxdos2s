@@ -413,7 +413,7 @@ BYTCT2  EQU     0F2FAH          ; partical sector transfer at end
 ERR_BUF EQU     0F2FBH  	; --S--
 SECCNT  EQU     0F2FCH          ; number of complete sectors to transfer
 BOOT_D  EQU     0F2FDH  	; --SL-
-BDOS_ST EQU     0F2FEH          ; --SL- pointer to temporary stack (BDOS)
+ST_BDOS EQU     0F2FEH          ; --SL- pointer to temporary stack (BDOS)
 ENTFRE  EQU     0F2FEH          ; first free direntry (0FFH if none found) (DOS1)
 READOP  EQU     0F2FFH          ; flag diskoperation (0 if read, 1 if write)
 KDSK_V  EQU     0F300H  	; --S--
