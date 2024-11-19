@@ -100,13 +100,15 @@ r101:		inc	sp
 ; May corrupt: F,HL,IX,IY
 ;
 ; The DRIVES routine will also initialize the work environment
-; Temporary RAM variables:
-; $9000,$0200	Copy of disk info / Master Boot Record
-; $9200,$0200	Copy of extended partition boot record
-; $9400,$0002	Pointer to next partition in work area
-; $9402,$0002	Extended partition sector offset low word
-; $9404,$0002	Extended partition sector offset high word
 ; ------------------------------------------
+
+; Temporary RAM variables:
+PART_BUF	equ	$C000		; Copy of disk info / Master Boot Record
+PART_BUFX	equ	PART_BUF+$200	; Copy of extended partition boot record
+PART_NEXT	equ	PART_BUF+$400	; Pointer to next partition in work area
+PART_EXTLO	equ	PART_BUF+$402	; Extended partition sector offset low word
+PART_EXTHI	equ	PART_BUF+$404	; Extended partition sector offset high word
+
 DRIVES:		push	af
 		push	bc
 		push	de
@@ -124,22 +126,22 @@ DRIVES:		push	af
 		; probe hardware, display info and validate MBR
 		call	ideInit
 		jr	nz,r207			; nz=ide hardware not detected
-		ld	hl,$9000		; Buffer address
+		ld	hl,PART_BUF		; Buffer address
 		call	ideInfo
 		jr	c,r207			; c=time-out
 		call	PrintDiskInfo
-		ld	hl,$9000		; Buffer address
+		ld	hl,PART_BUF		; Buffer address
 		call	ReadMBR
 		jr	c,r207
-		ld	a,($91fe)		; Validate boot signature (AA 55)
+		ld	a,(PART_BUF+$01fe)	; Validate boot signature (AA 55)
 		cp	$55
 		jr	nz,r207
-		ld	a,($91ff)
+		ld	a,(PART_BUF+$01ff)
 		cp	$aa
 		jr	nz,r207
 
 		pop	de			; Pointer to work bufer, initialided with zeros
-		ld	hl,$91be		; Start of partition table
+		ld	hl,PART_BUF+$01be	; Start of partition table
 		ld	b,$04			; max 4 primary partitions
 r201:		ld	c,(hl)			; Save status byte (active/inactive)
 		push	bc
@@ -199,7 +201,7 @@ r207:		pop	hl
 		jr	r205
 
 ; Process extended partitions
-xpart:		ld	($9400),de		; save pointer to next partition in workarea
+xpart:		ld	(PART_NEXT),de		; save pointer to next partition in workarea
 		push	af
 		push	hl
 		inc	hl
@@ -214,60 +216,60 @@ xpart:		ld	($9400),de		; save pointer to next partition in workarea
 		inc	hl
 		ld	b,(hl)
 		call	xpart1
-		ld	de,($9400)		; Load pointer to next partition in workarea
+		ld	de,(PART_NEXT)		; Load pointer to next partition in workarea
 		pop	hl
 		pop	af
 		ret
 
-xpart1:		ld	($9402),de		; save extended partition sector offset
-		ld	($9404),bc		; " 
-		ld	hl,$9200		; set extended partition boot record buffer
+xpart1:		ld	(PART_EXTLO),de		; save extended partition sector offset
+		ld	(PART_EXTHI),bc		; " 
+		ld	hl,PART_BUFX		; set extended partition boot record buffer
 		call	ReadBootRec
 		ret	c
-		ld	a,($93fe)		; Validate boot signature (AA 55)
+		ld	a,(PART_BUFX+$01fe)	; Validate boot signature (AA 55)
 		cp	$55
 		ret	nz
-		ld	a,($93ff)
+		ld	a,(PART_BUFX+$01ff)
 		cp	$aa
 		ret	nz
-		ld	a,($93c2)		; Partition type of first entry
+		ld	a,(PART_BUFX+$01c2)	; Partition type of first entry
 		call	PartitionType
 		jr	nz,r222
-r221:		ld	hl,$93c6		; First sector in partition
-		ld	de,($9400)		; Load pointer to next partition in workarea
-		ld	a,($9402)
+r221:		ld	hl,PART_BUFX+$01c6	; First sector in partition
+		ld	de,(PART_NEXT)		; Load pointer to next partition in workarea
+		ld	a,(PART_EXTLO)
 		add	a,(hl)
 		ld	(de),a
 		inc	hl
 		inc	de
-		ld	a,($9403)
+		ld	a,(PART_EXTLO+1)
 		adc	a,(hl)
 		ld	(de),a
 		inc	hl
 		inc	de
-		ld	a,($9404)
+		ld	a,(PART_EXTHI)
 		adc	a,(hl)
 		ld	(de),a
 		inc	hl
 		inc	de
-		ld	a,($9405)
+		ld	a,(PART_EXTHI+1)
 		adc	a,(hl)
 		ld	(de),a
 		inc	de
-		ld	a,($93c2)		; load partition type
+		ld	a,(PART_BUFX+$01c2)	; load partition type
 		ld	(de),a		
 		inc	de
-		ld	($9400),de		; Save pointer to next partition in workarea
+		ld	(PART_NEXT),de		; Save pointer to next partition in workarea
 		inc	(ix+W_DRIVES)		; Increase partition counter
 		ld	a,(ix+W_DRIVES)
 		cp	$08			; Maximum partitions processed?
 		ret	z			; z=yes
-r222:		ld	a,($93d2)		; Partition type of 2nd entry
+r222:		ld	a,(PART_BUFX+$01d2)	; Partition type of 2nd entry
 		call	PartitionExt
 		ret	nz			; End of chain
-		ld	hl,$93d6		; pointer to sector number of next extended partition
-		ld	de,($9402)
-		ld	bc,($9404)
+		ld	hl,PART_BUFX+$01d6	; pointer to sector number of next extended partition
+		ld	de,(PART_EXTLO)
+		ld	bc,(PART_EXTHI)
 		ld	a,(hl)
 		add	a,e
 		ld	e,a
@@ -627,20 +629,31 @@ r608:		inc	hl
 ; Input : None
 ; Output: HL = pointer to string, terminated by 0
 ; ------------------------------------------
-CHOICE:		ld	hl,choice_txt
+CHOICE:		
+IFDEF IDEDOS1	
+; No choice: HL = 0
+		xor	a
+		ld	l,a
+		ld	h,a
+		ret
+ELSE
+; Cannot format this drive: (HL) = 0
+		ld	hl,choice_txt
 		ret
 choice_txt:	db	$00
+ENDIF
 
 ; ------------------------------------------
 ; DSKFMT - Format not implemented
-; ------------------------------------------
-DSKFMT:		call	PrintMsg
-		db	13,"IDE format not implemented",13,10,0
-		ret
-
-; ------------------------------------------
 ; MTOFF - Motors off not implemented
 ; ------------------------------------------
+DSKFMT:		
+IFDEF IDEDOS1
+; This routine will be called by DOS1 only
+; Error $0c = Bad parameter
+		ld	a,$0c
+		scf
+ENDIF
 MTOFF:		ret
 
 ; -------------------------------------------
@@ -741,7 +754,7 @@ boot_r2:	dec	hl
 
 ; ------------------------------------------
 ; Print IDE disk information
-; Input: $9000 = info record
+; Input: PART_BUF = info record
 ; ------------------------------------------
 PrintDiskInfo:	push	af
 		push	hl
@@ -764,8 +777,8 @@ ENDIF
 		call	PrintMsg
 		db	"Master: ",0
 		ld	c,$4d
-		ld	hl,($9079)
-		ld	a,($907b)
+		ld	hl,(PART_BUF+$79)
+		ld	a,(PART_BUF+$7b)
 		srl	a
 		rr	h
 		rr	l
@@ -789,7 +802,7 @@ r721:		call	MakeDec
 		rst	$18
 		call PrintMsg
 		db	13,10,"        ",0
-		ld	hl,$9036		; $902e=firmware $9036=model
+		ld	hl,PART_BUF+$36		; +$2e=firmware +$36=model
 		ld	b,$0a
 r722:		inc	hl
 		ld	a,(hl)

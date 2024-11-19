@@ -51,7 +51,7 @@ C427F:  LD      HL,500+(I485F-I4418)	; 1595 = 200 + 300 + 1095
         LD      (IRQ_ST),HL
         LD      BC,300			; 300 bytes for BDOS stack
         LDIR
-        LD      (BDOS_ST),HL
+        LD      (ST_BDOS),HL
         EX      DE,HL
         LD      HL,I4418
         PUSH    DE
