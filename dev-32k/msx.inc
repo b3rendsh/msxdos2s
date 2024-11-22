@@ -3,7 +3,6 @@
 ; MSX constants and definitions for DOS1 and DOS2
 ; ------------------------------------------------------------------------------
 
-
 BOT16K	EQU	0C000H			; lower of 16 KB RAM
 BOT32K	EQU	08000H			; lower of 32 KB RAM
 BOOTSZ	EQU	256			; maximum size of MSX bootloader in bootsector
@@ -11,7 +10,7 @@ TMPSTK	EQU	BOT16K+BOOTSZ+256	; location of temporary stack
 TBASE	EQU	00100H			; start of MSX-DOS
 
 ; ------------------------------------------------------------------------------
-; P0
+; P0: BIOS or DOS 2 kernel
 
 WBOOT  	EQU     0000H   	; --SLI
 KBDOS   EQU     0005H
@@ -55,7 +54,7 @@ SGNMUL  EQU     325CH   	; -C---
 NULSTR  EQU     3FD6H   	; ----I
 
 ; ------------------------------------------------------------------------------
-; P1
+; P1: disk rom or basic rom
 
 BASENT  EQU     04022H		; Start DiskBASIC
 ERROR   EQU     0406FH          ; BASIC error
@@ -106,7 +105,7 @@ M7E14   EQU     07E14H          ; start MSX-BASIC program in ROM (DOS1)
 
 
 ; ------------------------------------------------------------------------------
-; P2
+; P2: workarea DOS 2
 
 ISB062  EQU     0B062H
 D_B064  EQU     0B064H  	; --SL-
@@ -173,13 +172,12 @@ D_BB7B  EQU     0BB7BH  	; --SL-
 D_BB7C  EQU     0BB7CH  	; --SL-
 D_BB7D  EQU     0BB7DH  	; --SL-
 D_BB7F  EQU     0BB7FH  	; --SL-
-D_BB80  EQU     0BB80H  	; --SLI
+D_BB80  EQU     0BB80H  	; --SLI		IY variables base address (kernel uses: BB80 - BC00)
 D_BB82  EQU     0BB82H  	; --SL-
 D_BB84  EQU     0BB84H  	; --SL-
 D_BB86  EQU     0BB86H  	; --SLI
 D_BB87  EQU     0BB87H  	; --S--
 DSBB89  EQU     0BB89H  	; --S--
-
 D_BB8A  EQU     0BB8AH  	; --S-I
 D_BB8B  EQU     0BB8BH  	; --SL-
 D_BB8D  EQU     0BB8DH  	; --SLI
@@ -243,24 +241,21 @@ D_BBFB  EQU     0BBFBH  	; ---LI
 DSBBFD  EQU     0BBFDH  	; --S--
 D_BBFE  EQU     0BBFEH  	; --SLI
 ISBBFF  EQU     0BBFFH
-I_BC00	EQU	0BC00H	        ; ----I  ramdisk boot sector
+I_BC00	EQU	0BC00H	        ; ----I		ramdisk boot sector
 CSBD02  EQU     0BD02H
-D_BE00  EQU     0BE00H          ; --SLI  number of ramdisk segments
-I_BE02  EQU     0BE02H          ; ----I  ramdisk segment table
+D_BE00  EQU     0BE00H          ; --SLI		number of ramdisk segments
+I_BE02  EQU     0BE02H          ; ----I		ramdisk segment table
 
 ; ------------------------------------------------------------------------------
-; P3
+; P3: system variables, hooks, buffers and paging helper routines
 
 YC000   EQU     0C000H          ; bootsector transferaddress
 CC206   EQU     0C206H          ; debugger breakpoint handler
 
 DATABA	EQU	0F1C9H		; start of disk system static work area
 SPRTBUF	EQU	0F1C9H		; BDOS _STROUT
-
-; Double declaration
+JUMPB   EQU     0F1D3H          ; start of handlers jump table
 RD_LDI	EQU	0F1D3H		; transfer to/from page 1
-JUMPB   EQU     0F1D3H          ; handlers
-
 P0_LDIR EQU     0F1D6H          ; transfer with page 0
 P0_CALL EQU     0F1D9H          ; call main-bios
 SFLUSH  EQU     0F1DCH          ; print string via chput
@@ -400,7 +395,6 @@ DSK_CHK EQU     0F2ECH
 CLUSNU  EQU     0F2ECH          ; current cluster of file (DOS1)
 SECPOS  EQU     0F2EEH          ; start relative sector for recordoperation
 VALSEC  EQU     0F2F0H          ; relative cluster after fileend for write recordoperation
-
 BLDCHK  EQU     0F2F1H  	; --S--
 BYTSEC  EQU     0F2F2H          ; start offset in sector for recordoperation
 BSVCHK  EQU     0F2F3H  	; --S--
@@ -478,13 +472,9 @@ GO_BIOS EQU     0F377H  	; J----
 BLDCHK1 EQU     0F377H          ; routine diskbasic BLOAD (DOS1)
 GO_BDOS EQU     0F37AH  	; J----
 BSVCHK1 EQU     0F37AH          ; routine diskbasic BSAVE (DOS1)
-
 BDOS  	EQU     0F37DH  	; -C---
-
-; Double declaration
-VARWRK	EQU	0F380H
+VARWRK	EQU	0F380H		; Start of variable workarea
 RDPRIM  EQU     0F380H
-
 WRPRIM  EQU     0F385H
 RETRTN	EQU	0F38BH		; on this adres is a simple RET instruction
 CLPRIM  EQU     0F38CH
@@ -513,7 +503,7 @@ TEMPPT	EQU	0F678H
 TEMPST  EQU     0F67AH		; (DOS1)
 DSCTMP	EQU	0F698H
 FRETOP	EQU	0F69BH
-AUTLIN	EQU	0F6ABH		; used for bigest sectorsize during disksystem init
+AUTLIN	EQU	0F6ABH		; used for biggest sectorsize during disksystem init
 MAXSEC	EQU	0F6ABH		; (DOS1)
 SAVSTK	EQU	0F6B1H
 VARTAB	EQU	0F6C2H
@@ -759,6 +749,3 @@ _IPARM	EQU	08BH
 ; +24,2		date
 ; +26,2		starting cluster
 ; +28,4		file size
-
-
-

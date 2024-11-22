@@ -1009,6 +1009,8 @@ IFDEF PPIDE
 ; 6	/WR Write data
 ; 7	/RD Read data
 
+		SECTION	PPIDE
+
 ; ------------------------------------------
 ; Initialize disk
 ; Output: Z-flag set if hardware detected
@@ -1260,6 +1262,8 @@ ELIFDEF CFIDE
 ; ------------------------------------------------------------------------------
 ; *** Compact Flash 8-BIT IDE routines ***
 ; ------------------------------------------------------------------------------
+
+		SECTION	CFIDE
 
 ; ------------------------------------------
 ; Initialize disk
