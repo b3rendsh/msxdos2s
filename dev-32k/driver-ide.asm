@@ -511,7 +511,9 @@ wr01:		call	ideWriteSector
 ;     Error code in A
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ; ------------------------------------------
-DSKCHG:		push	af
+DSKCHG:
+IFDEF IDEDOS1
+		push	af
 		call	GETWRK
 		pop	af
 		cp	(ix+W_CURDRV)		; current drive
@@ -524,6 +526,12 @@ DSKCHG:		push	af
 r501:		ld	b,$FF			; changed
 		xor	a
 		ret
+ELSE
+; always return unchanged for DOS2 (disks are not hot-pluggable)
+		ld	b,$01
+		xor	a
+		ret
+ENDIF
 
 ; ------------------------------------------
 ; GETDPB - Set DPB using sector 0 / bootsector of partition

@@ -67,10 +67,10 @@
 	ENDIF
 
 		; Routine used in the paging helper module
-		PUBLIC	C4B68
+		PUBLIC	ALLOCMEM
 
 		; Routine defined in the paging helper module
-		EXTERN	C427F
+		EXTERN	PH_INIT
 
 		; Symbols defined by the kernel in P0
 		EXTERN	C0080
@@ -108,7 +108,7 @@ DOSCALL		MACRO   X
 		ENDM
 
 ; ------------------------------------------------------------------------------
-; ROM Header at address 04000H
+; *** ROM Header at address 04000H ***
 ; ------------------------------------------------------------------------------
 
 		DEFB    "AB"
@@ -173,11 +173,11 @@ DOS_SIN:	JP      J417C
 
 ; DOS2:  RAMDISK driver jumpentries
 		DEFS    04080H-$-S_ORG0,0
-L4080:		JP      J6D49                   ; RAMDISK:  DSKIO routine
-L4083:		JP      J6D39                   ; RAMDISK:  DSKCHG routine
-L4086:		JP      J6EF1                   ; RAMDISK:  GETDPB routine
-L4089:		JP      J6EF2                   ; RAMDISK:  CHOICE routine
-L408C:		JP      J6EF6                   ; RAMDISK:  DSKFMT routine
+L4080:		JP      RAMD_DSKIO		; RAMDISK:  DSKIO routine
+L4083:		JP      RAMD_DSKCHG		; RAMDISK:  DSKCHG routine
+L4086:		JP      RAMD_GETDPB		; RAMDISK:  GETDPB routine
+L4089:		JP      RAMD_CHOICE		; RAMDISK:  CHOICE routine
+L408C:		JP      RAMD_DSKFMT		; RAMDISK:  DSKFMT routine
 
 ; DOS1 kernel compatible:  CP/M BIOS CONOUT entry
 ; This entry is supported, to use MSXDOS.SYS
@@ -204,7 +204,9 @@ I413A:		DEFB    "Disk BASIC version 2.01",MOD1,MOD2,0
 ; Mod: Relocated S0 code to the unused space between the DOS entry points
 ; ------------------------------------------------------------------------------
 
-; Subroutine EXTENSION ROM INIT handler
+; ------------------------------------------------------------------------------
+; *** EXTENSION ROM INIT handler ***
+; ------------------------------------------------------------------------------
 J47D6:		CALL    INIHRD			; initialize hardware disk driver
 		DI
 		LD      A,(IDBYT2)
@@ -256,8 +258,8 @@ J482B:  	XOR     A
 		DEC     BC
 		LD      A,C
 		OR      B
-		JR      NZ,J482B		; initialize disk system static work area
-		LD      (AUTLIN),BC		; bigest sector size = 0
+		JR      NZ,J482B		; clear disk system static work area
+		LD      (AUTLIN),BC		; biggest sector size = 0
 		LD      B,4*2+4*3
 		LD      HL,DRVTBL
 J483C:  	LD      (HL),A
@@ -1588,7 +1590,9 @@ I5757:		INC     SP
 		INC     SP
 		JP      PARDEV+8
 
-; Subroutine EXTENSION ROM CALL statement handler
+; ------------------------------------------------------------------------------
+; *** EXTENSION ROM CALL statement handler ***
+; ------------------------------------------------------------------------------
 C575C:		EI
 		LD      A,(H_PHYD)
 		CP      0C9H
@@ -3116,8 +3120,9 @@ DOS_SETTIM:     DOSCALL 02DH
 DOS_SETRAW:     DOSCALL 02EH
 ; -------------------------------------
 
-; **** No more DOS entry points below this point ****
-
+; ------------------------------------------------------------------------------
+; *** No more DOS entry points below this point ***
+; ------------------------------------------------------------------------------
 
 ; Subroutine right set (H_RSET)
 C6025:		DEFB	0F6H		        ; OR xx: trick to skip next instrunction
@@ -4949,8 +4954,12 @@ C6D2E:		LD      A,(HL)
 		LD      A,0D8H
 		RET
 
+; ------------------------------------------------------------------------------
+; *** RAMDISK driver ***
+; ------------------------------------------------------------------------------
+
 ; Subroutine DSKCHG RAMDISK
-J6D39:		LD      HL,I_BC00+32
+RAMD_DSKCHG:	LD      HL,I_BC00+32
 		LD      A,(DATA_S)		; BDOS data segment
 		CALL    RD_SEG                  ; RD_SEG
 		CP      'V'
@@ -4960,7 +4969,7 @@ J6D39:		LD      HL,I_BC00+32
 		RET
 
 ; Subroutine DSKIO RAMDISK
-J6D49:		EI
+RAMD_DSKIO:	EI
 		LD      (RD_SNU),DE		; store sector number
 		LD      (RD_ADDR),HL		; store transfer address
 		LD      A,B
@@ -5231,19 +5240,19 @@ I6EEC:		DEFB	0
 		DEFB	4
 
 ; Subroutine GETDPB RAMDISK
-J6EF1:		RET
+RAMD_GETDPB:	RET
 
 ; Subroutine CHOICE RAMDISK
-J6EF2:		LD      HL,I6EEC
+RAMD_CHOICE:	LD      HL,I6EEC
 		RET
 
 ; Subroutine DSKFMT RAMDISK
-J6EF6:		LD      A,0CH
+RAMD_DSKFMT:	LD      A,0CH
 		SCF
 		RET
 
 ; ------------------------------------------------------------------------------
-; Bank S1 code starts here
+; *** Bank S1 code starts here ***
 ; ------------------------------------------------------------------------------
 
 ; C4103/J410F - Install disksystem routines
@@ -5255,7 +5264,7 @@ J410F:		DI
 		CALL	C4E05			; get slot of page 1 (this ROM)
 		LD	H,080H			; enable page 2
 		CALL	ENASLT
-		CALL    C427F
+		CALL    PH_INIT			; initialze paging helper routines
 		RET     C
 		LD      A,1
 		LD      (CUR_DRV),A              ; default drive = A:
@@ -5389,7 +5398,7 @@ C492F:		CALL    C49D7
 		ADD     HL,HL
 		INC     HL
 		PUSH    DE
-		CALL    C4B68
+		CALL    ALLOCMEM
 		POP     DE
 		RET     C
 		LD      (MAP_TAB),HL
@@ -5481,7 +5490,9 @@ J49D1:		LD      A,01H
 		OR      A
 		RET
 
+; ------------------------------------------------------------------------------
 ; Subroutine initialize memory mapper
+; ------------------------------------------------------------------------------
 C49D7:		DI
 		PUSH    AF
 		LD      HL,KBUF+32
@@ -5767,8 +5778,8 @@ C4B5C:		PUSH    BC
 		XOR     A
 		RET
 
-; Subroutine 
-C4B68:		LD      A,L
+; Subroutine allocate RAM memory
+ALLOCMEM:	LD      A,L
 		OR      H
 		RET     Z
 		EX      DE,HL
@@ -6000,17 +6011,19 @@ I4D0E:		DOSST1  0FFH,"Incompatible disk"
 		DOSST1  07EH,"Press any key to continue... "
 		DEFB    0
 
+IFDEF FAT16
 ; ------------------------------------------------------------------------------
-; If FAT16 is enabled then the bootsector code is stored in the disk rom 
+; *** BOOTCODE ***
+; If FAT16 is enabled then the bootsector code is stored in the disk rom
 ; page 1 main code to free space in the page 0 kernel code.
 ; ------------------------------------------------------------------------------
-IFDEF FAT16
 IBOOTCODE:
 		INCLUDE	"bootcode.inc"
 ENDIF 
 
 ; ------------------------------------------------------------------------------
-; DRIVER section starts here
+; *** DISK DRIVER section starts here ***
+; ------------------------------------------------------------------------------
 ; See driver.asm
 
 DSKDRV:

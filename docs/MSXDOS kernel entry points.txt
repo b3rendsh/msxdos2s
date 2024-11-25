@@ -5,13 +5,23 @@ Baseline documentation:
 2. MSX DOS 2 System Specification 1986-11-26
 3. MSX system sourcefiles (sourceforge 2024-01-13)
 4. Nextor 2.1 Driver Development Guide (github)
+5. Microsoft FAT Specification (August 30 2005)
 
 
 MSXDOS kernel entry points:
 ---------------------------
 The following entry points (for DOS 1 and 2) are defined in the sources 
 for MSXDOS.SYS 1.03 and MSXDOS 2.2 DISK Kernel.These will be considered 
-the standardized kernel entry points:
+the standardized kernel entry points in ROM page 1:
+
+Header:
+4000H	"AB"
+4002H	EXTENSION ROM INIT handler
+4004H	EXTENSION ROM CALL statement handler
+4006H  	EXTENSION ROM device handler (no device)
+4008H	EXTENSION ROM basic program (no basic program)
+4038H	Pointer to kernel version ASCIIZ string
+4043H	Subroutine EXTBIO handler
 
 Driver:
 DSKIO	EQU	4010H
@@ -26,6 +36,13 @@ C4022	EQU	4022H	Start DiskBasic
 C4025	EQU	4025H	Format disk (workarea must be supplied)
 C4029	EQU	4029H	Stop all disks
 C402D	EQU	402DH	GETSLT - Get slotid
+
+RAMDISK:
+L4080	DSKIO routine
+L4083	DSKCHG routine
+L4086	GETDPB routine
+L4089	CHOICE routine
+L408C	DSKFMT routine
 
 DOS Kernel:
 SINIT	EQU	4030H

@@ -9219,9 +9219,8 @@ A752B:	ld	a,(0FFD9h)		; Drive of FAT buffer
 
 ; ------------------------------------------
 ; FAT16 routines
-; The FAT16 partition boot sector disk parameters must have
-; directory entries setting to an 8-bit value e.g. $E0 or $70!
-; 16-bit values can cause file system corruptions.
+; The FAT16 partition boot sector disk parameters should have the directory
+; entries setting to an 8-bit value e.g. $E0 or $70 (maximum is $FF)!
 ; ------------------------------------------
 
 IFDEF FAT16DOS1

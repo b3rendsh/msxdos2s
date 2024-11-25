@@ -19,6 +19,7 @@
 ; 02. FAT16 kernel patches based on FAT16 v0.12 by OKEI
 ; 03. Optimized FAT16 patch code to free space for format and ramdisk routines
 ; 04. Relocated format boot sector code if using FAT16 option
+; 05. Use Microsoft standards to determine if partition is FAT16 or FAT12 (DPBSET)
 
 ; Address labels that are replaced by non standard descriptive names:
 ; F_X	BDOS function X (public)
@@ -8952,7 +8953,7 @@ C334E:		PUSH    IX
 		INC     HL
 		LD      A,(HL)
 		DEC     A
-		CP      07H     ; 7
+		CP      07H
 		JR      NC,J337F
 		LD      DE,6
 		ADD     HL,DE
@@ -9088,7 +9089,7 @@ J340E:		INC     C
 		LD      E,(IX+17)
 		LD      D,(IX+18)
 		LD      A,E
-		AND     0FH     ; 15
+		AND     0FH
 		LD      (HL),A
 		LD      A,4
 J3430:		SRL     D
@@ -9175,6 +9176,9 @@ J3470:		INC     HL
 		LD      (HL),E
 		INC     HL
 		LD      (HL),D
+	IFDEF FAT16 ; DPBSET
+		PUSH	DE		; total clusters + 1
+	ENDIF
 		INC     HL
 		PUSH    HL
 		CALL    C32CB
@@ -9183,13 +9187,18 @@ J3470:		INC     HL
 		LD      BC,5
 		LDIR
 		EX      DE,HL
-	IFDEF FAT16
-		CALL	DPBSET
-	ELSE
-		LD      A,(IX+21)
+		LD      A,(IX+21)	; Media ID
 		LD      (HL),A
+	IFDEF FAT16 ; DPBSET
+		POP	DE
+		PUSH	HL
+		LD	HL,4085		; if total clusters < 4085 then FAT12 else FAT16
+		SBC	HL,DE
+		POP	HL
+		JR	NC,DPB_1
+		RES	7,(HL)		; clear FAT12 flag
 	ENDIF
-		POP     HL
+DPB_1:		POP     HL
 		PUSH    HL
 		INC     HL
 		INC     HL
@@ -10826,42 +10835,6 @@ FREE_1:		LD	A,(HL)
 		INC	DE
 FREE_2:		DJNZ	FREE_1
 		RET
-
-; ---------------------------------------------------------
-DPBSET:		LD	A,(IX+15h)
-		LD	(HL),A
-		PUSH	HL
-		PUSH	IX
-		POP	HL
-		LD	BC,0200h
-DPB_1:		LD	A,46h		;'F'
-		CPIR
-		JR	Z,DPB_2
-		OR	A
-		JR	DPB_3
-	
-DPB_2:		PUSH	HL
-		PUSH	BC
-		LD	B,04h
-		LD	DE,MOJI		;'AT16'
-DPB_4:		LD	A,(DE)
-		XOR	(HL)
-		JR	NZ,DPB_5
-		INC	HL
-		INC	DE
-		DJNZ	DPB_4
-		SCF
-DPB_5:		POP	BC
-		POP	HL
-		JR	NC,DPB_1
-
-DPB_3:		POP	HL
-		LD	A,(HL)
-		RET	NC
-		RES	7,(HL)
-		RET
-
-MOJI:		DB	"AT16"
 
 ; ---------------------------------------------------------
 ;CLUSTER NUMBER

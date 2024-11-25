@@ -1,7 +1,8 @@
 ; Target build options
 ; --------------------
-; CFIDE		8-bit CF IDE driver
-; PPIDE		PPI 8255 IDE driver
+; CFIDE		Include 8-bit CF IDE driver
+; PPIDE		Include PPI 8255 IDE driver
+; CORE		Include dummy IDE driver
 ; IDEDOS1	MSX-DOS 1 IDE
 ; TEST		Used for testing purposes
 
@@ -32,6 +33,14 @@ IF CFIDE || PPIDE
 	OPTM	EQU	1
 	MOD1	EQU	'x'	; eXtended
 	MOD2	EQU	'i'	; Ide
+ENDIF
+
+IFDEF CORE
+	DEFINE	FAT16
+	DEFINE	FAT16DOS1
+	OPTM	EQU	1
+	MOD1	EQU	'x'	; eXtended
+	MOD2	EQU	' '	;
 ENDIF
 
 IFDEF TEST
