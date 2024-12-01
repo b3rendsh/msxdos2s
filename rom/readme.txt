@@ -3,6 +3,16 @@ ROM Images
 
 This folder contains the following ROM images:
 
+BEER_AND_SODA.ZIP
+-----------------
+ZIP archive with ROM and EEPROM images for the BEER and SODA IDE interfaces.
+The ROM images include DOS enhancements and IDE disk drivers.
+Sources in dev-32k folder.
+
+There is a build script (Makefile) so you can create a custom ROM with the
+latest changes from source with the Z88DK toolkit on a Windows PC or Linux PC.
+
+
 BEER20_DISK.ROM
 ---------------
 16K ROM with driver version 2.0.x for the BEER IDE disk interface. It can be
@@ -31,20 +41,3 @@ This also means that format and ramdisk functions are disabled. Some code is
 optimized to free space for the extra FAT16 code. For FAT16 the command2.com
 must still be patched once with compatch.com.
 Sources in mod-32k folder.
-
-
-BEER_AND_SODA.ZIP
------------------
-ZIP archive with ROM and EEPROM images for the BEER and SODA IDE interfaces.
-The ROM images include the latest DOS enhancements and IDE disk drivers.
-Sources in dev-32k folder.
-
-
-DEVELOPMENT
------------
-There is a build script (Makefile) so you can create a custom ROM with the
-latest changes from source with the Z88DK toolkit on a Windows PC or Linux PC.
-Sources in dev-32k folder.
-
-
-

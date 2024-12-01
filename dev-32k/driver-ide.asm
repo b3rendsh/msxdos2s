@@ -350,7 +350,7 @@ r301:		ld	a,(hl)
 		rst	$18
 		call	PrintCRLF
 		; delay loop to view the driver info
-		ld	b,$04			
+		ld	b,$04
 r302:		ld	hl,$0000
 r303:		dec	hl
 		ld	a,h
@@ -691,7 +691,6 @@ DEFDPB:		db	$00		; +00 DRIVE	Drive number
 
 ; ------------------------------------------
 ; Boot MSX-DOS from selected partition, to be used in a modified MSX-DOS boot process.
-; The boot menu time-out is appr. 4 seconds in a MSX/3.58Mhz machine.
 ; MSX-DOS 1:
 ; 	The default boot drive is the last primary partition that is flagged active.
 ;	If DOS1 can't boot from the specified drive the machine will restart or start BASIC.
@@ -720,7 +719,7 @@ ENDIF
 		rst	$18
 		call	PrintMsg
 		db	13,10,13,10,"Press drive key or [ESC] to cancel.. ",0
-		ld	hl,$7800		; appr. 4 seconds
+		ld	hl,(bootWait)		; get wait time from patch area
 boot_r1:	push	hl
 		call	SelectDrive
 		pop	hl
@@ -770,8 +769,10 @@ PrintDiskInfo:	push	af
 		db	12
 IFDEF PPIDE
 		db	"BEER  : PPI IDE "
-ELSE
+ELIFDEF CFIDE
 		db	"SODA  : CF IDE "
+ELSE
+		db	"CORE  : "
 ENDIF
 IFDEF IDEDOS1
 		db	"DOS 1",13,10,0
@@ -1530,19 +1531,14 @@ IFDEF ATAPI_TABLE
 
 ENDIF
 
-; IDE jump table (under construction, subject to change!)
+; ------------------------------------------------------------------------------
+; *** Driver patch area ***
+; ------------------------------------------------------------------------------
 
-		SECTION	IDE_TABLE
+		SECTION	DRIVER_PATCH
 		ORG	$7FD0
 
-		jp  	ideInit
-		jp  	ideInfo
-		jp  	ideSetSector
-		jp  	ideCmdRead
-		jp  	ideReadSector
-		jp  	ideCmdWrite
-		jp  	ideWriteSector
-		jp	ideWaitReady
-		jp	ideWaitData
-		jp	ideError
+		; Reserved
+		ds	$2e,$00
 
+bootWait:	dw	$5000		; 7FFE Boot menu wait time-out (default $5000 is appr. 3 sec for MSX/3.58Mhz)
