@@ -1,14 +1,10 @@
-; p0_kernel.asm
-;
-; DOS 2.20 kernel page 0
-; Functions
 ; ------------------------------------------------------------------------------
+; p0_kernel.asm
+; DOS 2.20 kernel page 0: BDOS functions
 ; Based on ASCII DOS 2.20 codebase s2
-; Source re-created by Z80DIS 2.2
-; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
 ;
 ; Code Copyrighted by ASCII, OKEI and maybe others
-; Source comments by Arjen Zeilemaker
+; Source origin is the msxsyssrc repository by Arjen Zeilemaker
 ; Restructure, modifications and additional comments by H.J. Berends
 ; 
 ; Sourcecode supplied for STUDY ONLY
@@ -16,15 +12,12 @@
 ; ------------------------------------------------------------------------------
 ; Modifications:
 ; 01. The rom bank switching code is removed
-; 02. FAT16 kernel patches based on FAT16 v0.12 by OKEI
-; 03. Optimized FAT16 patch code to free space for format and ramdisk routines
+; 02. FAT16 kernel changes based on FAT16 v0.12 by OKEI
+; 03. Optimized FAT16 code to free space for format and ramdisk routines
 ; 04. Relocated format boot sector code if using FAT16 option
 ; 05. Use Microsoft standards to determine if partition is FAT16 or FAT12 (DPBSET)
-
-; Address labels that are replaced by non standard descriptive names:
-; F_X	BDOS function X (public)
-; K_X	Kernel procedure X (local)
-; KB_X	Kernel procedure X with call to main bios (local)
+; 06. Changed the free disk calculation routine for FAT16 partitions
+; 07. Rmoved unusued code (OPTM)
 
 
 		INCLUDE "disk.inc"		; Assembler directives
@@ -95,8 +88,8 @@ J004E:		LD      (DFFFF),A
 		OUT     (0A8H),A
 		RET
 		DEFS	7,0
-C005C:		JP      ALL_SEG			; ALL_SEG
-C005F:		JP      FRE_SEG			; FRE_SEG
+C005C:		JP      K_ALLSEG		; ALL_SEG
+C005F:		JP      K_FRESEG		; FRE_SEG
 		DEFS	$1E,0
 C0080:		JP      KB_CHARIN		; CON input
 C0083:		JP      KB_CHAROUTC		; CON output
@@ -109,13 +102,13 @@ C0092:		JP      KB_AUXIN		; AUX input
 ; ---------------------------------------------------------
 ; *** Initialize kernel / BDOS ***
 ; ---------------------------------------------------------
-K_INIT:		LD     	IY,D_BB80
-		LD      DE,RM_DPB
+K_INIT:		LD     	IY,D_BB80		; Base address for IY relative kernel variables
+		LD      DE,RM_DPB		; Ramdisk DPB
 		LD      A,(MASTER)
 		LD      C,A
 		LD      L,80H
 		LD      B,1
-		CALL    K_INIT_DRVTAB
+		CALL    K_INIT_DRVTAB		; Allocate and initialize drive table for ramdisk
 		JR      NZ,J00D8
 		LD      HL,DRVTBL
 		LD      DE,SDPBLI
@@ -129,14 +122,14 @@ J00B1:		LD      A,(HL)
 		PUSH    BC
 		LD      B,A
 		LD      L,10H
-		CALL    NZ,K_INIT_DRVTAB
+		CALL    NZ,K_INIT_DRVTAB	; Allocate and initialize drive tables
 		POP     BC
 		POP     HL
 		JR      NZ,J00D8
 		DJNZ    J00B1
 		LD      D,B
 		CALL    F_ASSIGN
-		LD      HL,I012C
+		LD      HL,I012C		; device table
 J00CB:		LD      A,(HL)
 		OR      A
 		JR      Z,J0101
@@ -147,7 +140,7 @@ J00CB:		LD      A,(HL)
 		POP     DE
 J00D8:		JR      NZ,J012A
 		LD      BC,(D_BBF4)
-		LD      (D_BBF4),HL
+		LD      (D_BBF4),HL		; Update start of device chain
 		LD      (HL),C
 		INC     HL
 		LD      (HL),B
@@ -170,8 +163,8 @@ J00FB:		INC     DE
 		DJNZ    J00FB
 		JR      J00CB
 
-J0101:		LD      B,5
-		CALL    F_BUFFER
+J0101:		LD      B,5			; number of buffers
+		CALL    F_BUFFER		; allocate buffers
 		LD      B,00H
 		CALL    F_JOIN
 		CALL    C0E35
@@ -183,7 +176,7 @@ J0101:		LD      B,5
 		LD      A,1
 		LD      (ST_COU),A
 		LD      (IY+16),0FFH
-		CALL    C10CA
+		CALL    C10CA			; initialize clockchip
 		OR      A
 		RET
 
@@ -489,7 +482,8 @@ I02A2:		DEFW    F_TERM0,F_CONIN,F_CONOUT,F_AUXIN	; 0
 		DEFW	F_REDIR					; 70
 
 ; ---------------------------------------------------------
-; *** Console I/O routines ***
+; *** Functions: 01-08,0A,0B ***
+; *** Console I/O routines   ***
 ; ---------------------------------------------------------
 
 ; ---------------------------------------------------------
@@ -1885,9 +1879,9 @@ K_BIOS:		EX      AF,AF'
 		EX      AF,AF'
 		RET
 
-; ---------------------------------------------------------
-; *** Functions ***
-; ---------------------------------------------------------
+; ------------------------------------------------------------
+; *** Functions: 00,0C-0E,18-1B,2A-2E,31,57,58,5F,62,65-70 ***
+; ------------------------------------------------------------
 
 ; ---------------------------------------------------------
 ; Function $0C _CPMVER
@@ -2342,7 +2336,7 @@ F_RAMD:		PUSH    BC
 J0DB6:		EXX
 		LD      A,1
 		LD      B,30H   	; "0"
-		CALL    ALL_SEG
+		CALL    K_ALLSEG
 		JR      C,J0DCA
 		PUSH    BC
 		EXX
@@ -2397,7 +2391,7 @@ J0E1D:		LD      C,(HL)
 		JR      Z,J0E2D
 		PUSH    HL
 		LD      A,C
-		CALL    FRE_SEG
+		CALL    K_FRESEG
 		POP     HL
 		JR      J0E1D
 
@@ -2465,7 +2459,7 @@ F_ASSIGN:	LD      HL,I_BA1A
 		LD      A,B
 		OR      A
 		JR      Z,J0EAC
-		CP      09H     ; 9
+		CP      09H
 		LD      A,0DBH
 		RET     NC
 		LD      C,B
@@ -2476,7 +2470,7 @@ F_ASSIGN:	LD      HL,I_BA1A
 		JR      Z,J0EA9
 		DEC     A
 		JR      Z,J0EA8
-		CP      09H     ; 9
+		CP      09H
 		LD      A,0DBH
 		RET     NC
 		LD      C,D
@@ -2488,7 +2482,7 @@ J0EA9:		LD      D,(HL)
 J0EAC:		LD      (HL),A
 		INC     HL
 		INC     A
-		CP      09H     ; 9
+		CP      09H
 		JR      NZ,J0EAC
 		XOR     A
 		LD      D,A
@@ -2842,7 +2836,7 @@ F_SDATE:	LD      BC,0F844H
 		LD      B,A
 		LD      A,D
 		DEC     A
-		CP      0CH     	; 12
+		CP      0CH
 		JR      NC,J1091
 		LD      HL,I1096
 		ADD     A,L
@@ -3061,9 +3055,9 @@ C119D:		LD      B,A
 		RET
 
 ; ---------------------------------------------------------
-; *** ALL_SEG ***
+; *** K_ALLSEG ***
 ; ---------------------------------------------------------
-ALL_SEG:	OR      A
+K_ALLSEG:	OR      A
 		LD      A,(D_BBFE)
 		JR      Z,J11AE
 		LD      A,0FFH
@@ -3195,9 +3189,9 @@ J1253:		POP     BC
 		RET
 
 ; ---------------------------------------------------------
-; *** FRE_SEG ***
+; *** K_FRESEG ***
 ; ---------------------------------------------------------
-FRE_SEG:	LD      C,A
+K_FRESEG:	LD      C,A
 		LD      A,B
 		AND     8FH
 		JR      NZ,J125F
@@ -3289,7 +3283,7 @@ J12BE:		POP     HL
 		RET
 
 ; ---------------------------------------------------------
-; *** Subroutines ***
+; *** Subroutines: parser  ***
 ; ---------------------------------------------------------
 
 ; ---------------------------------------------------------
@@ -4183,7 +4177,7 @@ J1819:		POP     BC
 I181C:		DEFB    07FH,"|<>/",0FFH," :;.,=+\\\"[]"
 
 ; ---------------------------------------------------------
-; *** Functions ***
+; *** Functions: 40-42,59-5E ***
 ; ---------------------------------------------------------
 
 ; ---------------------------------------------------------
@@ -4424,7 +4418,7 @@ J1983:		PUSH    AF
 		RET
 
 ; ---------------------------------------------------------
-; *** Subroutines file and directory ***
+; *** Subroutines: file and directory ***
 ; ---------------------------------------------------------
 
 ; Subroutine update FIB with directory entry info
@@ -5107,7 +5101,7 @@ J1D6D:		PUSH    BC
 		RET
 
 ; ---------------------------------------------------------
-; *** Functions ***
+; *** Functions: 43-56,60,61 ***
 ; ---------------------------------------------------------
 
 ; ---------------------------------------------------------
@@ -5715,7 +5709,7 @@ J20E0:		CALL    C20E8
 		RET
 
 ; ---------------------------------------------------------
-; *** Subroutines ***
+; *** Subroutines: file and directory ***
 ; ---------------------------------------------------------
 
 ; Subroutine update redirect status
@@ -6237,7 +6231,7 @@ C23FD:		XOR     A
 		LD      HL,I_B91B
 		LD      B,11
 		LD      A,(DE)
-		CP      05H     ; 5
+		CP      05H
 		JR      NZ,J2430
 		LD      A,0E5H
 J2430:		LD      (HL),A
@@ -6322,7 +6316,7 @@ J2430:		LD      (HL),A
 		CALL    C1BC8
 		POP     BC
 		RET     NC
-		AND     10H     ; 16
+		AND     10H
 		RET     Z
 		BIT     7,B
 		JR      Z,J24D1
@@ -6419,7 +6413,7 @@ I254C:		DEFB    "."
 I254D:		DEFB    ".          "
 
 ; ---------------------------------------------------------
-; *** Functions ***
+; *** Functions: 2F,30 ***
 ; ---------------------------------------------------------
 
 ; ---------------------------------------------------------
@@ -6468,7 +6462,7 @@ J2578:		LD      B,2
 		RET
 
 ; ---------------------------------------------------------
-; *** Subroutines ***
+; *** Subroutines: disk i/o and buffers ***
 ; ---------------------------------------------------------
 
 ; Subroutine read/write sectors
@@ -6836,11 +6830,10 @@ J273C:		LD      A,D
 		RES     7,D
 		RET
 
-; Subroutine zero write to FIB
-; Not used
-Q_274D:
 	IF OPTM = 0
-		AND     04H
+		; Subroutine zero write to FIB
+		; Not used
+Q_274D:		AND     04H
 		OR      02H
 		JR      C275B
 	ENDIF
@@ -6848,7 +6841,7 @@ Q_274D:
 ; Subroutine write to FIB
 ; Input:  BC = size
 ;         DE = transfer address
-C2753:		AND     04H     ; 4
+C2753:		AND     04H
 		JR      C275B
 
 ; Subroutine read from FIB
@@ -7311,7 +7304,7 @@ J2A62:		EXX
 
 J2A76:		POP     HL
 		LD      A,(IY+68)
-		AND     02H     ; 2
+		AND     02H
 		CALL    C2F40
 		JR      NZ,J2A93
 		DEC     DE
@@ -8611,10 +8604,9 @@ J30D7:		LD      DE,0
 J30E6:		LD      A,0F6H
 		RET
 
-; Not used
-Q_30E9:
 	IF OPTM = 0
-		DEFB    0EBH,0FEH	; x86 JMP +256
+		; Not used
+Q_30E9:		DEFB    0EBH,0FEH	; x86 JMP +256
 		DEFB    090H		; x86 NOP
 		DEFB    "MSXDOS22"
 	ENDIF
@@ -9066,31 +9058,31 @@ J33E7:		ADD     HL,HL
 C3401:		PUSH    HL
 		LD      BC,10
 		ADD     HL,BC
-		LD      A,(IX+13)
+		LD      A,(IX+13)	; get cluster size (in sectors)
 		DEC     A
-		LD      (HL),A
+		LD      (HL),A		; set cluster mask (0x0A)
 		INC     HL
 		LD      C,00H
 J340E:		INC     C
 		RRCA
 		JR      C,J340E
-		LD      (HL),C
+		LD      (HL),C		; set cluster shift (0x0B)
 		INC     HL
-		LD      E,(IX+14)
-		LD      (HL),E
+		LD      E,(IX+14)	; get number of unused sectors
+		LD      (HL),E		; set reserved sectors (0x0C)
 		INC     HL
-		LD      D,(IX+15)
-		LD      (HL),D
+		LD      D,(IX+15)	; "
+		LD      (HL),D		; "
 		INC     HL
 		PUSH    DE
-		LD      B,(IX+16)
-		LD      (HL),B
+		LD      B,(IX+16)	; get number of FAT's
+		LD      (HL),B		; set number of FAT's (0x0E)
 		INC     HL
-		LD      E,(IX+17)
+		LD      E,(IX+17)	; get first directory sector
 		LD      D,(IX+18)
 		LD      A,E
 		AND     0FH
-		LD      (HL),A
+		LD      (HL),A		; set remainder of directory entries (no whole sector) (0x0F)
 		LD      A,4
 J3430:		SRL     D
 		RR      E
@@ -9100,12 +9092,12 @@ J3430:		SRL     D
 		CP      (HL)
 	ENDIF
 		INC     HL
-		LD      (HL),E
+		LD      (HL),E		; set number of directory sectors (whole sectors) (0x10)
 		INC     HL
 		JR      NC,J343E
 		INC     DE
-J343E:		LD      A,(IX+22)
-		LD      (HL),A
+J343E:		LD      A,(IX+22)	; get size of FAT
+		LD      (HL),A		; set number of sectors per FAT (0x11)
 		INC     HL
 		EX      (SP),HL
 		PUSH    DE
@@ -9130,17 +9122,17 @@ J344C:		DJNZ    J3448
 		POP     HL
 		ADD     HL,DE
 		EX      (SP),HL
-		LD      (HL),E
+		LD      (HL),E		; set first sector of rootdirectory (0x12)
 		INC     HL
-		LD      (HL),D
+		LD      (HL),D		; "
 		INC     HL
 		POP     DE
-		LD      (HL),E
+		LD      (HL),E		; set first sector of data area (0x14)
 		INC     HL
-		LD      (HL),D
+		LD      (HL),D		; "
 		INC     HL
 		PUSH    HL
-		LD      L,(IX+19)
+		LD      L,(IX+19)	; get total number of sectors
 		LD      H,(IX+20)
 	IFDEF FAT16 ; TALCLS
 		;Total of cluster
@@ -9173,7 +9165,7 @@ J3467:		DEC     C
 J3470:		INC     HL
 		EX      DE,HL
 		POP     HL
-		LD      (HL),E
+		LD      (HL),E		; set number of clusters + 1 on disk (0x16)
 		INC     HL
 		LD      (HL),D
 	IFDEF FAT16 ; DPBSET
@@ -9185,10 +9177,10 @@ J3470:		INC     HL
 		POP     DE
 		DEC     HL
 		LD      BC,5
-		LDIR
+		LDIR			; set dirty flag bit (0x18) and volume serial number (0x19)
 		EX      DE,HL
-		LD      A,(IX+21)	; Media ID
-		LD      (HL),A
+		LD      A,(IX+21)	; get Media ID
+		LD      (HL),A		; set Media ID (0x1D)
 	IFDEF FAT16 ; DPBSET
 		POP	DE
 		PUSH	HL
@@ -9196,32 +9188,32 @@ J3470:		INC     HL
 		SBC	HL,DE
 		POP	HL
 		JR	NC,DPB_1
-		RES	7,(HL)		; clear FAT12 flag
+		RES	7,(HL)		; clear FAT12 flag in Media ID (0x1D)
 	ENDIF
-DPB_1:		POP     HL
+DPB_1:		POP     HL		; HL=pointer to begin of drivetable
 		PUSH    HL
 		INC     HL
 		INC     HL
-		LD      E,(HL)
+		LD      E,(HL)		; DE=pointer to DPB of drive
 		INC     HL
-		LD      D,(HL)
+		LD      D,(HL)		; "
 		EX      DE,HL
 		INC     HL
-		LD      (HL),A
+		LD      (HL),A		; set MEDIA
 		INC     HL
-		LD      (HL),00H
+		LD      (HL),00H	; set SECSIZ
 		INC     HL
-		LD      (HL),02H
+		LD      (HL),02H	; "
 		INC     HL
-		LD      (HL),0FH
+		LD      (HL),0FH	; set DIRMSK
 		INC     HL
-		LD      (HL),04H
+		LD      (HL),04H	; set DIRSHFT
 		INC     HL
 		EX      DE,HL
 		LD      BC,7
 		ADD     HL,BC
 		LD      BC,5
-		LDIR
+		LDIR			; set CLUSMSK,CLUSSFT,FIRFAT,FATCNT
 		LD      C,(HL)
 		INC     HL
 		LD      A,(HL)
@@ -9231,20 +9223,21 @@ DPB_1:		POP     HL
 		ADD     A,A
 		ADD     A,A
 		OR      C
-		LD      (DE),A
+		LD      (DE),A		; set MAXENT
 		INC     DE
 		PUSH    HL
 		INC     HL
 		INC     HL
 		INC     HL
 		LD      BC,4
-		LDIR
+		LDIR			; set FIRREC,MAXCLUS
 		POP     HL
-		LD      BC,3
+		LD      BC,3		; set FATSIZ,FIRDIR
 		LDIR
 		POP     HL
 
 ; Subroutine current directory invalid
+; Input:  HL = pointer to drive table
 C34C3:		PUSH    HL
 		PUSH    BC
 		LD      BC,31
@@ -9743,7 +9736,7 @@ I372F:		DEFB    _WPROT,0
 		DEFB    0,6+128
 
 ; ---------------------------------------------------------
-; *** Functions ***
+; *** Functions: 0F-17,21-24,28 ***
 ; ---------------------------------------------------------
 
 ; ---------------------------------------------------------
@@ -10081,7 +10074,7 @@ F_SETRND:	PUSH    DE
 		JP      J3787
 
 ; ---------------------------------------------------------
-; *** Subroutines ***
+; *** Subroutines: FIB and FCB ***
 ; ---------------------------------------------------------
 
 ; Subroutine rebuild FIB from FCB
@@ -10150,7 +10143,7 @@ C3A15:		LD      IX,I_B9DA
 		LD      HL,ISB9DB
 		INC     DE
 		LD      A,(DE)
-		LD      (IX+31),02H     ; 2
+		LD      (IX+31),02H
 		CALL    C173A
 		RET
 
@@ -10607,7 +10600,7 @@ J3D0A:		LD      (HL),A
 		RET
 
 ; ---------------------------------------------------------
-; *** Functions ***
+; *** Functions: 26,27 ***
 ; ---------------------------------------------------------
 
 ; ---------------------------------------------------------
@@ -10781,7 +10774,7 @@ J3E28:		DJNZ    J3E1B
 
 IFDEF FAT16
 ; ------------------------------------------------------------------------------
-; *** Subroutines for FAT16 ***
+; *** Subroutines: FAT16 ***
 ; ------------------------------------------------------------------------------
 
 ; Calculate disk free space without using an extra RAM segment

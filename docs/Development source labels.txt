@@ -1,0 +1,39 @@
+Development source labels 
+=========================
+
+Original
+--------
+The MSXDOS sources originated from the msxsyssrc repository:
+- Source re-created with Z80DIS 2.2.
+- Source comments by Arjen Zeilemaker.
+
+Address labels
+--------------
+Cxxxx   Called subroutine
+Jxxxx   Jumped to address
+Ixxxx   Information (data) address
+Rxxxx   Relocated address
+Dxxxx   Data address
+
+Code may be at a different address now then the xxxx value suggests.
+Any $ and . characters in labels are replaced by the S and _ characters.
+
+Modifications by H.J. Berends
+-----------------------------
+- Changes so the source can be compiled with z88dk's z80asm.
+- Restructured text, modified comments and additional comments.
+- Moved code to use free space in the rom.
+- Modified code is marked by a compiler directive or "Mod:" comment.
+
+Address labels
+--------------
+1. Upper case labels without prefix, refers to MSX standard names.
+2. Upper case labels with prefix:
+   F_X     BDOS function X
+   K_X     Kernel procedure X
+   KB_X    Kernel procedure X with call to main bios
+   PH_X    Paging helper routine X
+   Other   Local constants (e.g. IDE_READ)
+3. camelCase labels:
+  Subroutines with non MSX standard names, may start with object prefix.
+  Address labels with a local range inside a subroutine start with _ or r.

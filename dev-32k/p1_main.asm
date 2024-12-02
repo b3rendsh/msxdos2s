@@ -1,14 +1,10 @@
-; p1_main.asm
-;
-; DOS 2.20 kernel page 1
-; Main initialization routines
 ; ------------------------------------------------------------------------------
+; p1_main.asm
+; DOS 2.20 kernel page 1: initialization and Disk BASIC
 ; Based on ASCII DOS 2.20 codebase s0 and s1
-; Source re-created by Z80DIS 2.2
-; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
 ;
 ; Code Copyrighted by ASCII, OKEI and maybe others
-; Source comments by Arjen Zeilemaker
+; Source origin is the msxsyssrc repository by Arjen Zeilemaker
 ; Restructure, modifications and additional comments by H.J. Berends
 ;
 ; Sourcecode supplied for STUDY ONLY
@@ -569,7 +565,7 @@ J4A24:		INC     C			; next drive id
 		ADD     HL,DE
 		LD      (BUF_3),HL		; pointer to temporary buffer3
 		LD      DE,100
-		JR	DOS_DELETE+5			; Mod: jump over BDOS entry
+		JR	DOS_DELETE+5		; Mod: jump over BDOS entry
 
 ; -------------------------------------
 		DOSENT  0436CH
@@ -5919,6 +5915,10 @@ J4C44:		POP     DE
 		OR      A
 		RET
 
+; ------------------------------------------------------------------------------
+; *** Messages ***
+; ------------------------------------------------------------------------------
+
 I4C4A:		DOSST1  1,"Not enough memory"
 		DOSST1  2,"Drive name? ("
 		DOSST1  3,") "
@@ -6020,11 +6020,4 @@ IFDEF FAT16
 IBOOTCODE:
 		INCLUDE	"bootcode.inc"
 ENDIF 
-
-; ------------------------------------------------------------------------------
-; *** DISK DRIVER section starts here ***
-; ------------------------------------------------------------------------------
-; See driver.asm
-
-DSKDRV:
 

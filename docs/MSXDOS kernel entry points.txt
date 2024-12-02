@@ -1,18 +1,9 @@
-Baseline documentation:
------------------------
+MSXDOS kernel entry points
+==========================
 
-1. MSX Technical Data Book for MSX-DOS 1
-2. MSX DOS 2 System Specification 1986-11-26
-3. MSX system sourcefiles (sourceforge 2024-01-13)
-4. Nextor 2.1 Driver Development Guide (github)
-5. Microsoft FAT Specification (August 30 2005)
-
-
-MSXDOS kernel entry points:
----------------------------
 The following entry points (for DOS 1 and 2) are defined in the sources 
-for MSXDOS.SYS 1.03 and MSXDOS 2.2 DISK Kernel.These will be considered 
-the standardized kernel entry points in ROM page 1:
+for MSXDOS.SYS 1.03 and MSXDOS 2.2 DISK Kernel. These will be considered 
+the standardized kernel entry points in ROM page 1.
 
 Header:
 4000H	"AB"
@@ -94,9 +85,3 @@ SETTIM	EQU	55E6H
 SETRAW	EQU	55FFH
 
 Note: in the labels the $ is replaced by S.
-
-
-
-
-
-

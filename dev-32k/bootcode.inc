@@ -1,7 +1,14 @@
+; ------------------------------------------------------------------------------
 ; bootcode.inc
-;
 ; MSXDOS 2.2 boot sector code starting at offset 0x1e
 ; Used in the format routine to initialize a floppy disk
+;
+; Code Copyrighted by ASCII and maybe others
+; Source origin is the msxsyssrc repository by Arjen Zeilemaker
+; Restructure, modifications and additional comments by H.J. Berends
+;
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
 ; ------------------------------------------------------------------------------
 
 		PHASE  0C01EH

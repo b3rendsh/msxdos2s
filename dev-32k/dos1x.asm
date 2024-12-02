@@ -1,15 +1,12 @@
+; ------------------------------------------------------------------------------
 ; dos1x.asm
-;
 ; DOS version 1.5 (non official version number)
 ; Based on:
 ; DOS 1.03 kernel (latest version known, SONY HB-F1XV)
 ; FAT swapper and other DOS 1 enhancements by SOLiD
-; ------------------------------------------------------------------------------
-; Source re-created by Z80DIS 2.2
-; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
 ;
-; Code Copyrighted by ASCII and maybe others
-; Source comments by Arjen Zeilemaker
+; Code Copyrighted by ASCII, SOLiD and maybe others
+; DOS 1.03 kernel source origin is the msxsyssrc repository by Arjen Zeilemaker
 ; Restructure, modifications and additional comments by H.J. Berends
 ;
 ; Sourcecode supplied for STUDY ONLY
@@ -20,6 +17,7 @@
 ; + DOS 1 enhancements (IDEDOS1)
 ; + Optional FAT16 for DOS1 (FAT16DOS1)
 ; x Removed BEER 1.9 legacy dependencies
+
 
         INCLUDE "disk.inc"	; Assembler directives
 	INCLUDE	"msx.inc"	; MSX constants and definitions

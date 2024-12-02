@@ -1,24 +1,17 @@
-; p3_paging.asm
-;
-; DOS 2.20 kernel
-; Paging helper routines
 ; ------------------------------------------------------------------------------
-; Based on ASCII DOS 2.20 codebase
-; Source re-created by Z80DIS 2.2
-; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+; p3_paging.asm
+; DOS 2.20 kernel: paging helper routines
+; Based on ASCII DOS 2.20 codebase s1
 ;
 ; Code Copyrighted by ASCII and maybe others
-; Source comments by Arjen Zeilemaker
+; Source origin is the msxsyssrc repository by Arjen Zeilemaker
 ; Restructure, modifications and additional comments by H.J. Berends
 ;
 ; Sourcecode supplied for STUDY ONLY
 ; Recreation NOT permitted without authorisation of the copyrightholders
 ; ------------------------------------------------------------------------------
 ; Modifications:
-; 01. Restructured paging helper routines in separate module
-
-; Address labels that are replaced by non standard descriptive names:
-; PH_X	Paging helper routine X
+; 01. Moved init of paging helper routines to separate module
 
 
 		INCLUDE "disk.inc"	; Assembler directives
