@@ -17,7 +17,7 @@
 ; 04. Relocated format boot sector code if using FAT16 option
 ; 05. Use Microsoft standards to determine if partition is FAT16 or FAT12 (DPBSET)
 ; 06. Changed the free disk calculation routine for FAT16 partitions
-; 07. Rmoved unusued code (OPTM)
+; 07. Removed unused code (OPTM)
 
 
 		INCLUDE "disk.inc"		; Assembler directives
@@ -320,10 +320,10 @@ J01FF:		INC     BC
 
 J0203:		LD      A,0DEH
 		INC     BC
-I0206:		INC     BC
-I0207:		LD      HL,(D_B064)
+		INC     BC
+		LD      HL,(D_B064)
 		OR      A
-I020B:		SBC     HL,BC
+		SBC     HL,BC
 		JR      C,J0227
 		JP      P,J0227
 		LD      (D_B064),HL
@@ -589,7 +589,7 @@ J03E8:		BIT     0,(IY+9)
 ; ---------------------------------------------------------
 F_DIRIN:	BIT     0,(IY+9)
 		LD      C,00H
-I0404:		JR      NZ,K_HCONIN
+		JR      NZ,K_HCONIN
 J0406:		LD      A,(D_BB8D)
 		OR      A
 		CALL    Z,KB_CHARIN
@@ -1247,7 +1247,7 @@ J07A8:		INC     HL
 		CALL    C06BC
 		LD      A,13
 		CALL    C0836
-I07BC:		POP     HL
+		POP     HL
 		XOR     A
 		RET
 
@@ -2202,7 +2202,7 @@ F_TERM0:	LD      B,00H
 ; ---------------------------------------------------------
 F_TERM:		LD      A,B
 		LD      B,00H
-I0D00:		CALL    C3723
+		CALL    C3723
 J0D03:		JR      J0D03
 
 ; ---------------------------------------------------------
@@ -2752,13 +2752,13 @@ J0FE3:		CALL    C1003
 C0FF1:		LD      C,00H
 J0FF3:		CALL    C1003
 		INC     HL
-I0FF7:		CALL    C17AE
+		CALL    C17AE
 		LD      B,A
 		LD      A,(DE)
 		INC     DE
 		CP      B
 		RET     NZ
-I0FFF:		OR      A
+		OR      A
 		JR      NZ,J0FF3
 		RET
 
@@ -2795,7 +2795,7 @@ F_GDATE:	CALL    C111B
 		LD      B,00H
 		LD      E,L
 		LD      D,H
-		LD      HL,I07BC
+		LD      HL,1980		; year base is 1980 
 		ADD     HL,BC
 		LD      A,D
 		CP      03H
@@ -2920,7 +2920,7 @@ C10CA:		LD      A,13
 		OUT     (0B4H),A
 		LD      A,B
 		OUT     (0B5H),A
-		LD      BC,I0D00
+		LD      BC,00D00H
 J10E8:		LD      A,C
 		OUT     (0B4H),A
 		IN      A,(0B5H)
@@ -7969,7 +7969,7 @@ J2D9B:		PUSH    HL
 J2DA7:		AND     0FH
 		LD      H,A
 		EX      DE,HL
-		LD      HL,I0FF7
+		LD      HL,00FF7H
 		SBC     HL,DE
 		POP     HL
 		RET     NC
@@ -8068,7 +8068,7 @@ FATWR3:		PUSH	HL
 J2DDA:		LD      A,B
 		CP      10H
 		JR      C,J2DDF
-		LD      BC,I0FFF
+		LD      BC,00FFFH
 J2DDF:		CALL    C2E37
 		JR      Z,J2DF5
 J2DE4:		LD      A,0FFH
