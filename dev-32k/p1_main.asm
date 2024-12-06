@@ -36,7 +36,7 @@
 		PUBLIC  DIV16		; BC:=BC/DE, remainder in HL.
 		PUBLIC  ENASLT		; Enables a slot a address specified by A:HL.
 		PUBLIC  XFER		; Eactly emulates an LDIR.. ..used when transferring data to/fro page-1.
-		PUBLIC  SETINT		; Setup routine at (HL) as a timer interrupt routine (50Hz/60Hz0.
+		PUBLIC  SETINT		; Setup routine at (HL) as a timer interrupt routine (50Hz/60Hz).
 		PUBLIC  PRVINT		; Calls previous timer interrupt routine...
 	IFDEF FAT16
 		PUBLIC	IBOOTCODE	; Start of bootsector code

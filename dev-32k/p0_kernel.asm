@@ -472,7 +472,7 @@ I02A2:		DEFW    F_TERM0,F_CONIN,F_CONOUT,F_AUXIN	; 0
 		DEFW    F_READ,F_WRITE,F_SEEK,F_IOCTL		; 48
 		DEFW	F_HTEST,F_DELETE,F_RENAME,F_MOVE	; 4C
 		DEFW    F_ATTR,F_FTIME,F_HDELETE,F_HRENAME	; 50
-		DEFW	F_HMOVE,H_ATTR,F_HFTIME,F_GETDTA	; 54
+		DEFW	F_HMOVE,F_HATTR,F_HFTIME,F_GETDTA	; 54
 		DEFW    F_GETVFY,F_GETCD,F_CHDIR,F_PARSE	; 58
 		DEFW	F_PFILE,F_CHKCHR,F_WPATH,F_FLUSH	; 5C
 		DEFW    F_FORK,F_JOIN,F_TERM,K_INVALID		; 60
@@ -2824,19 +2824,19 @@ I104D:		DEFB    1,4,4,7,9,12,14,17,20,22,25,27
 ; ---------------------------------------------------------
 ; Function $2B _SDATE
 ; ---------------------------------------------------------
-F_SDATE:	LD      BC,0F844H
+F_SDATE:	LD      BC,-1980	; year base is 1980
 		ADD     HL,BC
 		JR      NC,J1091
 		LD      A,H
 		OR      A
 		JR      NZ,J1091
 		LD      A,L
-		CP      64H     	; "d"
+		CP      100		; year < 2080 ?
 		JR      NC,J1091
 		LD      B,A
 		LD      A,D
 		DEC     A
-		CP      0CH
+		CP      12		; valid month?
 		JR      NC,J1091
 		LD      HL,I1096
 		ADD     A,L
@@ -5473,7 +5473,7 @@ F_ATTR:		EX      AF,AF'
 ; ---------------------------------------------------------
 ; Function $55 _HATTR
 ; ---------------------------------------------------------
-H_ATTR:		EX      AF,AF'
+F_HATTR:	EX      AF,AF'
 		LD      C,L
 		CALL    C2136
 		RET     NC
@@ -7903,7 +7903,7 @@ J2D4A:		PUSH    DE
 		INC     C
 J2D5C:		CP      0F1H
 		JR      NZ,J2D63
-		LD      BC,J0101
+		LD      BC,00101H
 J2D63:		PUSH    AF
 		LD      A,E
 	IFDEF FAT16 ; FSIZE2
@@ -10587,7 +10587,7 @@ J3CFE:		LD      (IX+29),B
 ; Input:  HL = pointer to FCB
 C3D02:		INC     HL
 		LD      A,(DE)
-		CP      05H     ; 5
+		CP      05H
 		JR      NZ,J3D0A
 		LD      A,0E5H
 J3D0A:		LD      (HL),A

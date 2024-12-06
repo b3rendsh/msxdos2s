@@ -106,8 +106,10 @@ r101:		inc	sp
 PART_BUF	equ	$C000		; Copy of disk info / Master Boot Record
 PART_BUFX	equ	PART_BUF+$200	; Copy of extended partition boot record
 PART_NEXT	equ	PART_BUF+$400	; Pointer to next partition in work area
-PART_EXTLO	equ	PART_BUF+$402	; Extended partition sector offset low word
-PART_EXTHI	equ	PART_BUF+$404	; Extended partition sector offset high word
+PART_EXTLO	equ	PART_BUF+$402	; First extended partition offset low word
+PART_EXTHI	equ	PART_BUF+$404	; First extended partition offset high word
+PART_EBRLO	equ	PART_BUF+$406	; Extended partition boot record offset low word
+PART_EBRHI	equ	PART_BUF+$408	; Extended partition boot record offset high word
 
 DRIVES:		push	af
 		push	bc
@@ -215,14 +217,16 @@ xpart:		ld	(PART_NEXT),de		; save pointer to next partition in workarea
 		ld	c,(hl)
 		inc	hl
 		ld	b,(hl)
+		ld	(PART_EXTLO),de		; save first extended partition offset
+		ld	(PART_EXTHI),bc		; "
 		call	xpart1
 		ld	de,(PART_NEXT)		; Load pointer to next partition in workarea
 		pop	hl
 		pop	af
 		ret
 
-xpart1:		ld	(PART_EXTLO),de		; save extended partition sector offset
-		ld	(PART_EXTHI),bc		; " 
+xpart1:		ld	(PART_EBRLO),de		; save extended partition boot record offset
+		ld	(PART_EBRHI),bc		; "
 		ld	hl,PART_BUFX		; set extended partition boot record buffer
 		call	ReadBootRec
 		ret	c
@@ -237,22 +241,22 @@ xpart1:		ld	(PART_EXTLO),de		; save extended partition sector offset
 		jr	nz,r222
 r221:		ld	hl,PART_BUFX+$01c6	; First sector in partition
 		ld	de,(PART_NEXT)		; Load pointer to next partition in workarea
-		ld	a,(PART_EXTLO)
+		ld	a,(PART_EBRLO)
 		add	a,(hl)
 		ld	(de),a
 		inc	hl
 		inc	de
-		ld	a,(PART_EXTLO+1)
+		ld	a,(PART_EBRLO+1)
 		adc	a,(hl)
 		ld	(de),a
 		inc	hl
 		inc	de
-		ld	a,(PART_EXTHI)
+		ld	a,(PART_EBRHI)
 		adc	a,(hl)
 		ld	(de),a
 		inc	hl
 		inc	de
-		ld	a,(PART_EXTHI+1)
+		ld	a,(PART_EBRHI+1)
 		adc	a,(hl)
 		ld	(de),a
 		inc	de
@@ -268,7 +272,7 @@ r222:		ld	a,(PART_BUFX+$01d2)	; Partition type of 2nd entry
 		call	PartitionExt
 		ret	nz			; End of chain
 		ld	hl,PART_BUFX+$01d6	; pointer to sector number of next extended partition
-		ld	de,(PART_EXTLO)
+		ld	de,(PART_EXTLO)		; value is relative to first extended partition sector
 		ld	bc,(PART_EXTHI)
 		ld	a,(hl)
 		add	a,e
