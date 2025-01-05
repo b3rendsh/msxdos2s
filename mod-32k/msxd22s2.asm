@@ -2768,7 +2768,7 @@ CLST_1:	LD	D,(HL)			;#1534
 CLST_2:	DB	0FDh,0CBh,20h,0DEh	;SET  3,(IY+20h)	;#158B
 	JR	CHK_C
 	
-CLST_4:	LD	DE,(0BBE8h)		;#1C53
+CLST_4:	LD	DE,(D_BBE8)		;#1C53
 	JR	CHK_C
 	
 CLST_8:	POP	AF			;#1B87
@@ -2780,7 +2780,7 @@ CLST_5:	POP	AF			;#2F83
 CHK_D:	PUSH	AF
 	JR	CHK_C
 	
-CLST_6:	LD	DE,(0BBA3h)		;#2FAF
+CLST_6:	LD	DE,(D_BBA3)		;#2FAF
 CHK_C:	LD	A,D			;DE=FFFFh Z=0
 	AND	E
 	JR	CHK_A
@@ -2790,13 +2790,13 @@ CLST_7:	JR	NZ,CHK_C		;#3021
 	INC	SP
 	RET
 
-CLST_9:	LD	DE,(0BBE8h)		;#1CB1
+CLST_9:	LD	DE,(D_BBE8)		;#1CB1
 	CALL	CHK_C
-	LD	DE,(0BBE4h)
+	LD	DE,(D_BBE4)
 	RET	NZ
 	JR	CHK_C
 
-CLST_3:	LD	DE,(0BBE6h)		;#1C0D
+CLST_3:	LD	DE,(D_BBE6)		;#1C0D
 
 CHECK:	LD	A,D
 CHK_A:	INC	A
@@ -2811,13 +2811,13 @@ CLST_A:	LD	A,(HL)
 	
 ;---------------------------------
 	
-CLUST:	LD	HL,(0B9FAh)		;FCB+20h DPB address
+CLUST:	LD	HL,(I_B9FA)		;FCB+20h DPB address
 	CALL	CHKDRV
 	RET	Z			;FAT16
 	LD	A,(IX+2Ah)
 	JP	C39CE
 	
-CLUST2:	LD	HL,(0B9FAh)
+CLUST2:	LD	HL,(I_B9FA)
 	CALL	CHKDRV
 	RET	Z			;FAT16
 	LD	A,(IX+1Dh)
@@ -2842,7 +2842,7 @@ Z0018:	POP	AF
 	CALL	FATADR		;get address & sector set
 	JR	Z,Z0019		;no error
 Z0020:	XOR	A
-	LD	(0BBEAh),A
+	LD	(D_BBEA),A
 	LD	A,0F2h	
 	LD	DE,0FFFFh
 	CALL	C3686
@@ -8766,7 +8766,8 @@ ENDIF
         INC     C
 J2D5C:  CP      0F1H
         JR      NZ,J2D63
-        LD      BC,J0101
+        LD      BC,00101H	; Mod: use value not address
+
 J2D63:  PUSH    AF
         LD      A,E
 IFDEF FAT16
@@ -9464,7 +9465,7 @@ DSKBUF:
 	LD	A,(HL)		;Drive number of buffer
 	DEC	A
 	ADD	A,A
-	LD	HL,0BA25h	;(DRIVE-1)*2+BA25h=(DPB address)
+	LD	HL,I_BA25	;(DRIVE-1)*2+BA25h=(DPB address)
 	ADD	A,L
 	LD	L,A
 	LD	A,(HL)
@@ -9517,7 +9518,7 @@ SUB_16:	INC	DE			;[ver0.11]
 	LD	A,(SDIR_1)
 	INC	A
 	LD	(SDIR_1),A
-SUB_:	LD	A,(0BBE1h)
+SUB_:	LD	A,(D_BBE1)
 	RET
 	
 ;-------------------------------------
@@ -9539,7 +9540,7 @@ FATWRT:	CALL	CHKDRV
 FATWR2:	CALL	FATADR			;Get address
 	JR	Z,FATWR3		;Right routine
 	LD	A,0FFh
-	LD	(0BBEAh),A
+	LD	(D_BBEA),A
 FATWR4:	LD	A,0F2h
 	LD	DE,0FFFFh
 	CALL	C3686
@@ -9555,7 +9556,7 @@ FATWR3:	PUSH	HL
 	
 ;----------------------------------------------------------
 ;Set sector number at #BBB4
-NUM_1:	LD	(0BBB4h),HL
+NUM_1:	LD	(D_BBB4),HL
 	RET	NC
 SECINC:	LD	A,(BIT16)
 	INC	A
@@ -9580,7 +9581,7 @@ BUF_5:	XOR	A		;#2FD2
 	DEC	DE
 	RET
 
-BUF_4:	LD	BC,(0BBE8h)	;SUB DIR? ROOT?
+BUF_4:	LD	BC,(D_BBE8)	;SUB DIR? ROOT?
 	INC	BC
 	LD	A,B
 	OR	C
@@ -9602,7 +9603,7 @@ BUF_:	LD	(DSKEX),A	;FAT
 RAMRED:	PUSH	AF
 	LD	A,(BIT16)
 	LD	(RW_16),A	;write bit16-23 of sector number 
-	LD	DE,(0BBB4h)
+	LD	DE,(D_BBB4)
 	POP	AF
 	RET
 

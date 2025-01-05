@@ -26,12 +26,6 @@
 		EXTERN	GETSLT
 		EXTERN	ALLOCMEM
 
-		; Symbols defined in the kernel module
-		EXTERN	SSLOTL
-		EXTERN	SSLOTE
-		EXTERN	C005C
-		EXTERN	C005F
-
 ; ------------------------------------------------------------------------------
 ; *** Load and patch BDOS paging helper routines in ram p3
 ; ------------------------------------------------------------------------------
@@ -350,7 +344,7 @@ PH_XFER:	PUSH    AF
 		POP     DE
 		POP     HL
 		LDIR
-C0038:		PUSH    HL
+		PUSH    HL
 		PUSH    DE
 		PUSH    BC
 		LD      H,40H
@@ -430,8 +424,7 @@ R0094:		CALL    C0085
 R009B:		CALL    PH_GETP2
 		PUSH    AF
 R009F:		CALL    PH_PUTUS
-
-C00A2:		LD      IY,(MASTER-1)
+		LD      IY,(MASTER-1)
 		LD      IX,(SPROMPT)
 		CALL    CALSLT
 R00AD:		CALL    PH_PUTBD
@@ -587,7 +580,7 @@ J018F:		PUSH    HL
 R0195:		CALL    PH_PUTP2
 		LD      A,B
 		EI
-		CALL    C00A2
+		CALL    CHPUT
 		DI
 		LD      A,(DATA_S)
 R01A1:		CALL    PH_PUTP2
@@ -608,7 +601,7 @@ J01B8:		EI
 ; ---------------------------------------------------------
 ; Subroutine interrupt handler (F1E5)
 ; ---------------------------------------------------------
-PH_STRQ:	DI
+PH_SIRQ:	DI
 		PUSH    AF
 		PUSH    HL
 		PUSH    BC
@@ -663,7 +656,7 @@ R0215:		CALL    PH_PUTP1
 R0219:		CALL    PH_PUTP0
 		JR      R0221
 
-J021E:		CALL    C0038
+J021E:		CALL    KEYINT
 R0221:		JP      PH_P0RAM		; May be patched with 'CALL PH_P0RAM'
 
 R0224: 		POP     AF
@@ -729,14 +722,14 @@ R0275: 		DEFB    0,0		; "
 ; Subroutine ALL_SEG handler
 ; ---------------------------------------------------------
 PH_ALLSEG:	PUSH    HL
-		LD      HL,C005C
+		LD      HL,ALL_SEG
 		JR      J0285
 
 ; ---------------------------------------------------------
 ; Subroutine FRE_SEG handler
 ; ---------------------------------------------------------
 PH_FRESEG:	PUSH    HL
-		LD      HL,C005F
+		LD      HL,FRE_SEG
 J0285:		PUSH    DE
 		CALL    GO_BIOS
 		POP     DE
@@ -1109,7 +1102,7 @@ I485F:		DEFW    PH_RDLDI	; F1D3 RD_LDI / JUMPB transfer to/from page 1
 		DEFW    PH_SFLUSH	; F1DC SFLUSH print string via chput
 		DEFW    PH_GODRV	; F1DF GO_DRV interslot call with prompt handler
 		DEFW    PH_JPVEC	; F1E2 JP_VEC start DOS1 style handler
-		DEFW    PH_STRQ		; F1E5 SIRQ KEYINT handler
+		DEFW    PH_SIRQ		; F1E5 SIRQ KEYINT handler
 		DEFW    PH_RDSLT	; F1E8 RDSLT handler
 		DEFW    PH_WRSLT	; F1EB WRSLT handler
 		DEFW    PH_CASLT	; F1EE CALSLT handler

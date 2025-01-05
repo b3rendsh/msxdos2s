@@ -27,15 +27,6 @@
 
 		ORG	08000H
 
-		; labels used in P1 main
-		PUBLIC	SSLOTL
-		PUBLIC	SSLOTE
-		PUBLIC	C005C
-		PUBLIC	C005F
-		PUBLIC	C0080
-		PUBLIC	C0083
-		PUBLIC	C0086
-
 		PUBLIC	K1_BEGIN		; begin of kernel code
 		PUBLIC	K1_END			; end of kernel code
 
@@ -56,32 +47,32 @@ K1_BEGIN:
 		JP      K_INIT			; init kernel / BDOS
 		DEFS	2,0
 
-LBDOS:		JP      K_BDOS			; BDOS handler
+C0005:		JP      K_BDOS			; Kernel BDOS handler
 		DEFS	4,0
 C000C:		JP      SRDSLT			; RDSLT
 		DEFS	5,0
-		JP      SWRSLT			; WRSLT
+C0014:		JP      SWRSLT			; WRSLT
 		DEFS	5,0
 C001C:		JP      SCALSLT			; CALSLT
 		DEFS	5,0
-		JP      SENASLT			; ENASLT
+C0024:		JP      SENASLT			; ENASLT
 		DEFS	1,0
 		JP      CC206			; debugger
 		DEFS	5,0
 C0030:		JP      SCALLF			; CALLF
 		DEFS	5,0
 C0038: 		JP      SIRQ			; KEYINT
-SSLOT:		OUT     (0A8H),A
+C003B:		OUT     (0A8H),A		; SSLOT
 		LD      A,(DFFFF)
 		CPL
 		LD      L,A
 		AND     H
 		OR      D
 		JR      J004E
-SSLOTL:		OUT     (0A8H),A
+C0046:		OUT     (0A8H),A		; SSLOTL
 		LD      A,L
 		JR      J004E
-SSLOTE:		OUT     (0A8H),A
+C004B:		OUT     (0A8H),A		; SSLOTE
 		LD      A,E
 J004E:		LD      (DFFFF),A
 		LD      A,B
@@ -90,6 +81,7 @@ J004E:		LD      (DFFFF),A
 		DEFS	7,0
 C005C:		JP      K_ALLSEG		; ALL_SEG
 C005F:		JP      K_FRESEG		; FRE_SEG
+
 		DEFS	$1E,0
 C0080:		JP      KB_CHARIN		; CON input
 C0083:		JP      KB_CHAROUTC		; CON output
@@ -406,7 +398,7 @@ J026A:		POP     BC
 		RET
 
 ; ---------------------------------------------------------
-; *** BDOS handler ***
+; *** Kernel BDOS handler ***
 ; ---------------------------------------------------------
 K_BDOS:		EI
 		CALL    H_BDOS
@@ -6472,7 +6464,7 @@ C2599:		XOR     A
 		CP      B
 		RET     Z
 		LD      A,(D_BBC4)
-		AND     04H     ; 4
+		AND     04H
 		LD      DE,(D_BBC2)
 		CALL    C2731
 		SET     7,D
@@ -6607,7 +6599,7 @@ J2636:		PUSH    BC
 		LD	A,(HL)		; drive number of buffer
 		DEC	A
 		ADD	A,A
-		LD	HL,0BA25h	; (DRIVE-1)*2+BA25h=(DPB address)
+		LD	HL,I_BA25	; (DRIVE-1)*2+BA25h=(DPB address)
 		ADD	A,L
 		LD	L,A
 		LD	A,(HL)
@@ -8051,7 +8043,7 @@ C2DD6:		PUSH    DE
 FATWR2:		CALL	FATADR
 		JR	Z,FATWR3
 		LD	A,0FFh
-		LD	(0BBEAh),A
+		LD	(D_BBEA),A
 FATWR4:		LD	A,0F2h
 		LD	DE,0FFFFh
 		CALL	C3686
@@ -8969,7 +8961,7 @@ J337F:		POP     HL
 		OR      H
 		RET
 
-; Subroutine create bootsector DPB
+; Subroutine create bootsector BPB
 C3382:		LD      B,A
 		LD      A,3		; DSKCHG
 		CALL    C34D4		; call disk rom
@@ -10084,7 +10076,7 @@ C399D:		EX      DE,HL
 		LD      IX,I_B9DA
 		LD      (IX+0),0FFH
 		LD      A,(HL)
-		AND     0FH     ; 15
+		AND     0FH
 		LD      (IX+25),A
 		LD      DE,D_B9EF
 		LD      BC,16
@@ -10098,7 +10090,7 @@ C399D:		EX      DE,HL
 		LD      BC,8
 		LDIR
 	IFDEF FAT16 ; CLUST
-		LD	HL,(0B9FAh)	; FCB+20h DPB address
+		LD	HL,(I_B9FA)	; FCB+20h DPB address
 		CALL	CHKDRV
 		RET	Z		; FAT16
 	ENDIF
@@ -10121,7 +10113,7 @@ J39E7:		LD      (IX+30),B
 		JR      Z,J39F2
 		LD      B,80H
 J39F2:		LD      (IX+49),B
-		AND     0FH     ; 15
+		AND     0FH
 		LD      (IX+42),A
 		XOR     A
 		BIT     7,(IX+30)
@@ -10175,7 +10167,7 @@ C3A33:		PUSH    AF
 		POP     AF
 		LD      B,A
 		LD      A,(DE)
-		AND     0FH     ; 15
+		AND     0FH
 		LD      DE,I_B8F4
 J3A59:		LD      C,8
 		CALL    C12C3
@@ -10557,7 +10549,7 @@ C3CB4:		PUSH    IX
 		LD      BC,8
 		LDIR
 	IFDEF FAT16 ; CLUST2
-		LD	HL,(0B9FAh)
+		LD	HL,(I_B9FA)
 		CALL	CHKDRV
 		RET	Z		; FAT16
 	ENDIF
@@ -10837,7 +10829,7 @@ CLST_1:		LD	D,(HL)
 CLST_2:		SET	3,(IY+20h)
 		JR	CHK_C
 	
-CLST_4:		LD	DE,(0BBE8h)
+CLST_4:		LD	DE,(D_BBE8)
 		JR	CHK_C
 	
 CLST_8:		POP	AF
@@ -10849,7 +10841,7 @@ CLST_5:		POP	AF
 CHK_D:		PUSH	AF
 		JR	CHK_C
 	
-CLST_6:		LD	DE,(0BBA3h)
+CLST_6:		LD	DE,(D_BBA3)
 CHK_C:		LD	A,D		; DE=FFFFh Z=0
 		AND	E
 		JR	CHK_A
@@ -10859,13 +10851,13 @@ CLST_7:		JR	NZ,CHK_C
 		INC	SP
 		RET
 
-CLST_9:		LD	DE,(0BBE8h)
+CLST_9:		LD	DE,(D_BBE8)
 		CALL	CHK_C
-		LD	DE,(0BBE4h)
+		LD	DE,(D_BBE4)
 		RET	NZ
 		JR	CHK_C
 
-CLST_3:		LD	DE,(0BBE6h)
+CLST_3:		LD	DE,(D_BBE6)
 		LD	A,D
 
 CHK_A:		INC	A
@@ -10884,7 +10876,7 @@ Z0018:		POP	AF
 Z0018A:		CALL	FATADR		; get address & sector set
 		JR	Z,Z0019		; no error
 Z0020:		XOR	A
-		LD	(0BBEAh),A
+		LD	(D_BBEA),A
 		LD	A,0F2h
 		LD	DE,0FFFFh
 		CALL	C3686
@@ -10962,7 +10954,7 @@ CHKDRV:		PUSH	HL
 	
 ; ---------------------------------------------------------
 ;Set sector number
-NUM_1:		LD	(0BBB4h),HL
+NUM_1:		LD	(D_BBB4),HL
 		RET	NC
 SECINC:		LD	A,(BIT16)
 		INC	A
@@ -10974,7 +10966,7 @@ NUM_2:		INC	(IY+35h)
 		JR	SECINC
 	
 ; ---------------------------------------------------------
-BUF_4F:		LD	BC,(0BBE8h)	; SUB DIR? ROOT?
+BUF_4F:		LD	BC,(D_BBE8)	; SUB DIR? ROOT?
 		INC	BC
 		LD	A,B
 		OR	C

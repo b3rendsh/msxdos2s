@@ -60,21 +60,18 @@ SSLOTL  EQU     0046H
 SSLOTE  EQU     004BH
 C005C   EQU     005CH                   ; ALL_SEG in BDOS code segment
 C005F   EQU     005FH                   ; FRE_SEG in BDOS code segment
+CHPUT	EQU	00A2H
 GETSLT  EQU     402DH
 
 KBDOS   EQU     0005H
 
 ISB062  EQU     0B062H
 D_B064  EQU     0B064H
-ISB0ED  EQU     0B0EDH
-CSB382  EQU     0B382H
-I_B396  EQU     0B396H
 C_B582  EQU     0B582H
-C_B782  EQU     0B782H
 C_B982  EQU     0B982H
+I_BA23  EQU     0BA23H
 ISBA35  EQU     0BA35H
 ISBA75  EQU     0BA75H
-C_BA89  EQU     0BA89H
 ISBBFF  EQU     0BBFFH
 CSBD02  EQU     0BD02H
 
@@ -105,8 +102,8 @@ SBDOS   EQU     0F2DEH                  ; pointer to BDOS handler
 SS_TEMP EQU     0F2E0H
 RD_ADDR EQU     0F2E1H
 IX_BDOS EQU     0F2E6H                  ; temporary save IX register BDOS call
-PS_BDOS EQU     0F2EAH			; rem: Same as F2EB, but for primairy slots
-SS_BDOS EQU     0F2EBH			; rem: Secundairy slot status when BDOS function handler was executed
+PS_BDOS EQU     0F2EAH			; rem: Same as F2EB, but for primary slots
+SS_BDOS EQU     0F2EBH			; rem: secondary slot status when BDOS function handler was executed
 BDOS_ST EQU     0F2FEH                  ; pointer to temporary stack (BDOS)
 KANJTA  EQU     0F30FH                  ; double byte header table
 P0_64K  EQU     0F314H                  ; TPA segment table
@@ -211,7 +208,7 @@ IFDEF FAT16
 	LD	BC,0801h		; check 8 drives (B), counting from 1 (C)
 DIRINT:	PUSH	BC		
 	LD	B,0
-	LD	HL,0BA23H		; page 2
+	LD	HL,I_BA23		; page 2
 	ADD	HL,BC
 	ADD	HL,BC
 	LD	E,(HL)
@@ -335,7 +332,7 @@ J4954:	LD      (DE),A
         JR      J4946
 J495A:  LD      (DE),A
         LD      HL,(MAP_TAB)
-        LD      A,(HL)                  ; slotid primairy memory mapper
+        LD      A,(HL)                  ; slotid primary memory mapper
         PUSH    HL
         LD      (RAMAD3),A
         LD      (RAMAD2),A
@@ -354,7 +351,7 @@ J495A:  LD      (DE),A
         INC     HL
         LD      (HL),A                  ; free segments primary memory mapper
         INC     HL
-        LD      (HL),4+1+1              ; 6 reserved segments primairy memory mapper
+        LD      (HL),4+1+1              ; 6 reserved segments primary memory mapper
         LD      DE,P0_64K
         LD      HL,P0_SEG
         LD      A,4-1
@@ -374,7 +371,7 @@ J499B:  LD      (HL),00H
         LD      HL,ISB062
         LD      (D_B064),HL
         LD      HL,(MAP_TAB)
-        LD      A,(HL)                  ; slotid primairy memory mapper
+        LD      A,(HL)                  ; slotid primary memory mapper
         INC     HL
         PUSH    HL
         CALL    C4AD0
@@ -652,11 +649,11 @@ J4B0B:  LD      A,D
 
 J4B1A:  PUSH    HL
         LD      HL,(MAP_TAB)
-        LD      C,(HL)                  ; slotid primairy memory mapper
+        LD      C,(HL)                  ; slotid primary memory mapper
         INC     HL
-        LD      D,(HL)                  ; number of segments in primairy memory mapper
+        LD      D,(HL)                  ; number of segments in primary memory mapper
         INC     HL
-        LD      E,(HL)                  ; number of free segments in primairy memory mapper
+        LD      E,(HL)                  ; number of free segments in primary memory mapper
         POP     HL
         LD      A,C
         CALL    C4B5C                   ; slotid
@@ -665,9 +662,9 @@ J4B1A:  PUSH    HL
         LD      A,MAP_VE / 256		; rem: HIGH MAP_VE
         CALL    C4B5C                   ; memory mapper jump table
         LD      A,E
-        CALL    C4B5C                   ; number of free segments in primairy memory mapper
+        CALL    C4B5C                   ; number of free segments in primary memory mapper
         LD      A,D
-        CALL    C4B5C                   ; number of segments in primairy memory mapper
+        CALL    C4B5C                   ; number of segments in primary memory mapper
         CALL    C4B5C                   ; reserved byte
         CALL    C4B5C                   ; reserved byte
         JP      C4B5C                   ; reserved byte
@@ -677,7 +674,7 @@ J4B1A:  PUSH    HL
 J4B43:  POP     DE
         POP     AF
         LD      HL,(MAP_TAB)
-        LD      A,(HL)                  ; slotid primairy memory mapper
+        LD      A,(HL)                  ; slotid primary memory mapper
         PUSH    AF
         PUSH    DE
         RET
@@ -687,11 +684,11 @@ J4B43:  POP     DE
 J4B4C:  POP     DE
         POP     AF
         LD      HL,(MAP_TAB)
-        LD      B,(HL)                  ; slotid primairy memory mapper
+        LD      B,(HL)                  ; slotid primary memory mapper
         INC     HL
-        LD      A,(HL)                  ; number of segments in primairy memory mapper
+        LD      A,(HL)                  ; number of segments in primary memory mapper
         INC     HL
-        LD      C,(HL)                  ; number of free segments in primairy memory mapper
+        LD      C,(HL)                  ; number of free segments in primary memory mapper
         LD      HL,MAP_VE               ; memory mapper jump table
         PUSH    AF
         PUSH    DE
@@ -1287,12 +1284,7 @@ R0022:  PUSH    AF
         POP     DE
         POP     HL
         LDIR
-
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
-
-C0038:  PUSH    HL
+        PUSH    HL
         PUSH    DE
         PUSH    BC
         LD      H,40H
@@ -1364,12 +1356,7 @@ J0093:  POP     AF
         CALL    R0326                   ; GET_P2
         PUSH    AF
         CALL    R00E2
-
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
-
-C00A2:  LD      IY,(MASTER-1)
+        LD      IY,(MASTER-1)
         LD      IX,(SPROMPT)
         CALL    CALSLT
         CALL    R0103
@@ -1514,7 +1501,7 @@ J018F:  PUSH    HL
         CALL    R0320                   ; PUT_P2
         LD      A,B
         EI
-        CALL    C00A2
+        CALL    CHPUT
         DI
         LD      A,(DATA_S)
         CALL    R0320                   ; PUT_P2
@@ -1586,7 +1573,7 @@ C01E6:  CALL    C0235
         CALL    R030C                   ; PUT_P0
         JR      J0221
 
-J021E:  CALL    C0038
+J021E:  CALL    KEYINT
 J0221:  JP      R0254
 
 Q_0224: POP     AF

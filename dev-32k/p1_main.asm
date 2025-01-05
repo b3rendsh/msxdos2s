@@ -69,9 +69,6 @@
 		EXTERN	PH_INIT
 
 		; Symbols defined by the kernel in P0
-		EXTERN	C0080
-		EXTERN	C0083
-		EXTERN	C0086
 		EXTERN	K1_BEGIN
 		EXTERN	K1_END
 
@@ -145,21 +142,21 @@ DOS_SSBIOS:  	JP      J4177
 
 ; Subroutine EXTBIO handler
 		DEFS	04043H-$-S_ORG0,0
-I4043:		CALL    C410C
+C4043:		CALL    C410C
 		JP      FCALSA
 
 ; Subroutine H_TIMI handler
-I4049:		PUSH    AF
+C4049:		PUSH    AF
 		CALL    C4CF3                  	; H_TIMI handler
 		POP     AF
 		RET
 
-J4177:		LD      HL,C0086		; CONST
+J4177:		LD      HL,A0086		; CONST
 		JR      J4185
-J417C:		LD      HL,C0080		; CONIN
+J417C:		LD      HL,A0080		; CONIN
 		JR      J4185
 J4181:		LD      C,A
-J4182:		LD      HL,C0083		; CONOUT
+J4182:		LD      HL,A0083		; CONOUT
 J4185:		JP      GO_BIOS
 
 ; DOS1 kernel compatible:  CP/M BIOS CONIN entry
@@ -582,7 +579,7 @@ DOS_DELETE:     DOSCALL 013H
 		LD      BC,5
 		LDIR				; save current H_TIMI hook
 		POP     HL			; restore H_TIMI
-		LD      DE,I4049		; interrupt handler DOS2
+		LD      DE,A4049		; interrupt handler DOS2
 		CALL    C4C73			; patch hook
 		JR	DOS_RENAME+5		; Mod: jump over BDOS entry
 
@@ -597,7 +594,7 @@ DOS_RENAME:     DOSCALL 017H
 		PUSH    HL			; store EXTBIO
 		LDIR
 		POP     HL			; restore EXTBIO
-		LD      DE,I4043		; EXTBIO handler DOS2
+		LD      DE,A4043		; EXTBIO handler DOS2
 		CALL    C4C73			; patch hook
 		CALL    C56A5			; patch hooks for disk system
 		LD      HL,M7D2F+1
@@ -914,7 +911,7 @@ J4CAB:		LD      L,A
 		LD      A,L
 		POP     HL
 		PUSH    HL
-		LD      IX,C4010
+		LD      IX,A4010
 		CALL    CALSLT
 		POP     HL
 		RET
@@ -954,7 +951,7 @@ J4CD8:		INC     HL
 		INC     HL
 		PUSH    HL
 		PUSH    BC
-		LD      HL,C401F
+		LD      HL,A401F
 		PUSH    HL
 		POP     IX
 		OR      A
@@ -1712,8 +1709,8 @@ C5821:		CALL    C634C			; check for "(", evaluate file expression and check if d
 		CALL    C6559			; execute BDOS function with ASCIIZ string in buffer (handle error)
 		EX      DE,HL
 		LD      A,B
-		AND     05H     ; 5
-		XOR     04H     ; 4
+		AND     05H
+		XOR     04H
 		OR      (HL)
 		JP      NZ,J65ED		; bad drive name error
 		LD      A,C
@@ -3479,14 +3476,14 @@ C6284:		LD      DE,BUF+11
 		LD      HL,(PATHNAM)
 		LD      C,5CH			; function = parse filename
 		CALL    C655D			; execute BDOS function (handle error)
-		LD      B,08H   ; 8
+		LD      B,08H
 		CALL    C629E
 		LD      A,(HL)
 		CP      20H     ; " "
 		JR      Z,J629B
 		LD      A,2EH   ; "."
 J629B:		RST    	R_OUTDO
-		LD      B,03H   ; 3
+		LD      B,03H
 
 ; Subroutine 
 C629E:		LD      A,(HL)
@@ -3496,7 +3493,7 @@ C629E:		LD      A,(HL)
 		RET
 
 J62A4:		CALL    C6284
-		LD      A,20H   ; " "
+		LD      A,20H	; " "
 		RST    	R_OUTDO
 		LD      A,(BUF+24)
 		LD      C,A
@@ -3504,7 +3501,7 @@ J62A4:		CALL    C6284
 		LD      A,64H   ; "d"
 		CALL    C62F6
 		BIT     0,C
-		LD      A,72H   ; "r"
+		LD      A,72H	; "r"
 		CALL    C62F6
 		BIT     1,C
 		LD      A,68H   ; "h"
@@ -3522,7 +3519,7 @@ J62A4:		CALL    C6284
 		CALL    C664F
 		INC     HL
 		PUSH    HL
-		LD      B,0CH   ; 12
+		LD      B,0CH
 J62E6:		LD      A,(HL)
 		INC     HL
 		DEC     B
@@ -4126,7 +4123,7 @@ C6665:		EI
 		PUSH    HL
 		PUSH    DE
 		LD      A,E
-		CP      40H     ; "@"
+		CP      40H
 		JR      NC,J6642		; bad file name error
 		LD      C,E
 		LD      B,0
@@ -4185,7 +4182,7 @@ J66B9:		PUSH    HL
 		LD      A,(HL)
 		CP      ' '
 		JP      Z,J6642			; bad file name error
-		LD      B,08H   ; 8
+		LD      B,08H
 		CALL    C6729
 		JR      Z,J66E9
 		BIT     1,D
@@ -4244,7 +4241,7 @@ J671C:		POP     HL
 		RET
 
 ; Subroutine
-C6729:		LD      D,01H   ; 1
+C6729:		LD      D,01H
 J672B:		PUSH    HL
 		PUSH    BC
 		LD      E,(HL)
@@ -4280,9 +4277,9 @@ C674F:		EI
 ; Subroutine get pointer to error string (H_ERRP)
 C6753:		EI
 		LD      A,E
-		SUB     3CH     ; "<"
+		SUB     3CH
 		RET     C
-		CP      10H     ; 16
+		CP      10H
 		RET     NC
 		INC     A
 		LD      B,A
@@ -4297,7 +4294,7 @@ J6760:		LD      A,(HL)
 		PUSH    DE
 		LD      BC,26
 		LDIR
-		LD      E,01H   ; 1
+		LD      E,01H
 		POP     HL
 		RET
 
@@ -4361,11 +4358,11 @@ C68B3:		LD      B,A			; store boot drive id
 		LD      (DOSHIM),HL		; register top of MSXDOS memory
 		DI
 		LD      A,(P0_64K)		; page 0 segment disk system
-		CALL    PUT_P0                  ; PUT_P0
+		CALL    PUT_P0
 		LD      A,(P1_64K)		; page 1 segment disk system
-		CALL    PUT_P1                  ; PUT_P1
+		CALL    PUT_P1
 		LD      A,(P2_64K)		; page 2 segment disk system
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		LD      A,(RAMAD3)
 		LD      H,80H			; rem: HIGH 8000H
 		CALL    ENASLT			; switch page 2 to disk system RAM slot
@@ -4389,16 +4386,16 @@ J68E8:		LD      E,(HL)
 		LDI
 		JR      J68E8
 
-J68FA:		CALL    GET_P2                  ; GET_P2
+J68FA:		CALL    GET_P2
 		EX      AF,AF'			; store current segment page 2
 		LD      A,(CODE_S)		; BDOS code segment
-		CALL    PUT_P2                  ; PUT_P2
-		LD      HL,IS003B+8000H
-		LD      DE,IS003B
+		CALL    PUT_P2
+		LD      HL,SSLOT+8000H
+		LD      DE,SSLOT
 		LD      BC,26
 		LDIR    			; initialize secondary slot helper subroutines from BDOS code segment
 		EX      AF,AF'			; restore current segment page 2
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		EI
 		POP     HL			; restore pointer to command line
 		LD      DE,DBUF+1
@@ -4530,11 +4527,11 @@ I6A04:		DEFW	I6A01			; pointer to abort handler (ignore abort request)
 
 ; Subroutine select system segments
 C6A06:		LD      A,(P0_64K)		; page 0 segment disk system
-		CALL    PUT_P0                  ; PUT_P0
+		CALL    PUT_P0
 		LD      A,(P1_64K)		; page 1 segment disk system
-		CALL    PUT_P1                  ; PUT_P1
+		CALL    PUT_P1
 		LD      A,(P2_64K)		; page 2 segment disk system
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		RET
 
 ; Subroutine BDOS abort handler
@@ -4579,11 +4576,11 @@ C6A44:		DI
 		JR      NZ,J6A6A
 		LD      (HL),00H
 		LD      A,(CH_COU)
-		CP      02H     ; 2
+		CP      02H
 		ADC     A,0FFH
 		LD      (CH_COU),A
 		LD      A,(TIM_TI)
-		CP      07H     ; 7
+		CP      07H
 		ADC     A,00H
 		LD      (TIM_TI),A
 J6A6A:		LD      HL,(RANDOM+0)
@@ -5028,7 +5025,7 @@ J6DB4:		LD      C,A
 		OR      C
 		LD      E,(HL)
 		INC     HL
-		CALL    CS004B
+		CALL    SSLOTE
 		LD      A,C
 		ADD     A,40H   ; "@"
 		JR      NZ,J6DB4
@@ -5042,21 +5039,21 @@ C6DCA:		DI
 		LD      A,(RAMAD3)
 		CP      B
 		JR      Z,J6DE4
-		CALL    GET_P1                  ; GET_P1
+		CALL    GET_P1
 		PUSH    AF			; store current segment page 1
 		LD      A,C
-		CALL    PUT_P1                  ; PUT_P1
+		CALL    PUT_P1
 		SET     6,H
 		CALL    RD_LDI
 		POP     AF
-		CALL    PUT_P1                  ; PUT_P1
+		CALL    PUT_P1
 		EI
 		RET
 
-J6DE4:		CALL    GET_P0                  ; GET_P0
+J6DE4:		CALL    GET_P0
 		PUSH    AF			; store current segment page 0
 		LD      A,C
-		CALL    PUT_P0                  ; PUT_P0
+		CALL    PUT_P0
 		LD      B,D
 		LD      C,E
 		LD      DE,(RD_ADDR)
@@ -5066,7 +5063,7 @@ J6DE4:		CALL    GET_P0                  ; GET_P0
 J6DF6:		EX      AF,AF'
 		LDIR
 		POP     AF
-		CALL    PUT_P0                  ; PUT_P0
+		CALL    PUT_P0
 		EI
 		RET
 
@@ -5082,10 +5079,10 @@ C6DFF:		LD      A,D
 		LD      A,1
 		RET
 
-J6E11:		CALL    GET_P2                  ; GET_P2
+J6E11:		CALL    GET_P2
 		PUSH    AF			; store current segment page 2
 		LD      A,(DATA_S)		; BDOS data segment
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		LD      HL,(D_BE00)             ; number of ramdisk segments
 		LD      H,00H
 		ADD     HL,HL
@@ -5094,9 +5091,9 @@ J6E11:		CALL    GET_P2                  ; GET_P2
 		ADD     HL,HL
 		ADD     HL,HL
 		POP     AF
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		SBC     HL,DE
-		LD      A,0CH   ; 12
+		LD      A,0CH
 		RET     C
 		LD      H,D
 		LD      L,E
@@ -5111,36 +5108,36 @@ J6E11:		CALL    GET_P2                  ; GET_P2
 		LD      HL,I_BE02               ; ramdisk segment table
 		ADD     HL,DE
 		ADD     HL,DE
-		CALL    GET_P2                  ; GET_P2
+		CALL    GET_P2
 		PUSH    AF			; store current segment page 2
 		LD      A,(DATA_S)		; BDOS data segment
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		LD      C,(HL)
 		INC     HL
 		LD      B,(HL)
 		POP     AF
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		POP     AF
-		AND     3EH     ; ">"
+		AND     3EH
 		LD      H,A
 		LD      L,00H
-		LD      A,40H   ; "@"
+		LD      A,40H
 		SUB     H
 		RRCA
 		OR      A
 		RET
 
 ; Subroutine 
-C6E5B:		CALL    GET_P2                  ; GET_P2
+C6E5B:		CALL    GET_P2
 		PUSH    AF			; store current segment page 2
 		LD      A,(DATA_S)		; BDOS data segment
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		LD      A,(D_BE00)              ; number of ramdisk segments
 		OR      A
 		JR      NZ,J6E73
 		POP     AF
-		CALL    PUT_P2                  ; PUT_P2
-		LD      A,0CH   ; 12
+		CALL    PUT_P2
+		LD      A,0CH
 		SCF
 		RET
 
@@ -5148,23 +5145,23 @@ J6E73:		EXX
 		LD      HL,I_BC00+11
 		LD      (HL),00H
 		INC     HL
-		LD      (HL),02H        ; 2
+		LD      (HL),02H
 		INC     HL
-		LD      (HL),01H        ; 1
+		LD      (HL),01H
 		CP      81H
 		JR      C,J6E84
 		INC     (HL)
 J6E84:		INC     HL
-		LD      (HL),01H        ; 1
+		LD      (HL),01H
 		INC     HL
 		LD      (HL),00H
 		INC     HL
-		LD      (HL),02H        ; 2
+		LD      (HL),02H
 		INC     HL
 		LD      C,A
 		SRL     A
 		SRL     A
-		ADD     A,04H   ; 4
+		ADD     A,04H
 		LD      E,A
 		LD      D,00H
 		PUSH    DE
@@ -5223,7 +5220,7 @@ J6EC4:		LD      B,H
 		LDIR
 		EXX
 		POP     AF
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		XOR     A
 		RET
 
@@ -5275,7 +5272,7 @@ J410F:		DI
 		LD      BC,4
 		LDIR
 		LD      A,(CODE_S)              ; BDOS code segment
-		CALL    PUT_P0                  ; PUT_P0
+		CALL    PUT_P0
 		CALL    P0_RAM                  ; enable DOS memory on page 0
 		LD	HL,K1_BEGIN		; Source
 		LD	DE,0			; Target
@@ -5287,7 +5284,7 @@ J410F:		DI
 
 ; Mod: initialize RAM page 2 after rom copy
 		LD      A,(DATA_S)              ; BDOS data segment
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		CALL    C418C			; initialize characterset
 
 I416E:		CALL    0                       ; initialize BDOS code
@@ -5297,11 +5294,11 @@ IFDEF FAT16
 ; change from '00,FF,00' to 'FF,FF,00'
 		PUSH	AF
 		LD      A,(DATA_S)              ; BDOS data segment
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		LD	BC,0801h		; check 8 drives (B), counting from 1 (C)
 DIRINT:	        PUSH	BC
 		LD	B,0
-		LD	HL,0BA23H		; page 2
+		LD	HL,I_BA23		; page 2
 		ADD	HL,BC
 		ADD	HL,BC
 		LD	E,(HL)
@@ -5336,9 +5333,9 @@ ENDIF
 		LD      H,00H
 		CALL    ENASLT                  ; select ROM BIOS on page 0
 		LD      A,(P2_TPA)
-		CALL    PUT_P2                  ; PUT_P2
+		CALL    PUT_P2
 		LD      A,(P0_TPA)
-		CALL    PUT_P0                  ; PUT_P0
+		CALL    PUT_P0
 		EI
 		EX      AF,AF'
 		RET

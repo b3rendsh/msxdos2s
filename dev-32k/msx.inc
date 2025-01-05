@@ -10,7 +10,7 @@ TMPSTK	EQU	BOT16K+BOOTSZ+256	; location of temporary stack
 TBASE	EQU	00100H			; start of MSX-DOS
 
 ; ------------------------------------------------------------------------------
-; P0: BIOS or DOS 2 kernel
+; P0: BIOS or BDOS 2 kernel
 
 WBOOT  	EQU     0000H   	; --SLI
 KBDOS   EQU     0005H
@@ -23,11 +23,17 @@ IDBYT2  EQU     002DH		; ---L-
 CALLF	EQU	0030H
 CHAR_16 EQU     0034H		; ----I
 KEYINT	EQU	0038H
-IS003B  EQU     003BH  		; ----I
-CS004B  EQU     004BH  		; -C---	
+SSLOT   EQU     003BH  		; ----I
+SSLOTE  EQU     004BH  		; -C---	
+SSLOTL	EQU	0046H
 LDIRMV  EQU     0059H  		; -C---
 LDIRVM  EQU     005CH  		; -C---
+ALL_SEG	EQU	005CH		; BDOS
+FRE_SEG	EQU	005FH		; BDOS
 DBUF    EQU     0080H  		; --S-I
+A0080	EQU	0080H		; BDOS
+A0083	EQU	0083H		; BDOS
+A0086	EQU	0086H		; BODS
 CHSNS   EQU     009CH
 CHGET   EQU     009FH  		; -C--I
 CHPUT   EQU     00A2H   	; -C--I
@@ -56,7 +62,11 @@ NULSTR  EQU     3FD6H   	; ----I
 ; ------------------------------------------------------------------------------
 ; P1: disk rom or basic rom
 
+A4010	EQU	04010H		; DSKIO
+A401F	EQU	0401FH		; MTOFF
 BASENT  EQU     04022H		; Start DiskBASIC
+A4043	EQU	04043H		; EXTBIO handler DOS2 
+A4049	EQU	04049H		; H.TIMI handler
 ERROR   EQU     0406FH          ; BASIC error
 READYR  EQU     0409BH          ; restart BASIC
 NTSTOP  EQU     04173H          ; execute statement
@@ -107,28 +117,23 @@ M7E14   EQU     07E14H          ; start MSX-BASIC program in ROM (DOS1)
 ; ------------------------------------------------------------------------------
 ; P2: workarea DOS 2
 
-ISB062  EQU     0B062H
+ISB062	EQU	0B062H
 D_B064  EQU     0B064H  	; --SL-
 I_B066  EQU     0B066H  	; ----I
 ISB069  EQU     0B069H  	; ----I
 D_B06C  EQU     0B06CH  	; --S-I
 I_B0D0  EQU     0B0D0H  	; ----I
-ISB0ED  EQU     0B0EDH
 I_B1CF  EQU     0B1CFH  	; ----I
 I_B1D0  EQU     0B1D0H  	; ----I
 ISB1D1  EQU     0B1D1H  	; ----I
 ISB1D2  EQU     0B1D2H  	; ----I
 I_B2D4  EQU     0B2D4H  	; ----I
-CSB382  EQU     0B382H
-I_B396  EQU     0B396H
 D_B400  EQU     0B400H  	; --SL-
-C_B582  EQU     0B582H
 I_B6D4  EQU     0B6D4H  	; ----I
 ISB6F2  EQU     0B6F2H  	; ----I
 DSB6FA  EQU     0B6FAH  	; --S--
 DSB6FB  EQU     0B6FBH  	; --S--
 DSB6FD  EQU     0B6FDH  	; ---L-
-C_B782  EQU     0B782H
 I_B8D4  EQU     0B8D4H  	; ----I
 I_B8F4  EQU     0B8F4H  	; ----I
 ISB901  EQU     0B901H  	; ----I
@@ -141,7 +146,6 @@ ISB973  EQU     0B973H  	; ----I
 I_B975  EQU     0B975H  	; ----I
 D_B976  EQU     0B976H  	; --SL-
 D_B977  EQU     0B977H  	; --SL-
-C_B982  EQU     0B982H
 I_B99A  EQU     0B99AH  	; ----I
 I_B9DA  EQU     0B9DAH  	; ----I
 ISB9DB  EQU     0B9DBH  	; ----I
@@ -163,7 +167,6 @@ I_BA25  EQU     0BA25H  	; ----I
 D_BA33  EQU     0BA33H  	; --SL-
 I_BA35  EQU     0BA35H  	; ----I
 I_BA75  EQU     0BA75H  	; ----I
-C_BA89  EQU     0BA89H
 D_BB76  EQU     0BB76H  	; ---LI
 D_BB77  EQU     0BB77H  	; --SL-
 D_BB78  EQU     0BB78H  	; --SL-
@@ -242,7 +245,6 @@ DSBBFD  EQU     0BBFDH  	; --S--
 D_BBFE  EQU     0BBFEH  	; --SLI
 ISBBFF  EQU     0BBFFH
 I_BC00	EQU	0BC00H	        ; ----I		ramdisk boot sector
-CSBD02  EQU     0BD02H
 D_BE00  EQU     0BE00H          ; --SLI		number of ramdisk segments
 I_BE02  EQU     0BE02H          ; ----I		ramdisk segment table
 
@@ -588,62 +590,62 @@ YFFFF   EQU     0FFFFH		; (DOS1)
 ; ------------------------------------------------------------------------------
 ; Byte constants
 
-_NCOMP	EQU	0FFH
-_WRERR	EQU	0FEH
-_DISK	EQU	0FDH
-_NRDY	EQU	0FCH
-_VERFY	EQU	0FBH
-_DATA	EQU	0FAH
-_RNF	EQU	0F9H
-_WPROT	EQU	0F8H
-_UFORM	EQU	0F7H
-_NDOS	EQU	0F6H
-_WDISK	EQU	0F5H
-_WFILE	EQU	0F4H
-_SEEK	EQU	0F3H
-_IFAT	EQU	0F2H
-_NOUPB	EQU	0F1H
-_IFORM	EQU	0F0H
+_NCOMP	EQU	0FFH		; incompatible disk
+_WRERR	EQU	0FEH		; write error
+_DISK	EQU	0FDH		; disk error
+_NRDY	EQU	0FCH		; not ready
+_VERFY	EQU	0FBH		; verify error
+_DATA	EQU	0FAH		; data error
+_RNF	EQU	0F9H		; sector not found
+_WPROT	EQU	0F8H		; write protected disk
+_UFORM	EQU	0F7H		; unformatted disk
+_NDOS	EQU	0F6H		; not a DOS disk
+_WDISK	EQU	0F5H		; wrong disk
+_WFILE	EQU	0F4H		; wrong disk for file
+_SEEK	EQU	0F3H		; seek error
+_IFAT	EQU	0F2H		; bad file allocation table
+_NOUPB	EQU	0F1H		;
+_IFORM	EQU	0F0H		; cannot format this drive
 
-_INTER	EQU	0DFH
-_NORAM	EQU	0DEH
-_IBDOS	EQU	0DCH
-_IDRV	EQU	0DBH
-_IFNM	EQU	0DAH
-_IPATH	EQU	0D9H
-_PLONG	EQU	0D8H
-_NOFIL	EQU	0D7H
-_NODIR	EQU	0D6H
-_DRFUL	EQU	0D5H
-_DKFUL	EQU	0D4H
-_DUPF	EQU	0D3H
-_DIRE	EQU	0D2H
-_FILRO	EQU	0D1H
-_DIRNE	EQU	0D0H
-_IATTR	EQU	0CFH
-_DOT	EQU	0CEH
-_SYSX	EQU	0CDH
-_DIRX	EQU	0CCH
-_FILEX	EQU	0CBH
-_FOPEN	EQU	0CAH
-_OV64K	EQU	0C9H
-_FILE	EQU	0C8H
-_EOF	EQU	0C7H
-_ACCV	EQU	0C6H
-_IPROC	EQU	0C5H
-_NHAND	EQU	0C4H
-_IHAND	EQU	0C3H
-_NOPEN	EQU	0C2H
-_IDEV	EQU	0C1H
-_IENV	EQU	0C0H
-_ELONG	EQU	0BFH
-_IDATE	EQU	0BEH
-_ITIME	EQU	0BDH
-_RAMDX	EQU	0BCH
-_NRAMD	EQU	0BBH
-_HDEAD	EQU	0BAH
-_EOL	EQU	0B9H
-_ISBFN	EQU	0B8H
+_INTER	EQU	0DFH		; internal error
+_NORAM	EQU	0DEH		; not enough memory
+_IBDOS	EQU	0DCH		; invalid BDOS call
+_IDRV	EQU	0DBH		; invalid drive
+_IFNM	EQU	0DAH		; invalid filename
+_IPATH	EQU	0D9H		; invalid pathname
+_PLONG	EQU	0D8H		; pathname too long
+_NOFIL	EQU	0D7H		; file not found
+_NODIR	EQU	0D6H		; directory not found
+_DRFUL	EQU	0D5H		; boot directory full
+_DKFUL	EQU	0D4H		; disk full
+_DUPF	EQU	0D3H		; duplicate filename
+_DIRE	EQU	0D2H		; invalid directory move
+_FILRO	EQU	0D1H		; read only file
+_DIRNE	EQU	0D0H		; directory not empty
+_IATTR	EQU	0CFH		; invalid attributes
+_DOT	EQU	0CEH		; invalid . or .. operation
+_SYSX	EQU	0CDH		; system file exists
+_DIRX	EQU	0CCH		; directory exists
+_FILEX	EQU	0CBH		; file exists
+_FOPEN	EQU	0CAH		; file is already in use
+_OV64K	EQU	0C9H		; cannot transfer above 64K
+_FILE	EQU	0C8H		; file allocation error
+_EOF	EQU	0C7H		; end of file
+_ACCV	EQU	0C6H		; file access violation
+_IPROC	EQU	0C5H		; invalid process id
+_NHAND	EQU	0C4H		; no spare file handles
+_IHAND	EQU	0C3H		; invalid file handle
+_NOPEN	EQU	0C2H		; file handle not open
+_IDEV	EQU	0C1H		; invalid device operation
+_IENV	EQU	0C0H		; invalid environment string
+_ELONG	EQU	0BFH		; environment string too long
+_IDATE	EQU	0BEH		; invalid date
+_ITIME	EQU	0BDH		; invalid time
+_RAMDX	EQU	0BCH		; ram disk already exists
+_NRAMD	EQU	0BBH		; ram disk does not exist
+_HDEAD	EQU	0BAH		; file handle has been deleted
+_EOL	EQU	0B9H		; end of line
+_ISBFN	EQU	0B8H		; invalid sub-function number
 
 _STOP	EQU	09FH
 _CTRLC	EQU	09EH
