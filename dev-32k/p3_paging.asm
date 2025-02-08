@@ -322,7 +322,8 @@ J0010:		PUSH    HL
 		POP     DE
 		POP     HL
 		POP     AF                      ; restore IFF2 flag
-R001C:		JP      PE,J0020                ; maskable interrupts were disabled, leave disabled
+R001C:		JP      PE,J0020                ; pe=maskable interrupts were enabled, flip interrupt status (bug or intentional?)
+		;JP	PO,J0020		; po=maskabke interrupts were disabled, leave disabled
 		EI
 J0020:		POP     AF
 		RET

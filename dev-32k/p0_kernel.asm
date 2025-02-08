@@ -10769,45 +10769,56 @@ IFDEF FAT16
 ; *** Subroutines: FAT16 ***
 ; ------------------------------------------------------------------------------
 
-; Calculate disk free space without using an extra RAM segment
+; Calculate disk free space without using an extra RAM segment, start at end of FAT.
+; If FASTALLOC is defined then cut off count if number of free clusters is more than 2K.
+
 ALLOC16:	LD	B,D
 		LD	C,E		; BC = total cluster countdown
 		INC	BC		; Adjust for start cluster 2
-		LD	DE,0		; DE = free cluster counter
 		LD	L,(IX+0Ch)
 		LD	H,(IX+0Dh)	; HL = first FAT sector
-FREE_0:		PUSH	BC
+		LD	E,B
+		LD	D,0
+		ADD	HL,DE		; start at last sector
+		INC	B		; total FAT sector count
+		LD	A,C
+		OR	A		; (Total clusters) MOD 256 = 0 ?
+		JR	NZ,R01		; NZ=no
+		DEC	HL		; adjust last FAT sector
+		DEC	B		; adjust FAT sector counter
+R01:		LD	E,D		; DE=0: free cluster counter
+
+		; B  = FAT sector counter
+		; C  = End of FAT in last FAT sector
+		; DE = Free cluster counter
+		; HL = FAT sector address
+FREE_0:		PUSH	HL
+		PUSH	BC
 		PUSH	DE
 		EX	DE,HL
 		XOR	A
 		CALL	C2B6A
 		LD	BC,0Bh
 		ADD	HL,BC		; HL = Pointer to sector data
-		INC	DE		; Next FAT sector
-		LD	B,D
-		LD	C,E		; BC=DE
-		POP	DE		; Free cluster counter
-		PUSH	BC
-		LD	B,0
-		CALL	FREE_1		; Add free clusters in FAT sector to counter
-		POP	HL		; Next FAT sector
-		POP	BC		; Remaining total cluster count
-		DJNZ	FREE_0
-		LD	A,C
-		OR	A		; (Total clusters) MOD 256 = 0 ?
-		JR	Z,FREE_4
-		; Continue count with last FAT sector
-		PUSH	BC
-		PUSH	DE
-		EX	DE,HL
-		XOR	A
-		CALL	C2B6A
-		LD	BC,0Bh
-		ADD	HL,BC
-		POP	DE
+		POP	DE		
 		POP	BC
-		LD	B,C
-		CALL	FREE_1
+		LD	A,C		; End of FAT in last sector
+		LD	C,0		; Next FAT sectors
+		PUSH	BC
+		LD	B,A
+		CALL	FREE_1		; Add free clusters in FAT sector to counter
+		POP	BC		; Remaining total cluster count
+		POP	HL
+		DEC	HL		; Next FAT sector
+	IFDEF FASTALLOC
+		LD	A,D
+		AND	0F8H		; Free clusters >= 2048? (0F8H=2048 0F0H=4096)
+		JR	Z,FREE_3	; Z=no
+		LD	DE,0800H	; Set free clusters to 2048 (0800H=2048 1000H=4096)
+		JR	FREE_4
+FREE_3:
+	ENDIF
+		DJNZ	FREE_0
 FREE_4:		PUSH	DE
 		JP	ALLOC_RET
 
