@@ -2,7 +2,7 @@
 ; --------------------
 ; CFIDE		Include 8-bit CF IDE driver
 ; PPIDE		Include PPI 8255 IDE driver
-; GPIO		Include GPIO 115K2 / 57K6 driver
+; JIO		Include JIO 115K2 driver
 ; UART		Include UART 1655x serial driver
 ; CORE		Include dummy IDE driver
 ; IDEDOS1	MSX-DOS 1 IDE
@@ -31,7 +31,7 @@
 ; Apply to all targets
 	OPTM	EQU	1	
 
-IF PPIDE || GPIO || UART
+IF PPIDE || JIO || UART
 	DEFINE	FASTALLOC
 ENDIF
 
@@ -42,18 +42,16 @@ IF CFIDE || PPIDE
 	MOD2	EQU	'i'	; Ide
 ENDIF
 
-IFDEF GPIO
+IFDEF JIO
 	DEFINE	FAT16
 	DEFINE	FAT16DOS1
-	DEFINE	NODOS1
 	MOD1	EQU	'x'	; eXended
-	MOD2	EQU	'r'	; gpio Remote disk
+	MOD2	EQU	'r'	; JIO Remote disk
 ENDIF
 
 IFDEF UART
 	DEFINE	FAT16
 	DEFINE	FAT16DOS1
-	DEFINE	NODOS1
 	MOD1	EQU	'x'	; eXended
 	MOD2	EQU	'u'	; UART
 ENDIF

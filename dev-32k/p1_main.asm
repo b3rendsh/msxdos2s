@@ -19,6 +19,7 @@
 ; 06. Restructured codebase segments 0 and 1 into one main segment p1
 ; 07. Relocate code to unused space between msxdos 1 entry points
 ; 08. Added BOOTMENU option
+; 09. Check if boot sector contains a valid boot loader or extended boot signature (FAT16)
 
 
 		INCLUDE "disk.inc"	; Assembler directives
@@ -631,14 +632,21 @@ DOS_RENAME:     DOSCALL 017H
 		JR      J4AC1			; continue with boot loader
 
 ; Start DiskBASIC
-J4ABB:		CALL    C4BE8			; intialize DiskBASIC
+J4ABB:		CALL    C4BE8			; initialize DiskBASIC
 		JP      CALBAS			; start DiskBASIC
 
 J4AC1:		LD      HL,J4B1B
 		PUSH    HL			; start DiskBASIC when failed
+	IFDEF FAT16
+		LD	A,1
+		LD	(CUR_DRV),A		; set default drive to A:
+		CALL    C694A			; search for first drive with valid boot loader and set default drive to it
+		CALL	NZ,C4AFB		; NZ=found, execute boot loader with flag = BASIC
+	ELSE
 		CALL    C694A			; get valid boot loader
 		RET     Z			; no valid boot loader, start DiskBASIC
 		CALL    C4AFB			; (boot loader flag = BASIC), execute boot loader
+	ENDIF
 		LD      HL,(BOTTOM)
 		LD      DE,BOT32K
 		RST    	R_DCOMPR		; at least 32 Kb RAM ?
@@ -663,12 +671,16 @@ J4ADF:		LD      SP,TMPSTK		; switch to temporary stack
 		LD      A,0FFH
 		LD      (DOSFLG),A		; MSXDOS environment = enabled
 		POP     AF			; restore drive id
+	IFDEF NODOS1
+		JP	C68B3			; try to start MSXDOS2, if it fails start DiskBASIC
+	ELSE
 		CALL    C68B3			; prepare for MSXDOS, try to start MSXDOS2
 		CALL    C694A			; get valid boot loader
 		RET     Z			; no valid boot loader, start DiskBASIC
 		LD      A,0C3H			; page 1 support = enabled
 		CALL    C4C18			; update page 1 support
 		SCF     			; boot loader flag = MSXDOS
+	ENDIF
 
 ; Subroutine start boot loader
 C4AFB:		LD      HL,DISKVE		; address BDOS diskerror handler pointer
@@ -682,6 +694,11 @@ I4B18:		DEFB    0
 ; BDOS disk error handler: start DiskBASIC without running BASIC program file
 I4B19:		DEFW    J4B7B			; start DiskBASIC without running BASIC program file
 
+; -------------------------------------
+		DOSENT  04462H
+DOS_OPEN:       DOSCALL 00FH
+; -------------------------------------
+
 ; Subroutine start DiskBASIC
 J4B1B:		LD      SP,TMPSTK		; switch to temporary stack
 		CALL    C4C16			; disable page 1 support
@@ -690,13 +707,6 @@ J4B1B:		LD      SP,TMPSTK		; switch to temporary stack
 		LD      BC,18
 		LDIR				; prepare executing AUTOEXEC.BAS
 		LD      HL,NOTFIR
-		JR	DOS_OPEN+5		; Mod: jump over BDOS entry
-
-; -------------------------------------
-		DOSENT  04462H
-DOS_OPEN:       DOSCALL 00FH
-; -------------------------------------
-
 		LD      A,(HL)
 		OR      A			; cold start ?
 		LD      (HL),H			; next start is warm start
@@ -4467,7 +4477,20 @@ J6980:		LD      A,(DE)
 		JR      NZ,J6964		; yep, next disk interface
 		RET
 
-J698A:		LD      A,C
+J698A:
+	IFDEF FAT16
+		; add additional test for extended boot signature: FAT16 / MS-DOS boot sector
+		; if it exists then there is no valid MSX bootloader
+		LD	A,C			; save drive id
+		LD	BC,0026H
+		ADD	HL,BC
+		LD	C,A			; restore drive id
+		LD	A,(HL)
+		AND	0FEH			; EBS can be 28H or 29H
+		CP	28H			; EBS?
+		JR	Z,J6980			; Z=yes
+	ENDIF
+		LD      A,C
 		LD      (CUR_DRV),A		; update current drive
 		LD      HL,(SSECBUF)
 		LD      DE,BOT16K
