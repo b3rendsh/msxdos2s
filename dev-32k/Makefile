@@ -1,9 +1,10 @@
 # Make z80 binary from asm source with z88dk tools
 # 16K MSX-DOS 1 and 32K MSX-DOS 2 Development Edition
-# Universal IDE disk driver
+# Universal disk driver
+# Todo: create build rules
 
-SOURCES1 := dos1x.asm driver-ide.asm
-SOURCES2 := p1_main.asm p3_paging.asm driver-ide.asm p0_kernel.asm
+SOURCES1 := dos1x.asm drv_ide.asm driver.asm
+SOURCES2 := p1_main.asm p3_paging.asm drv_ide.asm driver.asm p0_kernel.asm
 
 # system agnostic commands
 ifdef ComSpec
@@ -70,6 +71,30 @@ core2:	rdate
 	z80asm -b -d -l -m -DCORE -Oobj -o=core_dos2.bin $(SOURCES2)
 	z88dk-appmake +glue -b obj/core_dos2 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/core_dos2__.bin -o $(ROM)/core_dos2.rom -s 32768 --org 0
+	@echo done
+
+jio1:	rdate
+	@echo Assembling JIO DOS1 / 16k jio remote disk rom..
+	$(RMF) obj$(RMD)
+	z80asm -b -d -l -m -DIDEDOS1 -DJIO -Oobj -o=jio_dos1.bin dos1x.asm drv_jio.asm driver.asm
+	z88dk-appmake +glue -b obj/jio_dos1 --filler 0xFF --clean
+	z88dk-appmake +rom -b obj/jio_dos1__.bin -o $(ROM)/jio_dos1.rom -s 16384 --org 0
+	@echo done
+
+jio2:	rdate
+	@echo Assembling JIO DOS2 / 32k jio remote disk rom..
+	$(RMF) obj$(RMD)
+	z80asm -b -d -l -m -DJIO -Oobj -o=jio_dos2.bin p1_main.asm p3_paging.asm drv_jio.asm driver.asm p0_kernel.asm
+	z88dk-appmake +glue -b obj/jio_dos2 --filler 0xFF --clean
+	z88dk-appmake +rom -b obj/jio_dos2__.bin -o $(ROM)/jio_dos2.rom -s 32768 --org 0
+	@echo done
+
+uart2:	rdate
+	@echo Assembling UART DOS2 / 32k uart 1655x remote disk rom..
+	$(RMF) obj$(RMD)
+	z80asm -b -d -l -m -DUART -Oobj -o=uart_dos2.bin p1_main.asm p3_paging.asm drv_uart.asm driver.asm p0_kernel.asm
+	z88dk-appmake +glue -b obj/uart_dos2 --filler 0xFF --clean
+	z88dk-appmake +rom -b obj/uart_dos2__.bin -o $(ROM)/uart_dos2.rom -s 32768 --org 0
 	@echo done
 
 taste:
