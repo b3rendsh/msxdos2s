@@ -17,7 +17,6 @@
 
 		; Mandatory symbols defined by the disk hardware interface driver
 		PUBLIC	DRVINIT		; Initialize hardware interface driver
-		PUBLIC	DRVINFO		; Disk driver information
 		PUBLIC	INIENV		; Initialize driver environment
 		PUBLIC	DSKIO		; Disk I/O routine
 		PUBLIC	DSKCHG		; Disk change routine
@@ -31,7 +30,7 @@
 		EXTERN	W_BOOTDRV	; "
 		EXTERN	W_DRIVES	; "
 
-		; Driver routines, use in DRVINIT/DRVINFO/INIENV only
+		; Driver routines, use in DRVINIT/INIENV only
 		EXTERN	PART_BUF
 		EXTERN	PrintMsg
 		EXTERN	PrintCRLF
@@ -46,24 +45,26 @@ W_IOCTL		equ	DRVSIZE+$02	; IODE IO control port/register
 DRVMEM		equ	$03		; Workarea memory for hardware interface variables
 
 ; ------------------------------------------
-; Initialize hardware interface driver 
+; DRVINIT - Initialize hardware interface driver
+; Input:  None
+; Output: 
+;   Zero flag  = Z: interface detected/active	NZ: not active
+;   Carry flag = NC: successfully initialized   C: interface error / time-out
+; May corrupt: AF,BC,DE,HL
 ; ------------------------------------------
-DRVINIT		equ	ideInit
+DRVINIT:	call	ideInit
+		ret	nz
 
-; ------------------------------------------
-; Print disk driver information
-; ------------------------------------------
-DRVINFO:	ld	hl,PART_BUF
+		ld	hl,PART_BUF
 		call	ideInfo
 		ret	c
 		call	PrintMsg
-		db	12
 IFDEF PPIDE
-		db	"BEER  : PPI IDE "
+		db	12,"BEER  : PPI IDE "
 ELIFDEF CFIDE
-		db	"SODA  : CF IDE "
+		db	12,"SODA  : CF IDE "
 ELSE
-		db	"CORE  : "
+		db	12,"CORE  : "
 ENDIF
 IFDEF IDEDOS1
 		db	"DOS 1",13,10
@@ -336,8 +337,11 @@ ELSE
 ENDIF
 
 ; ------------------------------------------
-; Read (boot) sector
-; Input: C,DE = sector number
+; READSEC - Read (boot) sector
+; Input:  C,DE = sector number
+;         HL   = transfer address
+; Output: Carry flag = clear ==> successful, set ==> error
+; May corrupt: AF,BC,DE
 ; ------------------------------------------
 READSEC:	call	ideSetSector
 		ret	c

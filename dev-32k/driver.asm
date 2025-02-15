@@ -48,7 +48,6 @@
 		; Hardware interface symbols used by the DOS driver
 		EXTERN	DRVMEM
 		EXTERN	DRVINIT
-		EXTERN	DRVINFO
 		EXTERN	DSKIO
 		EXTERN	READSEC
 
@@ -131,9 +130,8 @@ DRIVES:		push	af
 
 		; probe hardware, display info and validate MBR
 		call	DRVINIT
-		jr	nz,r207			; nz=ide hardware not detected
-		call	DRVINFO
-		jr	c,r207			; c=time-out
+		jr	nz,r207			; nz=interface not detected / canceled
+		jr	c,r207			; c=interface time-out
 		ld	hl,PART_BUF		; Buffer address
 		xor	a
 		ld	e,a
