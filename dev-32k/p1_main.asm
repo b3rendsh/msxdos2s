@@ -1027,6 +1027,29 @@ J4D27:		INC     HL
 C4D2D:		JP      NZ,CALSLT		; not in MASTER rom, use CALSLT
 		JP      (IX)			; in MASTER rom, use fast jump
 
+; Subroutine get fresh key, check for abort key
+C4D5B:		CALL    C4D86			; get fresh key
+		CP      3			; CTRL-STOP ?
+		RET
+
+; Subroutine message to screen
+C4D6E:		PUSH    HL
+		PUSH    DE
+		LD      DE,(SSECBUF)
+		CALL    C4106			; copy message to buffer
+		CALL    C4D7D			; string to screen
+		POP     DE
+		POP     HL
+		RET
+
+; Subroutine string to screen
+C4D7D:		LD      A,(DE)
+		INC     DE
+		OR      A
+		RET     Z
+		CALL    C4D97			; character to screen
+		JR      C4D7D
+
 ; -------------------------------------
 		DOSENT  046BAH
 DOS_ABSREA:     DOSCALL 02FH
@@ -1050,12 +1073,8 @@ I4D32:		LD      A,(TARGET)
 		CALL    C4D6E			; message to screen
 J4D54:		CALL    C4D5B			; get fresh key, check for abort key
 		JR      Z,J4D54			; abort, again
-		JR      C4D61			; CR/LF to screen
-
-; Subroutine get fresh key, check for abort key
-C4D5B:		CALL    C4D86			; get fresh key
-		CP      3			; CTRL-STOP ?
-		RET
+		; Mod: remove JR C4D61
+		; Mod: move routine C4D5B 
 
 ; Subroutine CR/LF to screen
 C4D61:		PUSH    AF
@@ -1065,29 +1084,6 @@ C4D61:		PUSH    AF
 		CALL    C4D97			; character to screen
 		POP     AF
 		RET
-
-; Subroutine message to screen
-C4D6E:		PUSH    HL
-		PUSH    DE
-		LD      DE,(SSECBUF)
-		CALL    C4106			; copy message to buffer
-		CALL    C4D7D			; string to screen
-		POP     DE
-		POP     HL
-		RET
-
-; Subroutine string to screen
-C4D7D:		LD      A,(DE)
-		INC     DE
-		OR      A
-		RET     Z
-		CALL    C4D97			; character to screen
-		JR      C4D7D
-
-; -------------------------------------
-		DOSENT  04720H
-DOS_ABSWRI:     DOSCALL 030H
-; -------------------------------------
 
 ; Subroutine get fresh key
 C4D86:		PUSH    IX
@@ -1113,6 +1109,11 @@ C4DA3:		PUSH    IY
 		POP     IY
 		RET
 
+; -------------------------------------
+		DOSENT  04720H
+DOS_ABSWRI:     DOSCALL 030H
+; -------------------------------------
+
 ; Subroutine get pointer to driver work area
 GETWRK:         CALL    C4DBB			; get pointer to SLTWRK entry
 		LD      A,(HL)
@@ -1122,29 +1123,6 @@ GETWRK:         CALL    C4DBB			; get pointer to SLTWRK entry
 		PUSH    HL
 		POP     IX
 		RET
-
-; -------------------------------------
-		DOSENT  04775H
-DOS_SEQRD:      DOSCALL 014H
-
-		DOSENT  0477DH
-DOS_SEQWRT:     DOSCALL 015H
-
-		DOSENT  04788H
-DOS_RNDRD:      DOSCALL 021H
-
-		DOSENT  04793H
-DOS_RNDWRT:     DOSCALL 022H
-
-		DOSENT  047B2H
-DOS_BLKRD:      DOSCALL 027H
-
-		DOSENT  047BEH
-DOS_BLKWRT:     DOSCALL 026H
-
-		DOSENT  047D1H
-DOS_ZWRITE:     DOSCALL 028H
-; -------------------------------------
 
 ; Subroutine get pointer to SLTWRK entry
 C4DBB:		IN      A,(0A8H)
@@ -1197,15 +1175,63 @@ SETINT:	        EX      DE,HL
 ; Subroutine previous interrupt handler
 PRVINT:	        RET
 
+; -------------------------------------
+		DOSENT  04775H
+DOS_SEQRD:      DOSCALL 014H
+
+		DOSENT  0477DH
+DOS_SEQWRT:     DOSCALL 015H
+
+		DOSENT  04788H
+DOS_RNDRD:      DOSCALL 021H
+
+		DOSENT  04793H
+DOS_RNDWRT:     DOSCALL 022H
+; -------------------------------------
+
+C53AC:	        LD	HL,0C91AH		; LD A,(DE)  RET
+		PUSH	HL 			; on stack (routine)
+		CALL	C53C0			; Get char out of memory
+		POP	HL
+		CP	'$'			; check "$" encountered
+		RET	Z			; yes, quit
+		PUSH	DE
+		LD	E,A
+		CALL	DOS_CONOUT		; Print char (BDOS #02)
+		POP	DE
+		INC	DE
+		JR	C53AC			; next char
+
+; -------------------------------------
+		DOSENT  047B2H
+DOS_BLKRD:      DOSCALL 027H
+
+		DOSENT  047BEH
+DOS_BLKWRT:     DOSCALL 026H
+; -------------------------------------
+
+C53C0:	        LD	HL,SDOSON
+		PUSH	HL 			; Routine Switch SystemDiskROM on page 1 on stack
+		LD	HL,4
+		ADD	HL,SP
+		PUSH	HL 			; Call "routine" on stack
+		JP	SDOSOF			; Switch RAM on page 1
+
+; -------------------------------------
+		DOSENT  047D1H
+DOS_ZWRITE:     DOSCALL 028H
+; -------------------------------------
+
 ; Subroutine get slot id of page 0
-Q4DF8:		PUSH    HL
-		PUSH    BC
-		IN      A,(0A8H)		; current slot (in page 0)
-		CALL    C4E38			; get secondary slot register (if slot is expanded)
-		JR      Z,J4E35			; slot is not expanded, return slot id
-		RLCA
-		RLCA				; secondary slot page 0 in b3-b2
-		JR      J4E30			; make slot id and return
+; Mod: this routine is not used
+;Q4DF8:		PUSH    HL
+;		PUSH    BC
+;		IN      A,(0A8H)		; current slot (in page 0)
+;		CALL    C4E38			; get secondary slot register (if slot is expanded)
+;		JR      Z,J4E35			; slot is not expanded, return slot id
+;		RLCA
+;		RLCA				; secondary slot page 0 in b3-b2
+;		JR      J4E30			; make slot id and return
 
 ; Subroutine get slot id of page 1
 C4E05:		PUSH    HL
@@ -2408,11 +2434,6 @@ C5C2B:		PUSH    HL			; store pointer to i/o channel
 		POP     HL			; restore pointer to i/o channel
 		RET     NZ			; buffer not full, quit
 
-; -------------------------------------
-		DOSENT  04FB8H
-DOS_SRCHFR:     DOSCALL 011H
-; -------------------------------------
-
 ; Subroutine flush i/o channel buffer
 C5C39:		PUSH    HL			; store pointer to i/o channel
 		INC     HL			; +1
@@ -2450,45 +2471,6 @@ C5C51:		CALL    C6888			; take control from hook caller
 		LD      IX,CLSFIL
 		JP      C664F			; close i/o channel
 
-; -------------------------------------
-		DOSENT  05006H
-DOS_SRCHNX:     DOSCALL 012H
-
-		DOSENT  0501EH
-DOS_FILESI:     DOSCALL 023H
-
-		DOSENT  0504EH
-DOS_LOGIN:      DOSCALL 018H
-
-		DOSENT  05058H
-DOS_SETDMA:     DOSCALL 01AH
-
-		DOSENT  0505DH
-DOS_GETEFA:     DOSCALL 01BH
-
-		DOSENT  0509FH
-DOS_DSKRES:     DOSCALL 00DH
-
-		DOSENT  050A9H
-DOS_WRTFAT:     LD      BC,0FFH*256+5FH		; drive = all, function = flush disk buffers
-		LD      D,0			; flush only
-		JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
-
-		DOSENT  050C4H
-DOS_GETDRV:     LD      C,019H
-		JR      L50CA
-
-		DOSENT  050C8H
-DOS_SETRND:     LD      C,024H
-L50CA:		JP      J4F54
-
-		DOSENT  050D5H
-DOS_SELDSK:     DOSCALL 00EH
-
-		DOSENT  050E0H
-DOS_BUFIN:      DOSCALL 00AH
-; -------------------------------------
-
 ; Subroutine binairy load (H_BINL)
 C5C79:		LD      IX,M739A
 		LD      IY,2*256+0
@@ -2496,6 +2478,13 @@ C5C79:		LD      IX,M739A
 		POP     AF
 		JP      Z,J65EA			; bad file mode error
 		LD      IX,CLSALL
+		JR	DOS_SRCHFR+5		; Mod: jump over BDOS entry
+
+; -------------------------------------
+		DOSENT  04FB8H
+DOS_SRCHFR:     DOSCALL 011H
+; -------------------------------------
+
 		CALL    C664F			; close all i/o channels
 		LD      HL,-199
 		ADD     HL,SP
@@ -2527,6 +2516,16 @@ C5C79:		LD      IX,M739A
 		LD      (VARTAB),HL
 		LD      IX,LINKER
 		CALL    C664F
+		JR	DOS_FILESI+5		; Mod: jump over BDOS entry
+
+; -------------------------------------
+		DOSENT  05006H
+DOS_SRCHNX:     DOSCALL 012H
+
+		DOSENT  0501EH
+DOS_FILESI:     DOSCALL 023H
+; -------------------------------------
+
 		LD      A,(FILNAM+0)
 		AND     A
 		RET     NZ
@@ -2545,11 +2544,14 @@ I5CED:		DEFB	03AH,092H		; :RUN
 		DEFW	0			; end of program
 
 ; -------------------------------------
-		DOSENT  05183H
-DOS_CRLF:       LD      E,13
-		CALL    DOS_CONOUT
-		LD      E,10
-		JP      DOS_CONOUT
+		DOSENT  0504EH
+DOS_LOGIN:      DOSCALL 018H
+
+		DOSENT  05058H
+DOS_SETDMA:     DOSCALL 01AH
+
+		DOSENT  0505DH
+DOS_GETEFA:     DOSCALL 01BH
 ; -------------------------------------
 
 ; Subroutine BSAVE
@@ -2575,6 +2577,30 @@ C5CF2:		PUSH    DE			; store device code
 		CALL    C665F			; get next BASIC character
 		AND     A			; source = VRAM
 		JR      J5D26			; continue
+
+; -------------------------------------
+		DOSENT  0509FH
+DOS_DSKRES:     DOSCALL 00DH
+
+		DOSENT  050A9H
+DOS_WRTFAT:     LD      BC,0FFH*256+5FH		; drive = all, function = flush disk buffers
+		LD      D,0			; flush only
+		JP      J4F54			; execute DOS1 BDOS function call (with CPMCAL=0)
+
+		DOSENT  050C4H
+DOS_GETDRV:     LD      C,019H
+		JR      L50CA
+
+		DOSENT  050C8H
+DOS_SETRND:     LD      C,024H
+L50CA:		JP      J4F54
+
+		DOSENT  050D5H
+DOS_SELDSK:     DOSCALL 00EH
+
+		DOSENT  050E0H
+DOS_BUFIN:      DOSCALL 00AH
+; -------------------------------------
 
 J5D1E:		CALL    C5E82			; evaluate address operand
 		LD      (SAVENT),DE		; store execute address
@@ -2662,6 +2688,14 @@ J5DAB:		POP     HL			; restore size of work area
 		LD      D,B			; transfer address = start of work area
 		CALL    C5EA7			; write bytes to i/o channel 0
 		JR      J5D66			; finish
+
+; -------------------------------------
+		DOSENT  05183H
+DOS_CRLF:       LD      E,13
+		CALL    DOS_CONOUT
+		LD      E,10
+		JP      DOS_CONOUT
+; -------------------------------------
 
 ; Subroutine BLOAD
 C5DB6:		PUSH    DE			; store device code
@@ -2826,57 +2860,6 @@ C5EAF:		PUSH    HL
 		POP     HL
 		RET
 
-; -------------------------------------
-		DOSENT  535DH
-DOS_BUFOUT:     EXX
-		PUSH    BC              	; errorcode
-		EXX
-		CALL    DOS_CRLF           	; CR/LF to console
-		LD      A,10            	; message 10 (Abort)
-		LD      DE,(SSECBUF)
-		CALL    C4106			; copy message to buffer
-		CALL    L5379           	; print prompt
-		POP     BC
-		LD      DE,(SSECBUF)
-		LD      C,066H			; function = explain
-		CALL    BDOS			; BDOS
-						; print error string
-L5379:		LD      A,(DE)
-		OR      A
-		RET     Z
-		PUSH    DE
-		LD      E,A
-		CALL    DOS_CONOUT           	; print char
-		POP     DE
-		INC     DE
-		JR      L5379
-; -------------------------------------
-
-; -------------------------------------
-		DOSENT  053A7H
-DOS_CONOUT:     DOSCALL 002H
-; -------------------------------------
-
-C53AC:	        LD	HL,0C91AH		; LD A,(DE)  RET
-		PUSH	HL 			; on stack (routine)
-		CALL	C53C0			; Get char out of memory
-		POP	HL
-		CP	'$'			; check "$" encountered
-		RET	Z			; yes, quit
-		PUSH	DE
-		LD	E,A
-		CALL	DOS_CONOUT		; Print char (BDOS #02)
-		POP	DE
-		INC	DE
-		JR	C53AC			; next char
-
-C53C0:	        LD	HL,SDOSON
-		PUSH	HL 			; Routine Switch SystemDiskROM on page 1 on stack
-		LD	HL,4
-		ADD	HL,SP
-		PUSH	HL 			; Call "routine" on stack
-		JP	SDOSOF			; Switch RAM on page 1
-
 ; Subroutine disk sector input (H_DSKI)
 C5EBB:		CALL    C6888			; take control from hook caller
 		CALL    C665F			; get next BASIC character
@@ -2930,32 +2913,6 @@ C5F09:		LD      IX,GETBYT
 		POP     BC			; restore byte
 		RET
 
-; -------------------------------------
-		DOSENT  0543CH
-DOS_CONSTA:     DOSCALL 00BH
-
-		DOSENT  05445H
-DOS_CONIN:      DOSCALL 001H
-
-		DOSENT  0544EH
-DOS_IN:         DOSCALL 008H
-
-		DOSENT  05454H
-DOS_RAWIO:      DOSCALL 006H
-
-		DOSENT  05462H
-DOS_RAWINP:     LD      C,007H
-		DEFB    011H            	; Pseudo LD DE,nnnn
-DOS_LIST:       LD      C,005H
-		JP      J4F54
-
-		DOSENT  0546EH
-DOS_READER:     DOSCALL 003H
-
-		DOSENT  05474H
-DOS_PUNCH:      DOSCALL 004H
-; -------------------------------------
-
 ; Subroutine (H_DGET)
 C5F1E:		LD      IX,RETRTN
 		LD      IY,4*256+0
@@ -2965,7 +2922,7 @@ C5F1E:		LD      IX,RETRTN
 		JP      NZ,J65EA		; nope, bad file mode error
 		EX      (SP),HL			; store pointer to i/o channel, restore BASIC pointer
 		CALL    C665E			; get BASIC character
-		JR      Z,J5F7D			; end of statement,
+		JR      Z,J5F7D			; end of statement, 
 		CALL    C6654			; check for BASIC character
 		DEFB    ","
 		LD      IX,FRMEVL
@@ -3014,6 +2971,34 @@ J5F51:		EX      DE,HL
 		CALL    BDOS
 		POP     HL			; restore pointer to i/o channel
 		EX      (SP),HL			; store pointer to i/o channel, restore BASIC pointer
+		JR	J5F7D			; Mod: jump over BDOS entry
+
+; -------------------------------------
+		DOSENT  535DH
+DOS_BUFOUT:     EXX
+		PUSH    BC              	; errorcode
+		EXX
+		CALL    DOS_CRLF           	; CR/LF to console
+		LD      A,10            	; message 10 (Abort)
+		LD      DE,(SSECBUF)
+		CALL    C4106			; copy message to buffer
+		CALL    L5379           	; print prompt
+		POP     BC
+		LD      DE,(SSECBUF)
+		LD      C,066H			; function = explain
+		CALL    BDOS			; BDOS
+						; print error string
+L5379:		LD      A,(DE)
+		OR      A
+		RET     Z
+		PUSH    DE
+		LD      E,A
+		CALL    DOS_CONOUT           	; print char
+		POP     DE
+		INC     DE
+		JR      L5379
+; -------------------------------------
+
 J5F7D:		EX      (SP),HL			; store BASIC pointer, restore pointer to i/o channel
 		INC     HL			; +1
 		LD      B,(HL)			; file handle
@@ -3038,6 +3023,11 @@ J5F7D:		EX      (SP),HL			; store BASIC pointer, restore pointer to i/o channel
 		LD      C,49H			; function = write to file handle
 J5F99:		CALL    C655D			; execute BDOS function (handle error)
 		JP      J627A			; restore BASIC pointer and output back to screen
+
+; -------------------------------------
+		DOSENT  053A7H
+DOS_CONOUT:     DOSCALL 002H
+; -------------------------------------
 
 ; Subroutine field (H_FIEL)
 C5F9F:		CALL    C6888			; take control from hook caller
@@ -3066,16 +3056,6 @@ C5F9F:		CALL    C6888			; take control from hook caller
 		LD      (BUF+12),HL		; total field size = 0
 		LD      BC,9			; offset = to i/o channel buffer
 		POP     HL			; restore BASIC pointer
-		JR	J5FDA        		; Mod: jump over BDOS entries
-
-; -------------------------------------
-		DOSENT  0553CH
-DOS_GETDAT:     DOSCALL 02AH
-
-		DOSENT  05552H
-DOS_SETDAT:     DOSCALL 02BH
-; -------------------------------------
-
 J5FDA:		EX      DE,HL
 		ADD     HL,BC
 		EX      DE,HL			; update pointer in buffer
@@ -3120,19 +3100,30 @@ J5FDA:		EX      DE,HL
 		JR      J5FDA			; next field
 
 ; -------------------------------------
-		DOSENT  055DBH
-DOS_GETTIM:     DOSCALL 02CH
+		DOSENT  0543CH
+DOS_CONSTA:     DOSCALL 00BH
 
-		DOSENT  055E6H
-DOS_SETTIM:     DOSCALL 02DH
+		DOSENT  05445H
+DOS_CONIN:      DOSCALL 001H
 
-		DOSENT  055FFH
-DOS_SETRAW:     DOSCALL 02EH
+		DOSENT  0544EH
+DOS_IN:         DOSCALL 008H
+
+		DOSENT  05454H
+DOS_RAWIO:      DOSCALL 006H
+
+		DOSENT  05462H
+DOS_RAWINP:     LD      C,007H
+		DEFB    011H            	; Pseudo LD DE,nnnn
+DOS_LIST:       LD      C,005H
+		JP      J4F54
+
+		DOSENT  0546EH
+DOS_READER:     DOSCALL 003H
+
+		DOSENT  05474H
+DOS_PUNCH:      DOSCALL 004H
 ; -------------------------------------
-
-; ------------------------------------------------------------------------------
-; *** No more DOS entry points below this point ***
-; ------------------------------------------------------------------------------
 
 ; Subroutine right set (H_RSET)
 C6025:		DEFB	0F6H		        ; OR xx: trick to skip next instrunction
@@ -3269,6 +3260,14 @@ J60E0:		EX      (SP),HL			; store , restore address of variable
 		PUSH    HL			; store address of variable
 		JP      J6079			; continue
 
+; -------------------------------------
+		DOSENT  0553CH
+DOS_GETDAT:     DOSCALL 02AH
+
+		DOSENT  05552H
+DOS_SETDAT:     DOSCALL 02BH
+; -------------------------------------
+
 ; Subroutine make integer (H_MKI)
 C60E6:		LD      A,2			; size of string = 2
 		DEFB    001H
@@ -3327,6 +3326,21 @@ C6129:		LD      A,8-1			; target size -1
 		LD      L,C			; pointer to string
 		LD      (VALTYP),A		; target type
 		JP      VMOVFM			; copy variable content to DAC
+
+; -------------------------------------
+		DOSENT  055DBH
+DOS_GETTIM:     DOSCALL 02CH
+
+		DOSENT  055E6H
+DOS_SETTIM:     DOSCALL 02DH
+
+		DOSENT  055FFH
+DOS_SETRAW:     DOSCALL 02EH
+; -------------------------------------
+
+; ------------------------------------------------------------------------------
+; *** No more DOS entry points below this point ***
+; ------------------------------------------------------------------------------
 
 ; Subroutine convert DAC to 32 bit integer
 C6147:		LD      IX,GETYPR
@@ -3399,7 +3413,6 @@ J61D5:		PUSH    AF
 		INC     HL			; +3
 		LD      (HL),A			; update backup character
 		RET
-
 
 ; Subroutine (H_FILE)
 C61E0:		CALL    C6888			; take control from hook caller
@@ -5280,15 +5293,15 @@ RAMD_DSKFMT:	LD      A,0CH
 
 ; C4103/J410F - Install disksystem routines
 J410F:		DI
-		CALL	C4E12			; get slot of page 2 (ie. RAM)
-		PUSH	AF			; save for later
-		CALL    C492F
-		RET     C
+		PUSH	AF			; save slot of page 2 for later
+		CALL    C492F			; initialize memory mapper
+		CALL    NC,PH_INIT		; initialize paging helper routines
+		POP	HL
+		RET     C			; c=error
+		PUSH	HL
 		CALL	C4E05			; get slot of page 1 (this ROM)
 		LD	H,080H			; enable page 2
 		CALL	ENASLT
-		CALL    PH_INIT			; initialze paging helper routines
-		RET     C
 		LD      A,1
 		LD      (CUR_DRV),A              ; default drive = A:
 		LD      A,(IDBYT0)

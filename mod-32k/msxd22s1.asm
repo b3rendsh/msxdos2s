@@ -148,19 +148,22 @@ LFFFF   EQU     0FFFFH
 ; ------------------------------------------------------------------------------
 
 J410F:  DI
-	CALL	C4E12			; get slot of page 2 (ie. RAM)
-	PUSH	AF			; save for later
-        CALL    C492F
-        RET     C
+	PUSH	AF			; save slot of page 2 for later
+        CALL    C492F			; initialize memory mapper
+	POP	HL
+        RET     C			; c=error
+	PUSH	HL
 
 	CALL	C4E05			; get slot of page 1 (this ROM)
 	LD	H,080H			; enable page 2
 	CALL	ENASLT
 
-        CALL    C427F
-        RET     C
+        CALL    C427F			; initialize paging helper routines
+	POP	HL
+        RET     C			; c=error
+	PUSH	HL
         LD      A,1
-        LD      (CUR_DRV),A              ; default drive = A:
+        LD      (CUR_DRV),A		; default drive = A:
         LD      A,(IDBYT0)
         RLCA
         SBC     A,A
