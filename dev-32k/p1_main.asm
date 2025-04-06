@@ -39,9 +39,6 @@
 		PUBLIC  XFER		; Eactly emulates an LDIR.. ..used when transferring data to/fro page-1.
 		PUBLIC  SETINT		; Setup routine at (HL) as a timer interrupt routine (50Hz/60Hz).
 		PUBLIC  PRVINT		; Calls previous timer interrupt routine...
-	IFDEF FAT16
-		PUBLIC	IBOOTCODE	; Start of bootsector code
-	ENDIF
 
 		; Symbols which must be defined by the disk hardware driver
 		EXTERN	INIHRD		; Initialize hardware
@@ -6050,14 +6047,4 @@ I4D0E:		DOSST1  0FFH,"Incompatible disk"
 		DOSST1  07FH,"Insert MSX-DOS2 disk in drive \x07:"		; rem: \x07 = bell
 		DOSST1  07EH,"Press any key to continue... "
 		DEFB    0
-
-IFDEF FAT16
-; ------------------------------------------------------------------------------
-; *** BOOTCODE ***
-; If FAT16 is enabled then the bootsector code is stored in the disk rom
-; page 1 main code to free space in the page 0 kernel code.
-; ------------------------------------------------------------------------------
-IBOOTCODE:
-		INCLUDE	"bootcode.inc"
-ENDIF 
 
