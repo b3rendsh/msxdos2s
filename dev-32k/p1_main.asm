@@ -55,10 +55,8 @@
 		EXTERN	SECLEN		; Maximum sector size for media supported by this driver (512).
 		EXTERN	DEFDPB		; Base address of an 18 byte "default" DPB for this driver.
 
-	IF PPIDE || CFIDE
 		; Additional symbol defined by the ide driver module
 		EXTERN	BOOTMENU
-	ENDIF
 
 		; Routine used in the paging helper module
 		PUBLIC	ALLOCMEM
@@ -648,7 +646,7 @@ J4AC1:		LD      HL,J4B1B
 		LD      DE,BOT32K
 		RST    	R_DCOMPR		; at least 32 Kb RAM ?
 		RET     NZ			; nope, start DiskBASIC
-	IF CFIDE || PPIDE
+	IF BOOTCHOICE
 		CALL	BOOTMENU		; boot menu which sets current drive
 		RET	C			; If c-flag is set then start DiskBASIC
 	ELSE

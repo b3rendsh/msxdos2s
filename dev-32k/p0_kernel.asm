@@ -4729,11 +4729,10 @@ J1B73:		LD	(DE),A
 		CALL	C2C38
 		LD	(DE),A
 		EX	DE,HL
-J1B81:		LD	B,14H
+		LD	B,14H
 J1B83:		INC	HL
 		LD	(HL),C
-J1B85:		DJNZ	J1B83
-J1B87:  
+		DJNZ	J1B83
 	IFDEF FAT16
 		CALL	CLST_8
 	ELSE
@@ -10951,7 +10950,7 @@ CLST_A:		LD	A,(HL)
 ; ---------------------------------------------------------
 ;Read 16 bit FAT
 Z0018:		POP	AF
-Z0018A:		CALL	FATADR		; get address & sector set
+		CALL	FATADR		; get address & sector set
 		JR	Z,Z0019		; no error
 Z0020:		XOR	A
 		LD	(D_BBEA),A

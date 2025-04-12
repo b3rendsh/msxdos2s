@@ -50,10 +50,8 @@
 	EXTERN	SECLEN		; Maximum sector size for media supported by this driver (512).
 	EXTERN	DEFDPB		; Base address of a 21 byte "default" DPB for this driver.
 
-IFDEF IDEDOS1
 	; Additional symbol defined by the ide driver module
 	EXTERN	BOOTMENU
-ENDIF
 
 ; rem: _RST MACRO replaced with labels
 R_SYNCHR	EQU	08H
@@ -4720,7 +4718,7 @@ A59ED:  call    A5C16                   ; initialize diskbasic
 
 A59F3:  ld      hl,A5B3A
         push    hl                      ; if quit anywhere start diskbasic
-IFDEF IDEDOS1
+IFDEF BOOTCHOICE
 	call	BOOTMENU		; Sets boot drive
 	ret	c
 ENDIF

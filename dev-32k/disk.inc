@@ -29,7 +29,9 @@
 ; FASTALLOC	Calculate max 4K free clusters for large drives in ALLOC function to avoid slow DIR command
 
 ; Apply to all targets
-	OPTM	EQU	1	
+	OPTM	EQU	1	; use optimized code
+	BTWAIT	EQU	$5000	; boot menu wait time-out (default $5000 is appr. 3 sec for MSX/3.58Mhz)
+
 
 IF PPIDE || JIO || UART
 	DEFINE	FASTALLOC
@@ -38,6 +40,7 @@ ENDIF
 IF CFIDE || PPIDE
 	DEFINE	FAT16
 	DEFINE	FAT16DOS1
+	DEFINE	BOOTCHOICE	; show boot menu / drive choice
 	MOD1	EQU	'x'	; eXtended
 	MOD2	EQU	'i'	; Ide
 ENDIF
