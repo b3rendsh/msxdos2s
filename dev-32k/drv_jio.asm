@@ -37,26 +37,31 @@
         EXTERN	PrintString
 
 ; Hardware driver variables
-W_FLAGS	equ	DRVSIZE
-W_TMP	equ	DRVSIZE+1
-DRVMEM	equ	2
+W_FLAGS		equ	DRVSIZE
+W_COMMAND	equ	DRVSIZE+1
+DRVMEM		equ	2
 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; #include "flags.inc"
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#define FLAGBITS_RX_CRC                 (1 << 4)
-#define FLAGBITS_TX_CRC                 (1 << 5)
-#define FLAGBITS_RETRY_TIMEOUT          (1 << 6)
-#define FLAGBITS_RETRY_CRC              (1 << 7)
+#define FLAG_RX_CRC                 (1 << 0)
+#define FLAG_TX_CRC                 (1 << 1)
+#define FLAG_TIMEOUT                (1 << 2)
+#define FLAG_AUTO_RETRY             (1 << 3)
 
-#define COMMAND_OK			0
-#define COMMAND_READ			1
-#define COMMAND_WRITE			2
-#define COMMAND_INFO			3
-#define COMMAND_REPORT_BAD_RX_CRC       4
-#define COMMAND_REPORT_BAD_TX_CRC       5
-#define COMMAND_REPORT_BAD_ACKNOWLEDGE  6
-#define COMMAND_REPORT_TIMEOUT          7
+#define COMMAND_DRIVE_REPORT_OK		       0
+#define COMMAND_DRIVE_REPORT_WRITE_PROTECTED   0+1
+#define COMMAND_DRIVE_REPORT_DRIVE_NOT_READY   2+1
+#define COMMAND_DRIVE_REPORT_CRC_ERROR         4+1
+#define COMMAND_DRIVE_REPORT_WRITE_FAULT       10+1
+
+#define COMMAND_DRIVE_READ		      16
+#define COMMAND_DRIVE_WRITE		      17
+#define COMMAND_DRIVE_INFO		      18
+
+#define DRIVE_ACKNOWLEDGE_WRITE_OK            0x1111
+#define DRIVE_ACKNOWLEDGE_WRITE_FAILED        0x2222
+#define DRIVE_ACKNOWLEDGE_WRITE_PROTECTED     0x3333 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 CHGCPU	equ	$180
@@ -67,8 +72,6 @@ GETCPU	equ	$183
 ;********************************************************************************************************************************
 
 DRVINIT:
-        ld	(ix+W_FLAGS),0
-
         call	PrintMsg
 IFDEF IDEDOS1
         db	12,"JIO MSX-DOS 1",13,10
@@ -98,7 +101,8 @@ DRVINIT_Retry:
         ld	b,1
         ld	hl,PART_BUF
 
-        ld      a,COMMAND_INFO
+        ld	(ix+W_FLAGS),FLAG_RX_CRC|FLAG_TX_CRC|FLAG_TIMEOUT
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_INFO
         call	ReadOrWriteSectors
         jr	c,DRVINIT_Retry
 
@@ -144,7 +148,6 @@ TestInterface:	ld	a,(hl)
         ld	b,(ix+W_BOOTDRV)	; Get boot drive
         add	a,b
         ld	(ix+W_BOOTDRV),a	; Set boot drive
-	;info flies by too fast to notice by user:
         ;call	PrintMsg
         ;db	"Drives: ",0
         ;ld	a,(ix+W_DRIVES)
@@ -166,6 +169,18 @@ TestInterface:	ld	a,(hl)
 ;   Carry flag = clear ==> successful, set ==> error
 ;   If error then
 ;	 A = error code
+;           0 - Write protected disk
+;           2 - Drive not ready
+;           4 - Data (CRC) error
+;           6 - Seek error
+;           7 - Record not found
+;           10 - Write fault (verify error)
+;           12 - Other error
+;           new 18 - Not a DOS disk
+;           new 20 - Incompatible disk
+;           new 22 - Unformatted disk
+;           new 24 - Unexpected disk change
+;
 ;	 B = remaining sectors
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
@@ -180,9 +195,9 @@ DSKIO:	push	hl
 	call	GETWRK	; Base address of workarea in hl and ix
 	pop	af
 
-        ld      (ix+W_TMP),COMMAND_WRITE
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
 	jr	c,WriteFlag
-        ld      (ix+W_TMP),COMMAND_READ
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
 WriteFlag:
 
         ld	e,a
@@ -235,8 +250,8 @@ rw_loop:
 	push	bc
 	push	de
 	ld	b,1
-	ld	a,(ix+W_TMP)
-	cp	COMMAND_READ
+        ld      a,(ix+W_COMMAND)
+	cp	COMMAND_DRIVE_READ
 	jr	nz,sec_write
 	push	hl
 	ld	hl,(SSECBUF)
@@ -279,7 +294,6 @@ sec_loop:
 	ret
 rw_multi:
 ENDIF 
-        ld      a,(ix+W_TMP)
         jp	ReadOrWriteSectors
 
 	; Disk i/o error
@@ -336,7 +350,7 @@ ENDIF
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 uiTransmit:
 	CALL	_ENT_PARM_DIRECT_L09
-	BIT	5,(IX+8)
+	BIT	1,(IX+8)
 	JR	Z,_0001
 _0000:
 	LD	E,2
@@ -353,7 +367,6 @@ _0000:
 _0001:
 	LD	E,0
 	CALL	vSetCPU
-	DEFB	243
 	LD	C,(IX+4)
 	LD	B,(IX+5)
 	LD	E,(IX+2)
@@ -362,7 +375,7 @@ _0001:
 	XOR	A
 	OR	(IX+12)
 	JR	Z,_0003
-	BIT	5,(IX+8)
+	BIT	1,(IX+8)
 	JR	Z,_0003
 _0005:
 _0004:
@@ -385,7 +398,6 @@ ucReceive:
 _0006:
 	LD	E,0
 	CALL	vSetCPU
-	DEFB	243
 _0007:
 _0009:
 	LD	C,(IX+4)
@@ -396,10 +408,10 @@ _0009:
 	OR	A
 	JR	NZ,_0008
 _0010:
-	BIT	6,(IX+8)
-	JR	NZ,_0007
+	BIT	2,(IX+8)
+	JR	Z,_0007
 _0011:
-	LD	A,7
+	LD	A,3
 	JR	_0013
 _0012:
 _0008:
@@ -408,52 +420,60 @@ _0013:
 	JP	_LEAVE_DIRECT_L09
 ucReadOrWriteSectors:
 	CALL	_ENT_AUTO_DIRECT_L09
-	DEFW	65514
+	DEFW	65510
 	PUSH	IY
-	LD	B,(IX+12)
+	LD	HL,W_FLAGS
+	LD	C,(IX+12)
+	LD	B,(IX+13)
+	ADD	HL,BC
+	LD	D,(HL)
+	LD	(IX-5),D
+	LD	HL,W_COMMAND
+	ADD	HL,BC
+	LD	B,(HL)
 	LD	IYH,B
 	CALL	eGetCPU
-	LD	(IX-4),A
-	LD	(IX-14),74
-	LD	(IX-13),73
-	LD	(IX-12),79
+	LD	(IX-7),A
+	LD	(IX-18),74
+	LD	(IX-17),73
+	LD	(IX-16),79
+	LD	(IX-15),D
 	LD	B,(IX+2)
-	LD	(IX-10),B
+	LD	(IX-13),B
 	LD	H,(IX+3)
-	LD	(IX-9),H
-	LD	L,C
+	LD	(IX-12),H
+	LD	L,(IX+4)
 	LD	BC,0
-	LD	(IX-8),L
+	LD	(IX-11),L
 	LD	B,(IX+8)
-	LD	(IX-7),B
+	LD	(IX-10),B
 	LD	L,(IX+10)
 	LD	H,(IX+11)
-	LD	(IX-6),L
-	LD	(IX-5),H
+	LD	(IX-9),L
+	LD	(IX-8),H
 	LD	H,B
 	LD	L,C
 	ADD	HL,HL
-	LD	(IX-22),L
-	LD	(IX-21),H
+	LD	(IX-26),L
+	LD	(IX-25),H
 _0016:
 	LD	B,IYH
-	LD	(IX-11),B
+	LD	(IX-14),B
 	LD	A,IYH
-	AND	15
-	CP	3
-	JR	NZ,_0043
+	CP	18
+	JR	NZ,_0042
 	LD	A,1
-	JR	_0044
-_0043:
+	JR	_0043
+_0042:
 	XOR	A
-_0044:
+_0043:
 	LD	C,A
 	PUSH	BC
 	LD	HL,0
 	PUSH	HL
-	LD	C,IYH
-	PUSH	BC
-	LD	BC,4
+	LD	L,(IX-5)
+	PUSH	HL
+	LD	BC,5
 	LD	L,16
 	ADD	HL,SP
 	EX	DE,HL
@@ -461,20 +481,17 @@ _0044:
 	POP	AF
 	POP	AF
 	POP	AF
-	LD	IYL,0
 	LD	A,IYH
-	AND	15
-	DEC	A
-	DEC	A
+	CP	17
 	JR	NZ,_0018
 _0017:
-	LD	C,A
+	LD	C,0
 	PUSH	BC
 	PUSH	HL
-	LD	C,IYH
-	PUSH	BC
+	LD	L,(IX-5)
+	PUSH	HL
 	LD	BC,6
-	LD	HL,20
+	LD	HL,21
 	ADD	HL,SP
 	EX	DE,HL
 	CALL	uiTransmit
@@ -484,94 +501,84 @@ _0017:
 	LD	C,1
 	PUSH	BC
 	PUSH	HL
-	LD	C,IYH
-	PUSH	BC
-	LD	C,(IX-22)
-	LD	B,(IX-21)
+	LD	L,(IX-5)
+	PUSH	HL
+	LD	C,(IX-26)
+	LD	B,(IX-25)
 	LD	E,(IX+10)
 	LD	D,(IX+11)
 	CALL	uiTransmit
 	POP	AF
 	POP	AF
 	POP	AF
-	LD	B,IYH
-	BIT	5,B
-	JR	Z,_0023
-_0019:
-	XOR	A
-	LD	(IX-20),A
-	LD	(IX-19),A
-	LD	C,IYH
-	PUSH	BC
+	LD	L,(IX-5)
+	PUSH	HL
 	LD	BC,2
-	LD	HL,24
+	LD	HL,27
 	ADD	HL,SP
 	EX	DE,HL
 	CALL	ucReceive
 	POP	HL
 	LD	IYL,A
 	OR	A
-	JR	NZ,_0023
-_0021:
-	LD	C,(IX-2)
-	LD	B,(IX-1)
+	JR	NZ,_0022
+_0019:
 	LD	HL,4369
+	LD	C,(IX-3)
+	LD	B,(IX-2)
 	AND	A
 	SBC	HL,BC
-	JR	NZ,_0025
+	JR	Z,_0022
+_0021:
+	LD	HL,13107
+	AND	A
+	SBC	HL,BC
+	JR	NZ,_0024
+	LD	A,1
+	JR	_0025
 _0024:
-	LD	IYL,5
-	JR	_0023
+	LD	A,11
 _0025:
-	LD	HL,8738
-	AND	A
-	SBC	HL,BC
-	JR	Z,_0037
-_0026:
-	LD	IYL,6
-_0023:
+	LD	IYL,A
 _0022:
 _0020:
-	JR	_0037
+	JR	_0036
 _0018:
-	LD	A,IYH
-	AND	15
-	DEC	A
-	JR	NZ,_0029
-_0028:
+	CP	16
+	JR	NZ,_0028
+_0027:
 	LD	C,1
 	PUSH	BC
 	PUSH	HL
-	LD	C,IYH
-	PUSH	BC
+	LD	L,(IX-5)
+	PUSH	HL
 	LD	BC,6
-	LD	HL,20
+	LD	HL,21
 	ADD	HL,SP
 	EX	DE,HL
 	CALL	uiTransmit
 	POP	AF
 	POP	AF
 	POP	AF
-_0029:
-	LD	C,IYH
-	PUSH	BC
-	LD	C,(IX-22)
-	LD	B,(IX-21)
+_0028:
+	LD	L,(IX-5)
+	PUSH	HL
+	LD	C,(IX-26)
+	LD	B,(IX-25)
 	LD	E,(IX+10)
 	LD	D,(IX+11)
 	CALL	ucReceive
 	POP	HL
 	LD	IYL,A
 	OR	A
-	JR	NZ,_0037
-	LD	B,IYH
-	BIT	4,B
-	JR	Z,_0037
-_0033:
+	JR	NZ,_0036
+	BIT	0,(IX-5)
+	JR	Z,_0036
 _0032:
-_0030:
-	LD	C,IYH
-	PUSH	BC
+_0031:
+_0029:
+	LD	L,(IX-5)
+	PUSH	HL
 	LD	BC,2
 	LD	HL,6
 	ADD	HL,SP
@@ -580,42 +587,42 @@ _0030:
 	POP	HL
 	LD	IYL,A
 	OR	A
-	JR	NZ,_0037
-_0034:
+	JR	NZ,_0036
+_0033:
 	LD	E,2
 	CALL	vSetCPU
 	LD	HL,0
 	PUSH	HL
-	LD	C,(IX-22)
-	LD	B,(IX-21)
+	LD	C,(IX-26)
+	LD	B,(IX-25)
 	LD	E,(IX+10)
 	LD	D,(IX+11)
 	CALL	uiXModemCRC16
 	POP	AF
-	LD	C,(IX-20)
-	LD	B,(IX-19)
+	LD	C,(IX-24)
+	LD	B,(IX-23)
 	AND	A
 	SBC	HL,BC
-	JR	Z,_0037
-_0036:
-	LD	IYL,4
-_0037:
+	JR	Z,_0036
 _0035:
-_0031:
-_0027:
+	LD	IYL,5
+_0036:
+_0034:
+_0030:
+_0026:
 	LD	B,IYL
 	INC	B
 	DEC	B
-	JR	Z,_0039
-_0038:
-	LD	(IX-11),B
+	JR	Z,_0038
+_0037:
+	LD	(IX-14),B
 	LD	C,1
 	PUSH	BC
 	LD	HL,0
 	PUSH	HL
-	LD	C,IYH
-	PUSH	BC
-	LD	BC,4
+	LD	L,(IX-5)
+	PUSH	HL
+	LD	BC,5
 	LD	L,16
 	ADD	HL,SP
 	EX	DE,HL
@@ -623,21 +630,19 @@ _0038:
 	POP	AF
 	POP	AF
 	POP	AF
-_0039:
+_0038:
 	LD	B,IYL
 	INC	B
 	DEC	B
 	JR	Z,_0014
-	LD	B,IYH
-	BIT	7,B
+	BIT	3,(IX-5)
 	JP	NZ,_0016
 _0014:
-	LD	E,(IX-4)
+	LD	E,(IX-7)
 	CALL	vSetCPU
-	DEFB	251
 	LD	A,IYL
 	POP	IY
-	JP	_LEAVE_DIRECT_L09
+	JP	_LEAVE_DIRECT_L09 
 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; INCLUDE	"crt.asm"
@@ -681,7 +686,7 @@ _ENT_PARM_DIRECT_L09:
 ; Input: C,DE = sector number
 ;********************************************************************************************************************************
 READSEC:
-        ld      a,COMMAND_READ
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
         ld	b,1
 
 ; CDE : Sector
@@ -689,28 +694,16 @@ READSEC:
 ; HL  : Address
 
 ReadOrWriteSectors:
-        push    af
-        ld      a,(ix+W_FLAGS)
-        and     0xF0
-        ld      (ix+W_FLAGS),a
-        pop     af
+        push    ix              ; _pucFlagsAndCommand
+        push    hl              ; _pvAddress
 
-        or      (ix+W_FLAGS)
-        ld      (ix+W_FLAGS),a
-
-        ld      a,c             ; Flags
-        ld      c,(ix+W_FLAGS)
+        ld      a,c
+        ld      c,b             ; _ucLength
         push    bc
 
-        push    hl              ; Address
-
-        ld      c,b             ; Length
-        push    bc
-
-        ld      b,0
+        ld      b,0             ; _ulSector in BCDE
         ld      c,a
 
-        di
         call    ucReadOrWriteSectors
         pop hl
         pop hl
@@ -718,7 +711,8 @@ ReadOrWriteSectors:
 
         or      a
         ret     z
-        scf
+        dec	a
+	scf
         ret
 
 ;********************************************************************************************************************************
@@ -750,6 +744,7 @@ vJIOTransmit:
         inc	bc
         exx
         ld	a,15
+	di
         out	($a0),a
         in	a,($a2)
         or	4
@@ -852,8 +847,7 @@ bJIOReceive:
         push	ix
         push	de
 
-        ld      d,0
-        ld      e,d
+        ld      de,0
 
         dec	hl
         ld	b,(hl)	; What if HL=0 ?
@@ -861,6 +855,7 @@ bJIOReceive:
         ld	ix,0
         add	ix,sp
         ld	a,15
+	di
         out	($a0),a
         in	a,($a2)
         or	64
@@ -935,8 +930,6 @@ RX_PO:	in	f,(c)	; 14
         ld	a,d	;  5
         or	e	;  5
         jp	nz,RX_PO	; 11
-
-        jp	ReceiveOK
 ;________________________________________________________________________________________________________________________________
 
 ReceiveOK:
@@ -1020,7 +1013,7 @@ RX_PE:	in	f,(c)	; 14
         or	e	;  5
         jp	nz,RX_PE	; 11
 
-        jp	ReceiveOK
+        jr	ReceiveOK
 
 ;________________________________________________________________________________________________________________________________
 
@@ -1033,58 +1026,61 @@ RX_PE:	in	f,(c)	; 14
 IFDEF IDEDOS1
 
 uiXModemCRC16:
-    ld  l,c
-    ld  h,b
+	ei
+	ld	l,c
+	ld	h,b
 
-    ld  b,l
-    dec hl
-    inc h
-    ld  c,h
+	ld	b,l
+	dec	hl
+	inc	h
+	ld	c,h
 
-    pop hl
-    pop hl
-    push hl
-    dec sp
-    dec sp
+        push    ix
+        ld      ix,0
+        add     ix,sp
+        ld      l,(ix+4)
+        ld      h,(ix+5)
+        pop     ix
 
 crc16:
-    push bc
-    ld	a,(de)
-    inc	de
-    xor     h
-    ld      b,a
-    ld      c,l
-    rrca
-    rrca
-    rrca
-    rrca
-    ld      l,a
-    and     0fh
-    ld      h,a
-    xor     b
-    ld      b,a
-    xor     l
-    and     0f0h
-    ld      l,a
-    xor     c
-    add     hl,hl
-    xor     h
-    ld      h,a
-    ld      a,l
-    xor     b
-    ld      l,a
+	push bc
+	ld	a,(de)
+	inc	de
+	xor     h
+	ld      b,a
+	ld      c,l
+	rrca
+	rrca
+	rrca
+	rrca
+	ld      l,a
+	and     0fh
+	ld      h,a
+	xor     b
+	ld      b,a
+	xor     l
+	and     0f0h
+	ld      l,a
+	xor     c
+	add     hl,hl
+	xor     h
+	ld      h,a
+	ld      a,l
+	xor     b
+	ld      l,a
 
-    pop     bc
-    djnz    crc16
+	pop     bc
+	djnz    crc16
 
-    dec     c
-    jp      nz,crc16
-    ret
+	dec     c
+	jp      nz,crc16
+	ret
 
 ELSE
 
 ; compute CRC with lookup table
 uiXModemCRC16:
+	ei
 	ld	l,c
 	ld	h,b
 	ld	b,l
@@ -1092,11 +1088,12 @@ uiXModemCRC16:
 	inc	h
 	ld	c,h
 
-	pop	hl
-	pop 	hl
-	push	hl
-	dec	sp
-	dec	sp
+        push    ix
+        ld      ix,0
+        add     ix,sp
+        ld      l,(ix+4)
+        ld      h,(ix+5)
+        pop     ix
 
 crc16:
 	ld	a,l
