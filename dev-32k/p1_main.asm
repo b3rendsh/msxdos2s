@@ -20,6 +20,7 @@
 ; 07. Relocate code to unused space between msxdos 1 entry points
 ; 08. Added BOOTMENU option
 ; 09. Check if boot sector contains a valid boot loader or extended boot signature (FAT16)
+; 10. Added BOOTCODE option
 
 
 		INCLUDE "disk.inc"	; Assembler directives
@@ -56,6 +57,7 @@
 		EXTERN	DEFDPB		; Base address of an 18 byte "default" DPB for this driver.
 
 		; Additional symbol defined by the ide driver module
+		EXTERN	BOOTMBR
 		EXTERN	BOOTMENU
 
 		; Routine used in the paging helper module
@@ -646,8 +648,12 @@ J4AC1:		LD      HL,J4B1B
 		LD      DE,BOT32K
 		RST    	R_DCOMPR		; at least 32 Kb RAM ?
 		RET     NZ			; nope, start DiskBASIC
-	IF BOOTCHOICE
-		CALL	BOOTMENU		; boot menu which sets current drive
+	IFDEF BOOTCODE
+		CALL	BOOTMBR
+		RET	C			; If c-flag is set then start DiskBASIC
+	ENDIF
+	IFDEF BOOTCHOICE
+		CALL	Z,BOOTMENU		; if BOOTCODE returns Z-flag or is not enabled then show boot menu to set current drive
 		RET	C			; If c-flag is set then start DiskBASIC
 	ELSE
 		LD      A,(CUR_DRV)		; current drive

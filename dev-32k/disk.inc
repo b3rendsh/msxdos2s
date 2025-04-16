@@ -27,10 +27,13 @@
 ; FAT16		Include FAT16 for the DOS 2 kernel
 ; NODOS1	Remove DOS 1 msxdos.sys entry points to free rom space
 ; FASTALLOC	Calculate max 4K free clusters for large drives in ALLOC function to avoid slow DIR command
+; BOOTCODE	Check for bootloader signature in the MBR and if present execute the boot code
+; BOOTCHOICE	Show boot menu / drive choice
+; BTWAIT	Boot menu wait time-out (default $5000 is appr. 3 sec for MSX/3.58Mhz)
 
 ; Apply to all targets
 	OPTM	EQU	1	; use optimized code
-	BTWAIT	EQU	$5000	; boot menu wait time-out (default $5000 is appr. 3 sec for MSX/3.58Mhz)
+	BTWAIT	EQU	$5000
 
 
 IF PPIDE || JIO || UART
@@ -40,7 +43,8 @@ ENDIF
 IF CFIDE || PPIDE
 	DEFINE	FAT16
 	DEFINE	FAT16DOS1
-	DEFINE	BOOTCHOICE	; show boot menu / drive choice
+	DEFINE	BOOTCODE
+	DEFINE	BOOTCHOICE
 	MOD1	EQU	'x'	; eXtended
 	MOD2	EQU	'i'	; Ide
 ENDIF
@@ -48,6 +52,7 @@ ENDIF
 IFDEF JIO
 	DEFINE	FAT16
 	DEFINE	FAT16DOS1
+	DEFINE	BOOTCODE
 	MOD1	EQU	'x'	; eXended
 	MOD2	EQU	'r'	; JIO Remote disk
 ENDIF
@@ -55,6 +60,7 @@ ENDIF
 IFDEF UART
 	DEFINE	FAT16
 	DEFINE	FAT16DOS1
+	DEFINE	BOOTCODE
 	MOD1	EQU	'x'	; eXended
 	MOD2	EQU	'u'	; UART
 ENDIF

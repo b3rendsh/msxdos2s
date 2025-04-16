@@ -34,6 +34,7 @@
 		PUBLIC	SECLEN
 
 		; Additional symbols defined by the DOS driver
+		PUBLIC	BOOTMBR
 		PUBLIC	BOOTMENU
 		PUBLIC	W_CURDRV
 		PUBLIC	W_BOOTDRV
@@ -106,7 +107,7 @@ r101:		inc	sp
 ; ------------------------------------------
 
 ; Temporary RAM variables:
-PART_BUF	equ	$C000		; Copy of disk info / Master Boot Record
+PART_BUF	equ	TMPSTK		; Copy of disk info / Master Boot Record
 PART_BUFX	equ	PART_BUF+$200	; Copy of extended partition boot record
 PART_NEXT	equ	PART_BUF+$400	; Pointer to next partition in work area
 PART_EXTLO	equ	PART_BUF+$402	; First extended partition offset low word
@@ -450,6 +451,7 @@ IFDEF IDEDOS1
 		ld	a,$0c
 		scf
 ENDIF
+SUBRET:
 MTOFF:		ret
 
 ; -------------------------------------------
@@ -478,6 +480,42 @@ DEFDPB:		db	$00		; +00 DRIVE	Drive number
 		dw	$0000		; +12 FATPTR	FAT pointer
 
 ; ------------------------------------------
+; Check for boot code in the MBR, to be used in a modified MSX-DOS boot process.
+; Parameters for boot code:
+;   hl,ix = pointer to driver workspace
+;   a     = master disk major DOS version (1 or 2)
+; Output:
+;   Zx set ==> show boot choice (if this option is enabled)
+;   Cx set ==> start Disk BASIC
+; May corrupt: AF,BC,DE,HL,IX,IY
+; ------------------------------------------
+	IFNDEF BOOTCODE
+BOOTMBR:	EQU	SUBRET
+	ELSE
+BOOTMBR:	; check for boot code signature 'BC'
+		ld	a,(PART_BUF+$40)
+		cp	'B'
+		jr	nz,bcret
+		ld	a,(PART_BUF+$41)
+		cp	'C'
+		jr	nz,bcret
+
+		; set parameters
+		call	GETWRK
+	IFDEF IDEDOS1
+		ld	a,1
+	ELSE
+		ld	a,2
+	ENDIF
+
+		; execute bootcode
+		jp	PART_BUF+$42
+
+bcret:		xor	a
+		ret
+
+	ENDIF ; BOOTCODE
+; ------------------------------------------
 ; Boot MSX-DOS from selected partition, to be used in a modified MSX-DOS boot process.
 ; MSX-DOS 1:
 ; 	The default boot drive is the last primary partition that is flagged active.
@@ -486,6 +524,9 @@ DEFDPB:		db	$00		; +00 DRIVE	Drive number
 ; 	The default boot drive is the first drive with a valid MSX-DOS 2 boot loader.
 ;	If DOS2 can't boot from the  specified drive the machine will boot from the first drive or start BASIC.
 ; ------------------------------------------
+	IFNDEF BOOTCHOICE
+BOOTMENU:	EQU	SUBRET
+	ELSE
 BOOTMENU:	ei
 		call	GETWRK
 		xor	a
@@ -543,8 +584,37 @@ boot_r2:	dec	hl
 		or	a			; clear carry flag
 		ret	
 
+; -----------------------------------------
+; Get drive character from keyboard
+; Output: A=0..7 or ff if no key pressed
+;         carry flag if ESC is pressed
+; -----------------------------------------
+SelectDrive:	call	CHSNS			; check keyboard buffer
+		jr	z,nokey			; z=empty
+		ld	a,$01
+	        ld	(REPCNT),a		; not to wait until repeat
+		call	CHGET           	; get a character (if exists)
+		cp	$1b			; [ESC]
+		scf
+		ret	z
+		cp	'A'
+		jr	c,nokey
+		cp	'I'
+		jr	c,setdrive
+		cp	'a'
+		jr	c,nokey
+		cp	'i'
+		jr	nc,nokey
+		sub	$20
+setdrive:	sub	'A'
+		ret
+nokey:		or	$ff
+		ret
+
+	ENDIF ; BOOTCHOICE
+
 ; ------------------------------------------------------------------------------
-; *** Print and input subroutines ***
+; *** Print subroutines ***
 ; ------------------------------------------------------------------------------
 PrintMsg:	ex      (sp),hl
 	        call    PrintString
@@ -601,31 +671,3 @@ r734:		ld	b,$01
 r735:		dec	b
 		jr	z,r734
 		ret
-
-; -----------------------------------------
-; Get drive character from keyboard
-; Output: A=0..7 or ff if no key pressed
-;         carry flag if ESC is pressed
-; -----------------------------------------
-SelectDrive:	call	CHSNS			; check keyboard buffer
-		jr	z,nokey			; z=empty
-		ld	a,$01
-	        ld	(REPCNT),a		; not to wait until repeat
-		call	CHGET           	; get a character (if exists)
-		cp	$1b			; [ESC]
-		scf
-		ret	z
-		cp	'A'
-		jr	c,nokey
-		cp	'I'
-		jr	c,setdrive
-		cp	'a'
-		jr	c,nokey
-		cp	'i'
-		jr	nc,nokey
-		sub	$20
-setdrive:	sub	'A'
-		ret
-nokey:		or	$ff
-		ret
-
