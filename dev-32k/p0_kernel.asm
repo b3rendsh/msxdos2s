@@ -6528,8 +6528,8 @@ J25C8:		PUSH	BC
 		LD	A,00H
 		BIT	0,(IY+68)
 		JR	NZ,J25DF
-		LD	A,1
-J25DF:		CALL	C324F
+		LD	A,1		; DSKIO write
+J25DF:		CALL	C324F		; call disk driver read/write sectors with disk check
 		JR	J25E6
 
 J25E4:		LD	B,1
@@ -7589,11 +7589,11 @@ J2BEE:		PUSH	DE
 		LD	B,1
 		LD	A,(DATA_S)
 		LD	C,A
-		LD	A,00H
+		LD	A,00H		; DSKIO read
 	IFDEF FAT16
 		CALL	REDBUF
 	ELSE
-		CALL	C324F
+		CALL	C324F		; call disk driver read/write sectors with disk check
 	ENDIF
 		POP	BC
 		POP	DE
@@ -7902,11 +7902,11 @@ J2D4A:		PUSH	DE
 		LD	B,1
 		LD	A,(DATA_S)
 		LD	C,A
-		LD	A,1
+		LD	A,1		; DSKIO write
 	IFDEF FAT16
 		CALL	WRTBUF
 	ELSE
-		CALL	C324F
+		CALL	C324F		; call disk driver read/write sectors with disk check
 	ENDIF
 		POP	BC
 		POP	DE
@@ -8486,8 +8486,8 @@ C2FFC:		PUSH	DE
 		RET
 
 ; Subroutine get format choice string
-C3013:		LD	A,4
-		CALL	C34D4
+C3013:		LD	A,4		; CHOICE
+		CALL	C34D4		; call disk driver function
 		RET	NZ
 		LD	A,E
 		OR	D
@@ -8513,8 +8513,8 @@ C3030:		BIT	7,A
 		LD	C,D
 		LD	D,B
 		LD	B,A
-		LD	A,5
-		CALL	C34D4
+		LD	A,5		; DSKFMT
+		CALL	C34D4		; call disk driver function
 		RET	NZ
 		INC	A
 J303F:		PUSH	AF
@@ -8523,8 +8523,8 @@ J303F:		PUSH	AF
 		LD	B,1
 		LD	A,(DATA_S)
 		LD	C,A
-		LD	A,00H
-		CALL	C34D4
+		LD	A,00H		; DSKIO read
+		CALL	C34D4		; call disk driver function
 		POP	BC
 		RET	NZ
 		PUSH	BC
@@ -8536,8 +8536,8 @@ J303F:		PUSH	AF
 J3063:		LD	B,1
 		LD	A,(DATA_S)
 		LD	C,A
-		LD	A,00H
-		CALL	C34D4
+		LD	A,00H		; DSKIO read
+		CALL	C34D4		; call disk driver function
 		POP	BC
 		RET	NZ
 		LD	A,(IX+1)
@@ -8553,8 +8553,8 @@ J3063:		LD	B,1
 		LD	B,1
 		LD	A,(DATA_S)
 		LD	C,A
-		LD	A,00H
-		CALL	C34D4
+		LD	A,00H		; DSKIO read
+		CALL	C34D4		; call disk driver function
 		POP	BC
 		RET	NZ
 		PUSH	BC
@@ -8570,7 +8570,7 @@ J3063:		LD	B,1
 		LD	HL,IBOOTCODE
 		LD	DE,ISB6F2
 		LD	BC,0099H
-		LDIR				; copy bootsector code
+		LDIR			; copy bootsector code
 		EX	DE,HL
 		LD	DE,0FFB7H
 J30B2:		LD	(HL),B
@@ -8599,8 +8599,8 @@ J30D7:		LD	DE,0
 		LD	B,1
 		LD	A,(DATA_S)
 		LD	C,A
-		LD	A,1
-		CALL	C34D4
+		LD	A,1		; DSKIO write
+		CALL	C34D4		; call disk driver function
 		RET
 
 J30E6:		LD	A,0F6H
@@ -8801,7 +8801,7 @@ C324F:		CALL	C3264
 	IFDEF FAT16
 		CALL	C34D8
 	ELSE
-		CALL	C34D4
+		CALL	C34D4		;  call disk driver function
 	ENDIF
 
 ; Subroutine next 0.5 seconds no disk change
@@ -8848,8 +8848,8 @@ J3291:		POP	DE
 ;		Cx = set: disk driver does not know
 C3294:		PUSH	BC
 		PUSH	DE
-		LD	A,2
-		CALL	C34D4
+		LD	A,2		; DSKCHG
+		CALL	C34D4		; call disk driver function
 		JR	Z,J32A7
 		CP	0FCH
 		LD	DE,0FFFFH
@@ -8943,8 +8943,8 @@ J3303:		LD	DE,0
 		LD	B,1
 		LD	A,(DATA_S)
 		LD	C,A
-		LD	A,00H
-		CALL	C34D4
+		LD	A,00H		; DSKIO read
+		CALL	C34D4		; call disk driver function
 		JR	NZ,J3346
 		CALL	C334E
 		JR	Z,J3341
@@ -8955,8 +8955,8 @@ J3303:		LD	DE,0
 		LD	B,1
 		LD	A,(DATA_S)
 		LD	C,A
-		LD	A,00H
-		CALL	C34D4
+		LD	A,00H		; DSKIO read
+		CALL	C34D4		; call disk driver function
 		JR	NZ,J3346
 		LD	A,(IX+1)
 		AND	(IX+2)
@@ -9029,8 +9029,8 @@ J337F:		POP	HL
 
 ; Subroutine create bootsector BPB
 C3382:		LD	B,A
-		LD	A,3		; DSKCHG
-		CALL	C34D4		; call disk rom
+		LD	A,3		; GETDPB
+		CALL	C34D4		; call disk driver function
 		RET	NZ
 		PUSH	HL
 		LD	DE,2
@@ -9383,12 +9383,13 @@ J351D:		LD	A,0DFH
 ; Subroutine execute
 C3521:		JP	(HL)
 
-I3522:		DEFW	I352E
-		DEFW	I3531
-		DEFW	I354B
-		DEFW	I3566
-		DEFW	I357C
-		DEFW	I3587
+; Driver function jump table
+I3522:		DEFW	I352E		; 0 = DSKIO read
+		DEFW	I3531		; 1 = DSKIO write
+		DEFW	I354B		; 2 = DSKCHG
+		DEFW	I3566		; 3 = GETDPB
+		DEFW	I357C		; 4 = CHOICE
+		DEFW	I3587		; 5 = DSKFMT
 
 ; Subroutine function DSKIO read
 I352E:		OR	A
@@ -11068,7 +11069,7 @@ WRTBUF:		PUSH	AF
 		LD	A,(IX-3)	; bit16-23
 REDB_1:		LD	(RW_16),A	; use bit16-23 of sector number
 		POP	AF
-		JP	C324F
+		JP	C324F		; call disk driver read/write sectors with disk check
 
 ; ---------------------------------------------------------
 STOR_7:		PUSH	AF

@@ -191,12 +191,12 @@ r204:		ld	a,(ix+W_DRIVES)
 		jr	nc,r205
 		djnz	r201			; process next primary partition
 r205:		ld	a,(ix+W_DRIVES)
-IFDEF IDEDOS1
+	IFDEF IDEDOS1
 		or	a
 		jr	nz,r206
 		inc	a			; Return value of 0 drives is not allowed in DOS 1
 r206:
-ENDIF
+	ENDIF
 		ld	l,a			; set number of drives
 		pop	de
 		pop	bc
@@ -299,13 +299,13 @@ r222:		ld	a,(PART_BUFX+$01d2)	; Partition type of 2nd entry
 ; Validate partition type
 PartitionType:	cp	$01			; FAT12
 		ret	z
-IFNDEF FAT16DOS1
+	IFNDEF FAT16DOS1
 		push	af
 		ld      a,(DOSVER)		; 15=BEER-DOS1
 		cp      $20			; Master disk system is DOS 2 or higher?
 		jr	c,r223
 		pop	af
-ENDIF
+	ENDIF
 		cp	$04			; FAT16 (<=32MB)
 		ret	z
 		cp	$06			; FAT16B (>32MB)
@@ -333,6 +333,9 @@ PartitionExt:	cp	$05			; Extended partition (CHS,LBA)
 ; Output:
 ;   [HL+1] .. [HL+18] = DPB fo the specified drive
 ; ------------------------------------------
+	IFNDEF IDEDOS1
+GETDPB:		EQU	SUBRET
+	ELSE
 GETDPB:		ei
 		push	hl
 		ld	de,0			; first logical sector
@@ -420,37 +423,37 @@ r608:		inc	hl
 		ld 	(iy+$0f),h
 		xor	a
 		ret
-
+	ENDIF
 ; ------------------------------------------
 ; CHOICE - Choice for FORMAT 
 ; Input : None
 ; Output: HL = pointer to string, terminated by 0
 ; ------------------------------------------
 CHOICE:		
-IFDEF IDEDOS1	
-; No choice: HL = 0
+	IFDEF IDEDOS1
+		; No choice: HL = 0
 		xor	a
 		ld	l,a
 		ld	h,a
 		ret
-ELSE
-; Cannot format this drive: (HL) = 0
+	ELSE
+		; Cannot format this drive: (HL) = 0
 		ld	hl,choice_txt
 		ret
 choice_txt:	db	$00
-ENDIF
+	ENDIF
 
 ; ------------------------------------------
 ; DSKFMT - Format not implemented
 ; MTOFF - Motors off not implemented
 ; ------------------------------------------
 DSKFMT:		
-IFDEF IDEDOS1
-; This routine will be called by DOS1 only
-; Error $0c = Bad parameter
+	IFDEF IDEDOS1
+		; This routine will be called by DOS1 only
+		; Error $0c = Bad parameter
 		ld	a,$0c
 		scf
-ENDIF
+	ENDIF
 SUBRET:
 MTOFF:		ret
 
@@ -531,15 +534,15 @@ BOOTMENU:	ei
 		call	GETWRK
 		xor	a
 		or	(ix+W_DRIVES)		; are there any IDE drives?
-IFDEF IDEDOS1
+	IFDEF IDEDOS1
 		ret	z
 		ld	a,(ix+W_BOOTDRV)
 		ld	(CURDRV),a		
-ELSE
+	ELSE
 		ld	a,(CUR_DRV)
 		ret	z			; z=no IDE drives
 		dec	a
-ENDIF
+	ENDIF
 		push	af
 		call	PrintMsg
 		db	"Boot  : ",0
@@ -562,15 +565,15 @@ boot_r1:	push	hl
 		ld	a,h
 		or	l
 		jr	nz,boot_r1
-IFDEF IDEDOS1
+	IFDEF IDEDOS1
 		ld	a,(CURDRV)
 boot_valid:	ld	(CURDRV),a
-ELSE
+	ELSE
 		ld	a,(CUR_DRV)
 		dec	a
 boot_valid:	inc	a
 		ld	(CUR_DRV),a
-ENDIF
+	ENDIF
 		push	af
 		ld	a,$0c			; clear screen
 		rst	$18
