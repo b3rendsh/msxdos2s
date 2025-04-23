@@ -4740,7 +4740,7 @@ ENDIF
 ; MSXDOS requirement are met, try starting it
 
 A5A11:  
-IFDEF IDEDOS1
+IFDEF BOOTCHOICE
 	LD	A,(CURDRV)		; Load drive that is set in the boot menu
 ELSE
 	XOR     A			; drive 0
@@ -4861,7 +4861,7 @@ A5ADB:  LD      HL,DISKVE               ; address diskerror handler pointer
 
 ;DiskBootSequence
 A5AE7:  
-IFDEF IDEDOS1
+IFDEF BOOTCHOICE
 	ld	bc,01f8h		; B=Number of sectors (1), C=Media ID (F8)
 	ld	hl,(SDIRBU)		; Begin address in memory
 	push	hl

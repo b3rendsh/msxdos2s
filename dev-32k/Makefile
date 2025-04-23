@@ -28,7 +28,7 @@ endif
 # Note: the rom folder must be an existing folder
 ROM 	:= .$/rom
 
-all:	ppide1 cfide1 ppide2 cfide2 core2 taste
+all:	ppide1 cfide1 ppide2 cfide2 core2 jio1 jio2 taste
 
 rdate:
 	@echo db $(QUOTE)$(shell $(GETDATE))$(QUOTE) > rdate.inc
@@ -76,7 +76,7 @@ core2:	rdate
 jio1:	rdate
 	@echo Assembling JIO DOS1 / 16k jio remote disk rom..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DIDEDOS1 -DJIO -Oobj -o=jio_dos1.bin dos1x.asm driver.asm drv_jio.asm
+	z80asm -b -d -l -m -DIDEDOS1 -DJIO -Oobj -o=jio_dos1.bin dos1x.asm drv_jio.asm
 	z88dk-appmake +glue -b obj/jio_dos1 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/jio_dos1__.bin -o $(ROM)/jio_dos1.rom -s 16384 --org 0
 	@echo done
@@ -84,7 +84,7 @@ jio1:	rdate
 jio2:	rdate
 	@echo Assembling JIO DOS2 / 32k jio remote disk rom..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DJIO -Oobj -o=jio_dos2.bin p1_main.asm p3_paging.asm driver.asm drv_jio.asm p0_kernel.asm
+	z80asm -b -d -l -m -DJIO -Oobj -o=jio_dos2.bin p1_main.asm p3_paging.asm drv_jio.asm p0_kernel.asm
 	z88dk-appmake +glue -b obj/jio_dos2 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/jio_dos2__.bin -o $(ROM)/jio_dos2.rom -s 32768 --org 0
 	@echo done
@@ -92,7 +92,7 @@ jio2:	rdate
 uart2:	rdate
 	@echo Assembling UART DOS2 / 32k uart 1655x remote disk rom..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DUART -Oobj -o=uart_dos2.bin p1_main.asm p3_paging.asm drv_uart.asm driver.asm p0_kernel.asm
+	z80asm -b -d -l -m -DUART -Oobj -o=uart_dos2.bin p1_main.asm p3_paging.asm driver.asm drv_uart.asm p0_kernel.asm
 	z88dk-appmake +glue -b obj/uart_dos2 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/uart_dos2__.bin -o $(ROM)/uart_dos2.rom -s 32768 --org 0
 	@echo done
@@ -104,7 +104,7 @@ taste:
 	@echo done
 
 img:	
-	@echo Creating BEER and SODA EEPROM images..
+	@echo Creating BEER, SODA and JIO EEPROM images..
 	z80asm -b -d -l -m -Oobj -o=dummy.bin dummy.asm
 	z88dk-appmake +rom -b obj/dummy.bin -o $(ROM)/dummy_16k.rom -s 16384 --org 0
 	z88dk-appmake +rom -b obj/dummy.bin -o $(ROM)/beer_64k.img -s 65536 --org 0
@@ -113,6 +113,10 @@ img:
 	z88dk-appmake +rom -b obj/dummy.bin -o $(ROM)/soda_64k.img -s 65536 --org 0
 	z88dk-appmake +inject -b $(ROM)/soda_64k.img -i $(ROM)/soda_dos2.rom -s 00000 -o $(ROM)/soda_64k.img 
 	z88dk-appmake +inject -b $(ROM)/soda_64k.img -i $(ROM)/soda_dos1.rom -s 32768 -o $(ROM)/soda_64k.img
+	z88dk-appmake +rom -b obj/dummy.bin -o $(ROM)/jio_64k.img -s 65536 --org 0
+	z88dk-appmake +inject -b $(ROM)/jio_64k.img -i $(ROM)/jio_dos2.rom -s 00000 -o $(ROM)/jio_64k.img 
+	z88dk-appmake +inject -b $(ROM)/jio_64k.img -i $(ROM)/jio_dos1.rom -s 32768 -o $(ROM)/jio_64k.img
+
 	@echo done
 
 test1:	rdate

@@ -12,38 +12,10 @@
         INCLUDE	"disk.inc"	; Assembler directives
         INCLUDE	"msx.inc"	; MSX constants and definitions
 
-        SECTION	DRV_JIO
+; ----------------------------------------
+; Included file 'flags.inc'
+; ----------------------------------------
 
-        ; Mandatory symbols defined by the disk hardware interface driver
-        PUBLIC	DRVINIT	; Initialize hardware interface driver
-        PUBLIC	INIENV	; Initialize driver environment
-        PUBLIC	DSKIO	; Disk I/O routine
-        PUBLIC	DSKCHG	; Disk change routine
-        PUBLIC	READSEC	; Read sector (MBR / bootsector) routine
-        PUBLIC	DRVMEM	; Memory for hardware interface variables
-
-        EXTERN	GETWRK	; Get address of disk driver's work area
-        EXTERN	GETSLT	; Get slot of this interface
-        EXTERN	DRVSIZE	; DOS driver workarea size (offset)
-        EXTERN	W_CURDRV	; Workarea variable defined by the DOS driver
-        EXTERN	W_BOOTDRV	; "
-        EXTERN	W_DRIVES	; "
-
-        ; Driver routines, use in DRVINIT/INIENV only
-        EXTERN	PART_BUF
-
-        EXTERN	PrintMsg
-        EXTERN	PrintCRLF
-        EXTERN	PrintString
-
-; Hardware driver variables
-W_FLAGS		equ	DRVSIZE
-W_COMMAND	equ	DRVSIZE+1
-DRVMEM		equ	2
-
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-; #include "flags.inc"
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #define FLAG_RX_CRC                 (1 << 0)
 #define FLAG_TX_CRC                 (1 << 1)
 #define FLAG_TIMEOUT                (1 << 2)
@@ -61,293 +33,50 @@ DRVMEM		equ	2
 
 #define DRIVE_ACKNOWLEDGE_WRITE_OK            0x1111
 #define DRIVE_ACKNOWLEDGE_WRITE_FAILED        0x2222
-#define DRIVE_ACKNOWLEDGE_WRITE_PROTECTED     0x3333 
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#define DRIVE_ACKNOWLEDGE_WRITE_PROTECTED     0x3333
 
-CHGCPU	equ	$180
-GETCPU	equ	$183
+        SECTION	DRV_JIO
 
-;********************************************************************************************************************************
-; Initialize hardware interface driver
-;********************************************************************************************************************************
+        ; Mandatory symbols defined by the disk hardware interface driver
+        PUBLIC	DRIVES	; Initialize hardware interface driver
+        PUBLIC	INIENV	; Initialize driver environment
+        PUBLIC	DSKIO	; Disk I/O routine
+        PUBLIC	DSKCHG	; Disk change routine
+        PUBLIC	GETDPB
+        PUBLIC	CHOICE
+        PUBLIC	DSKFMT
+        PUBLIC	MTOFF
+        PUBLIC	OEMSTA
+        PUBLIC	DEFDPB
+        PUBLIC	SECLEN
+        PUBLIC	INIHRD
+        PUBLIC	BOOTMBR
+	PUBLIC	BOOTMENU
 
-DRVINIT:
-        call	PrintMsg
-IFDEF IDEDOS1
-        db	12,"JIO MSX-DOS 1",13,10
-ELSE
-        db	12,"JIO MSX-DOS 2",13,10
-ENDIF
-        db	"Rev.: "
-        INCLUDE	"rdate.inc"	; Revision date
-        db	13,10
-        db	"Waiting for server,",13,10
-        db	"press [ESC] to cancel",0
+        EXTERN	GETWRK	; Get address of disk driver's work area
+        EXTERN	GETSLT	; Get slot of this interface
+        EXTERN	MYSIZE	; "
+
+; Hardware driver variables
+
+W_CURDRV	equ	$0	; Current drive
+W_BOOTDRV	equ	$1	; Boot drive (partition)
+W_DRIVES	equ	$2	; Number of drives (partitions) on disk
+W_FLAGS		equ	$3
+W_COMMAND	equ	$4
+W_DRIVE		equ	$5	; DSKIO save drive number (DOS1)
+MYSIZE		equ	$6
+
+SECLEN		equ	512
+PART_BUF	equ	TMPSTK		; Copy of disk info / Master Boot Record
+
+CHGCPU          equ	$180
+GETCPU          equ	$183
 
 
-DRVINIT_Retry:
-        ld	a,7
-        call	SNSMAT
-        and	4
-        ret     z
-
-        ld	a,'.'
-        rst	$18
-
-        ld	e,0xFF
-        ld	d,e
-        ld	c,e
-
-        ld	b,1
-        ld	hl,PART_BUF
-
-        ld	(ix+W_FLAGS),FLAG_RX_CRC|FLAG_TX_CRC|FLAG_TIMEOUT
-        ld      (ix+W_COMMAND),COMMAND_DRIVE_INFO
-        call	ReadOrWriteSectors
-        jr	c,DRVINIT_Retry
-
-        ld	hl,PART_BUF
-        ld	a,(hl)
-        ld	(ix+W_FLAGS),a
-        inc	hl
-        call	PrintString
-
-        xor	a
-        ret
-
-;********************************************************************************************************************************
-; INIENV - Initialize the work area (environment)
-; Input : None
-; Output: None
-; May corrupt: AF,BC,DE,HL,IX,IY
-;********************************************************************************************************************************
-
-INIENV:	call	GETWRK	; HL and IX point to work buffer
-        xor	a
-        or	(ix+W_DRIVES)	; number of drives 0?
-        ret	z
-        ld	(ix+W_CURDRV),$ff	; Init current drive
-        call	GETSLT
-        ld 	hl,DRVTBL
-        ld	b,a	; B = this disk interface slot number
-        ld	c,$00
-
-TestInterface:	ld	a,(hl)
-        add	a,c
-        ld	c,a
-        inc	hl
-        ld	a,(hl)
-        inc	hl
-        cp	b	; this interface?
-        jr	nz,TestInterface	; nz=no
-
-        dec	hl
-        dec	hl
-        ld	a,c
-        sub	(hl)
-        ld	b,(ix+W_BOOTDRV)	; Get boot drive
-        add	a,b
-        ld	(ix+W_BOOTDRV),a	; Set boot drive
-        ;call	PrintMsg
-        ;db	"Drives: ",0
-        ;ld	a,(ix+W_DRIVES)
-        ;add	a,'0'
-        ;rst	$18
-        jp	PrintCRLF
-
-;********************************************************************************************************************************
-; DSKIO - Disk Input / Output
-; Input:
-;   Carry flag = clear ==> read, set ==> write
-;   A  = drive number
-;   B  = number of sectors to transfer
-;   C  = if bit7 is set then media descriptor byte
-;	else first logical sector number bit 16..22
-;   DE = first logical sector number (bit 0..15)
-;   HL = transfer address
-; Output:
-;   Carry flag = clear ==> successful, set ==> error
-;   If error then
-;	 A = error code
-;           0 - Write protected disk
-;           2 - Drive not ready
-;           4 - Data (CRC) error
-;           6 - Seek error
-;           7 - Record not found
-;           10 - Write fault (verify error)
-;           12 - Other error
-;           new 18 - Not a DOS disk
-;           new 20 - Incompatible disk
-;           new 22 - Unformatted disk
-;           new 24 - Unexpected disk change
-;
-;	 B = remaining sectors
-; May corrupt: AF,BC,DE,HL,IX,IY
-;********************************************************************************************************************************
-
-DSKIO:	push	hl
-	push	de
-	push	bc
-
-	push	af
-	cp	$08	; Max 8 drives (partitions) supported
-	jp	nc,r404
-	call	GETWRK	; Base address of workarea in hl and ix
-	pop	af
-
-        ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
-	jr	c,WriteFlag
-        ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
-WriteFlag:
-
-        ld	e,a
-        add	a,a
-        add	a,a
-        add	a,e
-        ld	e,a	; a * 5
-        ld	d,$00
-        add	hl,de
-
-        push	hl
-        pop	iy
-
-        pop	bc
-        pop	de
-        pop	hl
-
-        xor	a
-        or	(iy+$04)	; Test if partition exists (must have nonzero partition type)
-        jr	z,r405
-
-        ; Translate logical to physical sector number
-        push	bc	; Save sector counter
-        push 	hl	; Save transfer address
-        ex	de,hl
-        bit	7,c	; If bit 7 of media descriptor is 0 then use 23-bit sector number
-        jr	nz,r401	; nz if 16-bit sector number
-        ld	e,c	; Bit 16-22 of sector number
-        ld	d,$00
-        jr	r402
-
-r401:	ld	de,$0000
-
-r402:	ld	c,(iy+$00)
-        ld	b,(iy+$01)
-        add	hl,bc
-        ex	de,hl	; LBA address: de=00..15
-        ld	c,(iy+$02)
-        ld	b,(iy+$03)
-        adc	hl,bc
-	ld	c,l	; LBA address: c=16..23
-	pop	hl	; Restore transfer address
-	pop	af	; Restore sector counter
-	ld	b,a
-
-IFDEF IDEDOS1
-rw_loop:
-	bit	7,h
-	jr	nz,rw_multi
-	push	bc
-	push	de
-	ld	b,1
-        ld      a,(ix+W_COMMAND)
-	cp	COMMAND_DRIVE_READ
-	jr	nz,sec_write
-	push	hl
-	ld	hl,(SSECBUF)
-	call	ReadOrWriteSectors
-	pop	de
-	jr	nz,sec_err
-	ld	hl,(SSECBUF)
-	ld	bc,$0200
-	call	XFER
-	ex	de,hl
-	jr	sec_next
-sec_write:
-	push	hl
-	push	de
-	push	bc
-	ld	de,(SSECBUF)
-	ld	bc,$0200
-	call	XFER
-	pop	bc
-	pop	de
-	ld	hl,(SSECBUF)
-	call	ReadOrWriteSectors
-	pop	hl
-	jr	nz,sec_err
-	inc	h
-sec_next:
-	xor	a
-sec_err:
-	pop	de
-	pop	bc
-	jr	nz,r405
-	inc	e
-	jr	nz,sec_loop
-	inc	d
-	jr	nz,sec_loop
-	inc	c
-sec_loop:
-	djnz	rw_loop
-	xor	a
-	ret
-rw_multi:
-ENDIF 
-        jp	ReadOrWriteSectors
-
-	; Disk i/o error
-r404:	pop	af
-	pop	bc
-	pop	de
-	pop	hl
-
-r405:	ld	a,$04	; Error 4 = Data (CRC) error (abort,retry,ignore message)
-	scf
-        ret
-
-;********************************************************************************************************************************
-; DSKCHG - Disk change
-; Input:
-;   A  = Drive number
-;   B  = 0
-;   C  = Media descriptor
-;   HL = Base address of DPB
-; Output:
-;   If successful then
-;	 Carry flag reset
-;	 B = Disk change status
-;	 1= Disk unchanged, 0= Unknown, -1=Disk changed
-;   else
-;	 Carry flag set
-;	 Error code in A
-; May corrupt: AF,BC,DE,HL,IX,IY
-;********************************************************************************************************************************
-DSKCHG:
-IFDEF IDEDOS1
-        push	af
-        call	GETWRK
-        pop	af
-        cp	(ix+W_CURDRV)	; current drive
-        ld	(ix+W_CURDRV),a
-        jr	nz,DiskChanged
-        ld	b,$01	; unchanged
-        xor	a
-        ret
-
-DiskChanged:	ld	b,$FF	; changed
-        xor	a
-        ret
-ELSE
-        ; Always return unchanged for DOS2 (disks are not hot-pluggable)
-        ld	b,$01
-        xor	a
-        ret
-ENDIF
-
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-; INCLUDE	"drv_jio_c.asm"
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; ----------------------------------------
+; Included file 'drv_jio_c.asm'
+; ----------------------------------------
 uiTransmit:
 	CALL	_ENT_PARM_DIRECT_L09
 	BIT	1,(IX+8)
@@ -427,32 +156,40 @@ ucReadOrWriteSectors:
 	LD	B,(IX+13)
 	ADD	HL,BC
 	LD	D,(HL)
-	LD	(IX-5),D
+	LD	(IX-4),D
 	LD	HL,W_COMMAND
 	ADD	HL,BC
 	LD	B,(HL)
 	LD	IYH,B
 	CALL	eGetCPU
-	LD	(IX-7),A
+	LD	(IX-6),A
 	LD	(IX-18),74
 	LD	(IX-17),73
 	LD	(IX-16),79
 	LD	(IX-15),D
-	LD	B,(IX+2)
-	LD	(IX-13),B
+	LD	HL,36
+	ADD	HL,SP
+	INC	HL
+	LD	B,(HL)
+	DEC	HL
+	LD	(HL),B
+	LD	C,(IX+4)
+	LD	B,(IX+5)
+	LD	L,(IX+2)
 	LD	H,(IX+3)
+	LD	(IX-13),L
 	LD	(IX-12),H
-	LD	L,(IX+4)
-	LD	BC,0
-	LD	(IX-11),L
-	LD	B,(IX+8)
+	LD	(IX-11),C
 	LD	(IX-10),B
+	LD	B,(IX+8)
+	LD	(IX-9),B
 	LD	L,(IX+10)
 	LD	H,(IX+11)
-	LD	(IX-9),L
-	LD	(IX-8),H
-	LD	H,B
-	LD	L,C
+	LD	(IX-8),L
+	LD	(IX-7),H
+	LD	L,B
+	LD	H,L
+	LD	L,0
 	ADD	HL,HL
 	LD	(IX-26),L
 	LD	(IX-25),H
@@ -471,7 +208,7 @@ _0043:
 	PUSH	BC
 	LD	HL,0
 	PUSH	HL
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	BC,5
 	LD	L,16
@@ -488,9 +225,9 @@ _0017:
 	LD	C,0
 	PUSH	BC
 	PUSH	HL
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
-	LD	BC,6
+	LD	BC,7
 	LD	HL,21
 	ADD	HL,SP
 	EX	DE,HL
@@ -501,7 +238,7 @@ _0017:
 	LD	C,1
 	PUSH	BC
 	PUSH	HL
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	C,(IX-26)
 	LD	B,(IX-25)
@@ -511,10 +248,10 @@ _0017:
 	POP	AF
 	POP	AF
 	POP	AF
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	BC,2
-	LD	HL,27
+	LD	HL,28
 	ADD	HL,SP
 	EX	DE,HL
 	CALL	ucReceive
@@ -524,8 +261,8 @@ _0017:
 	JR	NZ,_0022
 _0019:
 	LD	HL,4369
-	LD	C,(IX-3)
-	LD	B,(IX-2)
+	LD	C,(IX-2)
+	LD	B,(IX-1)
 	AND	A
 	SBC	HL,BC
 	JR	Z,_0022
@@ -550,9 +287,9 @@ _0027:
 	LD	C,1
 	PUSH	BC
 	PUSH	HL
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
-	LD	BC,6
+	LD	BC,7
 	LD	HL,21
 	ADD	HL,SP
 	EX	DE,HL
@@ -561,7 +298,7 @@ _0027:
 	POP	AF
 	POP	AF
 _0028:
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	C,(IX-26)
 	LD	B,(IX-25)
@@ -572,12 +309,12 @@ _0028:
 	LD	IYL,A
 	OR	A
 	JR	NZ,_0036
-	BIT	0,(IX-5)
+	BIT	0,(IX-4)
 	JR	Z,_0036
 _0032:
 _0031:
 _0029:
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	BC,2
 	LD	HL,6
@@ -620,7 +357,7 @@ _0037:
 	PUSH	BC
 	LD	HL,0
 	PUSH	HL
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	BC,5
 	LD	L,16
@@ -635,18 +372,19 @@ _0038:
 	INC	B
 	DEC	B
 	JR	Z,_0014
-	BIT	3,(IX-5)
+	BIT	3,(IX-4)
 	JP	NZ,_0016
 _0014:
-	LD	E,(IX-7)
+	LD	E,(IX-6)
 	CALL	vSetCPU
 	LD	A,IYL
 	POP	IY
-	JP	_LEAVE_DIRECT_L09 
+	JP	_LEAVE_DIRECT_L09
 
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-; INCLUDE	"crt.asm"
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; ----------------------------------------
+; Included file 'crt.asm'
+; ----------------------------------------
+
 _ENT_AUTO_DIRECT_L09:
         pop     hl
         push    bc
@@ -679,15 +417,286 @@ _ENT_PARM_DIRECT_L09:
         ld      ix,0
         add     ix,sp
         jp      (hl)
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+; ------------------------------------------
+; INIHRD - Initialize the disk
+; Input : None
+; Output: None
+; May corrupt: AF,BC,DE,HL,IX,IY
+; Note: the workbuffer is not available yet so most of the initialization is moved to the DRIVES routine.
+; ------------------------------------------
+INIHRD:		ld	a,$06
+                call	SNSMAT			; Check if CTRL key is pressed
+                and	2
+                jr	z,r101			; z=yes: exit disk init
+                xor	a
+                ret
+r101:		inc	sp
+                inc	sp
+                ret
+
+
+; ------------------------------------------
+; DRIVES - Get number of drives connected
+; A maximum of 8 partitions (drives) is supported.
+; Input:
+;   F = The zero flag is reset if one physical drive must act as two logical drives.
+; Output:
+;   L = Number of drives connected. A value of 0 is not allowed for DOS 1.
+; May corrupt: F,HL,IX,IY
+;
+; The DRIVES routine will also initialize the work environment
+; ------------------------------------------
+
+DRIVES:
+        push	af
+        push	bc
+        push	de
+
+        ; initialize work buffer
+        call	GETWRK			; HL and IX point to work buffer
+        ld	d,h
+        ld	e,l
+        inc	de
+        ld	(hl),$00
+        ld	bc,MYSIZE-1
+        ldir
+
+        call	PrintMsg
+IFDEF IDEDOS1
+        db	12,"JIO MSX-DOS 1",13,10
+ELSE
+        db	12,"JIO MSX-DOS 2",13,10
+ENDIF
+        db	"Rev.: "
+        INCLUDE	"rdate.inc"	; Revision date
+        db	13,10
+        db	"Waiting for server,",13,10
+        db	"press [ESC] to cancel",0
+
+
+DRIVES_Retry:
+        ld	a,7
+        call	SNSMAT
+        and	4
+        jr      z,DRIVES_Exit
+
+        ld	a,'.'
+        rst	$18
+
+        ld	(ix+W_FLAGS),FLAG_RX_CRC|FLAG_TX_CRC|FLAG_TIMEOUT
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_INFO
+        ld      b,1
+        ld	hl,PART_BUF
+        call	ReadOrWriteSectors
+        jr	c,DRIVES_Retry
+
+        ld	hl,PART_BUF
+
+        ld	a,(hl)
+        ld	(ix+W_FLAGS),a
+        inc     hl
+        ld      a,(hl)
+        ld	(ix+W_DRIVES),a
+        inc     hl
+        ld      a,(hl)
+        ld	(ix+W_BOOTDRV),a
+        inc     hl
+
+        call	PrintString
+
+DRIVES_Exit:
+        ld	a,(ix+W_DRIVES)
+IFDEF IDEDOS1
+	or	a
+	jr	nz,r206
+	inc	a			; Return value of 0 drives is not allowed in DOS 1
+r206:
+ENDIF
+	ld	l,a
+        pop     de
+        pop     bc
+        pop     af
+        ret
 
 ;********************************************************************************************************************************
-; Read (boot) sector
-; Input: C,DE = sector number
+; INIENV - Initialize the work area (environment)
+; Input : None
+; Output: None
+; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
-READSEC:
+
+INIENV:	call	GETWRK	; HL and IX point to work buffer
+        xor	a
+        or	(ix+W_DRIVES)	; number of drives 0?
+        ret	z
+        ld	(ix+W_CURDRV),$ff	; Init current drive
+        call	GETSLT
+        ld 	hl,DRVTBL
+        ld	b,a	; B = this disk interface slot number
+        ld	c,$00
+
+TestInterface:	ld	a,(hl)
+        add	a,c
+        ld	c,a
+        inc	hl
+        ld	a,(hl)
+        inc	hl
+        cp	b	; this interface?
+        jr	nz,TestInterface	; nz=no
+
+        dec	hl
+        dec	hl
+        ld	a,c
+        sub	(hl)
+        ld	b,(ix+W_BOOTDRV)	; Get boot drive
+        add	a,b
+        ld	(ix+W_BOOTDRV),a	; Set boot drive
+        ret
+
+;********************************************************************************************************************************
+; DSKIO - Disk Input / Output
+; Input:
+;   Carry flag = clear ==> read, set ==> write
+;   A  = drive number
+;   B  = number of sectors to transfer
+;   C  = if bit7 is set then media descriptor byte
+;	else first logical sector number bit 16..22
+;   DE = first logical sector number (bit 0..15)
+;   HL = transfer address
+; Output:
+;   Carry flag = clear ==> successful, set ==> error
+;   If error then
+;	 A = error code
+;           0 - Write protected disk
+;           2 - Drive not ready
+;           4 - Data (CRC) error
+;           6 - Seek error
+;           7 - Record not found
+;           10 - Write fault (verify error)
+;           12 - Other error
+;           new 18 - Not a DOS disk
+;           new 20 - Incompatible disk
+;           new 22 - Unformatted disk
+;           new 24 - Unexpected disk change
+;
+;	 B = remaining sectors
+; May corrupt: AF,BC,DE,HL,IX,IY
+;********************************************************************************************************************************
+
+DSKIO:	push	hl
+        push	bc
+        push	af
+        call	GETWRK
+        pop	af
+        pop	bc
+        pop	hl
+
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
+        jr	c,WriteFlag
         ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
+WriteFlag:
+
+IFDEF IDEDOS1
+	ld	(ix+W_DRIVE),a		; save drive number
+rw_loop:
+        bit	7,h
+        jr	nz,rw_multi
+        push	bc
+        push	de
         ld	b,1
+        ld      a,(ix+W_COMMAND)
+        cp	COMMAND_DRIVE_READ
+        jr	nz,sec_write
+        push	hl
+        ld	hl,(SSECBUF)
+	ld	a,(ix+W_DRIVE)		; load drive number
+        call	ReadOrWriteSectors
+        pop	de
+        jr	nz,sec_err
+        ld	hl,(SSECBUF)
+        ld	bc,$0200
+        call	XFER
+        ex	de,hl
+        jr	sec_next
+sec_write:
+        push	hl
+        push	de
+        push	bc
+        ld	de,(SSECBUF)
+        ld	bc,$0200
+        call	XFER
+        pop	bc
+        pop	de
+        ld	hl,(SSECBUF)
+	ld	a,(ix+W_DRIVE)		; load drive number
+        call	ReadOrWriteSectors
+        pop	hl
+        jr	nz,sec_err
+        inc	h
+sec_next:
+        xor	a
+sec_err:
+        pop	de
+        pop	bc
+        jr	nz,r405
+        inc	e
+        jr	nz,sec_loop
+        inc	d
+        jr	nz,sec_loop
+        inc	c
+sec_loop:
+        djnz	rw_loop
+        xor	a
+        ret
+
+r405:	ld	a,$04	; Error 4 = Data (CRC) error (abort,retry,ignore message)
+        scf
+        ret
+
+rw_multi:
+ENDIF
+        jp	ReadOrWriteSectors
+
+;********************************************************************************************************************************
+; DSKCHG - Disk change
+; Input:
+;   A  = Drive number
+;   B  = 0
+;   C  = Media descriptor
+;   HL = Base address of DPB
+; Output:
+;   If successful then
+;	 Carry flag reset
+;	 B = Disk change status
+;	 1= Disk unchanged, 0= Unknown, -1=Disk changed
+;   else
+;	 Carry flag set
+;	 Error code in A
+; May corrupt: AF,BC,DE,HL,IX,IY
+;********************************************************************************************************************************
+DSKCHG:
+IFDEF IDEDOS1
+        push	af
+        call	GETWRK
+        pop	af
+        cp	(ix+W_CURDRV)	; current drive
+        ld	(ix+W_CURDRV),a
+        jr	nz,DiskChanged
+        ld	b,$01	; unchanged
+        xor	a
+        ret
+
+DiskChanged:	ld	b,$FF	; changed
+        xor	a
+        ret
+ELSE
+        ; Always return unchanged for DOS2 (disks are not hot-pluggable)
+        ld	b,$01
+        xor	a
+        ret
+ENDIF
+
 
 ; CDE : Sector
 ; B   : Length
@@ -696,13 +705,9 @@ READSEC:
 ReadOrWriteSectors:
         push    ix              ; _pucFlagsAndCommand
         push    hl              ; _pvAddress
+        push    bc              ; _uiLength
 
-        ld      a,c
-        ld      c,b             ; _ucLength
-        push    bc
-
-        ld      b,0             ; _ulSector in BCDE
-        ld      c,a
+        ld      b,a             ; _ulSector in BCDE
 
         call    ucReadOrWriteSectors
         pop hl
@@ -711,8 +716,8 @@ ReadOrWriteSectors:
 
         or      a
         ret     z
-        dec	a
-	scf
+        dec     a
+        scf
         ret
 
 ;********************************************************************************************************************************
@@ -744,7 +749,7 @@ vJIOTransmit:
         inc	bc
         exx
         ld	a,15
-	di
+        di
         out	($a0),a
         in	a,($a2)
         or	4
@@ -855,7 +860,7 @@ bJIOReceive:
         ld	ix,0
         add	ix,sp
         ld	a,15
-	di
+        di
         out	($a0),a
         in	a,($a2)
         or	64
@@ -1023,70 +1028,15 @@ RX_PE:	in	f,(c)	; 14
 ;         Stack = CRC-16
 ; Output: HL    = updated CRC-16
 
-IFDEF IDEDOS1
-
-uiXModemCRC16:
-	ei
-	ld	l,c
-	ld	h,b
-
-	ld	b,l
-	dec	hl
-	inc	h
-	ld	c,h
-
-        push    ix
-        ld      ix,0
-        add     ix,sp
-        ld      l,(ix+4)
-        ld      h,(ix+5)
-        pop     ix
-
-crc16:
-	push bc
-	ld	a,(de)
-	inc	de
-	xor     h
-	ld      b,a
-	ld      c,l
-	rrca
-	rrca
-	rrca
-	rrca
-	ld      l,a
-	and     0fh
-	ld      h,a
-	xor     b
-	ld      b,a
-	xor     l
-	and     0f0h
-	ld      l,a
-	xor     c
-	add     hl,hl
-	xor     h
-	ld      h,a
-	ld      a,l
-	xor     b
-	ld      l,a
-
-	pop     bc
-	djnz    crc16
-
-	dec     c
-	jp      nz,crc16
-	ret
-
-ELSE
-
 ; compute CRC with lookup table
 uiXModemCRC16:
-	ei
-	ld	l,c
-	ld	h,b
-	ld	b,l
-	dec	hl
-	inc	h
-	ld	c,h
+        ei
+        ld	l,c
+        ld	h,b
+        ld	b,l
+        dec	hl
+        inc	h
+        ld	c,h
 
         push    ix
         ld      ix,0
@@ -1096,93 +1046,387 @@ uiXModemCRC16:
         pop     ix
 
 crc16:
-	ld	a,l
-	ex	af,af'
-	ld	a,(de)
-	inc	de
-	xor	h
-	ld	h,CrcTab/256
-	ld	l,a
-	ex	af,af'
-	xor	(hl)
-	inc	h
-	ld	l,(hl)
-	ld	h,a
-	djnz	crc16
-	dec	c
-	jp	nz,crc16
-	ret
+        ld	a,l
+        ex	af,af'
+        ld	a,(de)
+        inc	de
+        xor	h
+        ld	h,CrcTab/256
+        ld	l,a
+        ex	af,af'
+        xor	(hl)
+        inc	h
+        ld	l,(hl)
+        ld	h,a
+        djnz	crc16
+        dec	c
+        jp	nz,crc16
+        ret
 
-	SECTION	DRV_CRCTAB
+; ------------------------------------------
+; GETDPB - Set DPB using sector 0 / bootsector of partition
+; Called by DOS 1 only, not used by DOS 2.2
+; Input:
+;   A  = Drive number
+;   B  = First byte of FAT
+;   C  = Media descriptor
+;   HL = Base address of DPB
+; Output:
+;   [HL+1] .. [HL+18] = DPB fo the specified drive
+; ------------------------------------------
+        IFNDEF IDEDOS1
+GETDPB:		EQU	SUBRET
+        ELSE
+GETDPB:		ei
+                push	hl
+                ld	de,0			; first logical sector
+                ld	hl,(SSECBUF)		; transfer address
+                ld	b,1			; number of sectors is 1
+                or	a			; carry flag cleared ==> read sector
+                call	DSKIO
+                pop	iy
+                ret	c
+                ld	ix,(SSECBUF)
+                ld	a,(ix+$15)		; Media ID
+                ld	(iy+$01),a
+                ld	(iy+$02),$00		; Sector size is 0200h
+                ld	(iy+$03),$02
+                ld	(iy+$04),$0f		; Directory mask 00fh: 512/32-1
+                ld	(iy+$05),$04		; Directory shift 004h
+                ld	a,(ix+$0d)		; Cluster size (in sectors)
+                dec	a
+                ld	(iy+$06),a		; Cluster mask
+                ld	c,$00
+r601:		inc	c
+                rra
+                jr	c,r601
+                ld	(iy+$07),c		; Cluster shift
+                ld	l,(ix+$0e)		; Number of unused sectors
+                ld	h,(ix+$0f)
+                ld	(iy+$08),l		; FIRFAT - first FAT sector
+                ld	(iy+$09),h
+                ld	e,(ix+$16)		; Size of FAT (in sectors)
+                ld	(iy+$10),e		; FATSIZ - Sectors per FAT
+                ld	d,$00
+                ld	b,(ix+$10)		; Number of FATs
+                ld	(iy+$0A),b
+r602:		add	hl,de
+                djnz	r602
+                ld	(iy+$11),l		; FIRDIR - First directory sector
+                ld	(iy+$12),h
+                ld	a,(ix+$12)		; Number of directory entries (high byte)
+                ex	de,hl
+                ld	h,a
+                ld	l,(ix+$11)		; Number of directory entries (low byte)
+                ld	bc,$000f
+                add	hl,bc
+                add	hl,hl
+                add	hl,hl
+                add	hl,hl
+                add	hl,hl			; 16 directory entries per sector
+                ld	l,h
+                ld	h,$00
+                ex	de,hl
+                or	a			; number of directory entries < 256?
+                jr	z,r603			; z=yes
+                ld	a,$ff			; set max 255 directory entries
+                jr	r604
+r603:		ld	a,(ix+$11)		; set max directory entries to directory entries low byte
+r604:		ld	(iy+$0b),a		; MAXENT - Max directory entries
+                add	hl,de
+                ld	(iy+$0c),l		; FIRREC - first data sector
+                ld	(iy+$0d),h
+                ex	de,hl
+                ld	l,(ix+$13)		; Total number of sectors
+                ld	h,(ix+$14)
+                ld	bc,$0000
+                ld	a,l
+                or	h
+                jr	nz,r605
+                ld	l,(ix+$20)
+                ld	h,(ix+$21)
+                ld	c,(ix+$22)
+                ld	b,(ix+$23)
+r605: 		or	a
+                sbc	hl,de
+                jr	nc,r606
+                dec	bc
+r606:		ld	a,(iy+$07)
+r607:	  	dec	a
+                jr	z,r608
+                srl	b
+                rr	c
+                rr	h
+                rr	l
+                jr	r607
+r608:		inc	hl
+                ld	(iy+$0e),l		; MAXCLUS - number of clusters + 1
+                ld 	(iy+$0f),h
+                xor	a
+                ret
+        ENDIF
 
-	ORG	$7E00	; align to 256-byte page boundary
+; ------------------------------------------
+; CHOICE - Choice for FORMAT
+; Input : None
+; Output: HL = pointer to string, terminated by 0
+; ------------------------------------------
+CHOICE:
+        IFDEF IDEDOS1
+                ; No choice: HL = 0
+                xor	a
+                ld	l,a
+                ld	h,a
+                ret
+        ELSE
+                ; Cannot format this drive: (HL) = 0
+                ld	hl,choice_txt
+                ret
+choice_txt:	db	$00
+        ENDIF
+
+; ------------------------------------------
+; DSKFMT - Format not implemented
+; MTOFF - Motors off not implemented
+; ------------------------------------------
+DSKFMT:
+        IFDEF IDEDOS1
+                ; This routine will be called by DOS1 only
+                ; Error $0c = Bad parameter
+                ld	a,$0c
+                scf
+        ENDIF
+SUBRET:
+MTOFF:		ret
+
+; -------------------------------------------
+; OEMSTATEMENT - BASIC System statement expansion
+; -------------------------------------------
+OEMSTA:		scf
+                ret
+
+; ------------------------------------------
+; Default DPB pattern (DOS 1)
+; ------------------------------------------
+DEFDPB:		db	$00		; +00 DRIVE	Drive number
+                db	$f9		; +01 MEDIA	Media type
+                dw	$0200		; +02 SECSIZ	Sector size
+                db	$0f		; +04 DIRMSK	Directory mask
+                db	$04		; +05 DIRSHFT	Directory shift
+                db	$03		; +06 CLUSMSK	Cluster mask
+                db	$03		; +07 CLUSSFT	Cluster shift
+                dw	$0001		; +08 FIRFAT	First FAT sector
+                db	$02		; +0A FATCNT	Number of FATs
+                db	$70		; +0B MAXENT	Number of directory entries
+                dw	$000e		; +0C FIRREC	First data sector
+                dw	$02ca		; +0E MAXCLUS	Number of clusters+1
+                db	$03		; +10 FATSIZ	Sectors per FAT
+                dw	$0007		; +11 FIRDIR	First directory sector
+                dw	$0000		; +12 FATPTR	FAT pointer
+
+; ------------------------------------------
+; Check for boot code in the MBR, to be used in a modified MSX-DOS boot process.
+; Parameters for boot code:
+;   hl,ix = pointer to driver workspace
+;   a     = master disk major DOS version (1 or 2)
+; Output:
+;   Zx set ==> show boot choice (if this option is enabled)
+;   Cx set ==> start Disk BASIC
+; May corrupt: AF,BC,DE,HL,IX,IY
+; ------------------------------------------
+
+; Not implemented in JIO driver
+BOOTMBR:	EQU	SUBRET
+
+; ------------------------------------------
+; Boot MSX-DOS from selected partition, to be used in a modified MSX-DOS boot process.
+; MSX-DOS 1:
+; 	The default boot drive is the last primary partition that is flagged active.
+;	If DOS1 can't boot from the specified drive the machine will restart or start BASIC.
+; MSX-DOS 2:
+; 	The default boot drive is the first drive with a valid MSX-DOS 2 boot loader.
+;	If DOS2 can't boot from the  specified drive the machine will boot from the first drive or start BASIC.
+; ------------------------------------------
+        IFNDEF BOOTCHOICE
+BOOTMENU:	EQU	SUBRET
+        ELSE
+BOOTMENU:	ei
+                call	GETWRK
+                xor	a
+                or	(ix+W_DRIVES)		; are there any IDE drives?
+        IFDEF IDEDOS1
+                ret	z
+                ld	a,(ix+W_BOOTDRV)
+                ld	(CURDRV),a
+        ELSE
+                ld	a,(CUR_DRV)
+                ret	z			; z=no IDE drives
+                dec	a
+        ENDIF
+                push	af
+                call	PrintMsg
+                db	"Boot  : ",0
+                pop	af
+                add	a,'A'
+                rst	$18
+                call	PrintMsg
+                db	13,10,13,10,"Press drive key or [ESC] to cancel.. ",0
+                ld	hl,BTWAIT		; wait time is defined in disk.inc
+boot_r1:	push	hl
+                call	SelectDrive
+                pop	hl
+                ret	c
+                push	hl
+                ld	hl,SNUMDR		; Number of drives in the system
+                cp	(hl)
+                pop	hl
+                jr	c,boot_valid
+                dec	hl
+                ld	a,h
+                or	l
+                jr	nz,boot_r1
+        IFDEF IDEDOS1
+                ld	a,(CURDRV)
+boot_valid:	ld	(CURDRV),a
+        ELSE
+                ld	a,(CUR_DRV)
+                dec	a
+boot_valid:	inc	a
+                ld	(CUR_DRV),a
+        ENDIF
+                push	af
+                ld	a,$0c			; clear screen
+                rst	$18
+                ld	hl,$1000		; wait until boot key is released
+boot_r2:	dec	hl
+                ld	a,h
+                or	l
+                jr	nz,boot_r2
+                call	KILBUF			; clear keyboard buffer
+                pop	af
+                or	a			; clear carry flag
+                ret
+
+; -----------------------------------------
+; Get drive character from keyboard
+; Output: A=0..7 or ff if no key pressed
+;         carry flag if ESC is pressed
+; -----------------------------------------
+SelectDrive:	call	CHSNS			; check keyboard buffer
+                jr	z,nokey			; z=empty
+                ld	a,$01
+                ld	(REPCNT),a		; not to wait until repeat
+                call	CHGET           	; get a character (if exists)
+                cp	$1b			; [ESC]
+                scf
+                ret	z
+                cp	'A'
+                jr	c,nokey
+                cp	'I'
+                jr	c,setdrive
+                cp	'a'
+                jr	c,nokey
+                cp	'i'
+                jr	nc,nokey
+                sub	$20
+setdrive:	sub	'A'
+                ret
+nokey:		or	$ff
+                ret
+
+        ENDIF ; BOOTCHOICE
+
+; ------------------------------------------------------------------------------
+; *** Print subroutines ***
+; ------------------------------------------------------------------------------
+PrintMsg:	ex      (sp),hl
+                call    PrintString
+                ex      (sp),hl
+                ret
+
+PrintString:	ld      a,(hl)
+                inc     hl
+                and     a
+                ret     z
+                rst	$18			; print character
+                jr      PrintString
+
+; Print CR+LF
+PrintCRLF:	ld	a,$0d
+                rst	$18
+                ld	a,$0a
+                rst	$18
+                ret
+
+
+        SECTION	DRV_CRCTAB
+
+        ORG	$7E00	; align to 256-byte page boundary
 
 CrcTab:	; high bytes
-	db	000h,010h,020h,030h,040h,050h,060h,070h
-	db	081h,091h,0A1h,0B1h,0C1h,0D1h,0E1h,0F1h
-	db	012h,002h,032h,022h,052h,042h,072h,062h
-	db	093h,083h,0B3h,0A3h,0D3h,0C3h,0F3h,0E3h
-	db	024h,034h,004h,014h,064h,074h,044h,054h
-	db	0A5h,0B5h,085h,095h,0E5h,0F5h,0C5h,0D5h
-	db	036h,026h,016h,006h,076h,066h,056h,046h
-	db	0B7h,0A7h,097h,087h,0F7h,0E7h,0D7h,0C7h
-	db	048h,058h,068h,078h,008h,018h,028h,038h
-	db	0C9h,0D9h,0E9h,0F9h,089h,099h,0A9h,0B9h
-	db	05Ah,04Ah,07Ah,06Ah,01Ah,00Ah,03Ah,02Ah
-	db	0DBh,0CBh,0FBh,0EBh,09Bh,08Bh,0BBh,0ABh
-	db	06Ch,07Ch,04Ch,05Ch,02Ch,03Ch,00Ch,01Ch
-	db	0EDh,0FDh,0CDh,0DDh,0ADh,0BDh,08Dh,09Dh
-	db	07Eh,06Eh,05Eh,04Eh,03Eh,02Eh,01Eh,00Eh
-	db	0FFh,0EFh,0DFh,0CFh,0BFh,0AFh,09Fh,08Fh
-	db	091h,081h,0B1h,0A1h,0D1h,0C1h,0F1h,0E1h
-	db	010h,000h,030h,020h,050h,040h,070h,060h
-	db	083h,093h,0A3h,0B3h,0C3h,0D3h,0E3h,0F3h
-	db	002h,012h,022h,032h,042h,052h,062h,072h
-	db	0B5h,0A5h,095h,085h,0F5h,0E5h,0D5h,0C5h
-	db	034h,024h,014h,004h,074h,064h,054h,044h
-	db	0A7h,0B7h,087h,097h,0E7h,0F7h,0C7h,0D7h
-	db	026h,036h,006h,016h,066h,076h,046h,056h
-	db	0D9h,0C9h,0F9h,0E9h,099h,089h,0B9h,0A9h
-	db	058h,048h,078h,068h,018h,008h,038h,028h
-	db	0CBh,0DBh,0EBh,0FBh,08Bh,09Bh,0ABh,0BBh
-	db	04Ah,05Ah,06Ah,07Ah,00Ah,01Ah,02Ah,03Ah
-	db	0FDh,0EDh,0DDh,0CDh,0BDh,0ADh,09Dh,08Dh
-	db	07Ch,06Ch,05Ch,04Ch,03Ch,02Ch,01Ch,00Ch
-	db	0EFh,0FFh,0CFh,0DFh,0AFh,0BFh,08Fh,09Fh
-	db	06Eh,07Eh,04Eh,05Eh,02Eh,03Eh,00Eh,01Eh
+        db	000h,010h,020h,030h,040h,050h,060h,070h
+        db	081h,091h,0A1h,0B1h,0C1h,0D1h,0E1h,0F1h
+        db	012h,002h,032h,022h,052h,042h,072h,062h
+        db	093h,083h,0B3h,0A3h,0D3h,0C3h,0F3h,0E3h
+        db	024h,034h,004h,014h,064h,074h,044h,054h
+        db	0A5h,0B5h,085h,095h,0E5h,0F5h,0C5h,0D5h
+        db	036h,026h,016h,006h,076h,066h,056h,046h
+        db	0B7h,0A7h,097h,087h,0F7h,0E7h,0D7h,0C7h
+        db	048h,058h,068h,078h,008h,018h,028h,038h
+        db	0C9h,0D9h,0E9h,0F9h,089h,099h,0A9h,0B9h
+        db	05Ah,04Ah,07Ah,06Ah,01Ah,00Ah,03Ah,02Ah
+        db	0DBh,0CBh,0FBh,0EBh,09Bh,08Bh,0BBh,0ABh
+        db	06Ch,07Ch,04Ch,05Ch,02Ch,03Ch,00Ch,01Ch
+        db	0EDh,0FDh,0CDh,0DDh,0ADh,0BDh,08Dh,09Dh
+        db	07Eh,06Eh,05Eh,04Eh,03Eh,02Eh,01Eh,00Eh
+        db	0FFh,0EFh,0DFh,0CFh,0BFh,0AFh,09Fh,08Fh
+        db	091h,081h,0B1h,0A1h,0D1h,0C1h,0F1h,0E1h
+        db	010h,000h,030h,020h,050h,040h,070h,060h
+        db	083h,093h,0A3h,0B3h,0C3h,0D3h,0E3h,0F3h
+        db	002h,012h,022h,032h,042h,052h,062h,072h
+        db	0B5h,0A5h,095h,085h,0F5h,0E5h,0D5h,0C5h
+        db	034h,024h,014h,004h,074h,064h,054h,044h
+        db	0A7h,0B7h,087h,097h,0E7h,0F7h,0C7h,0D7h
+        db	026h,036h,006h,016h,066h,076h,046h,056h
+        db	0D9h,0C9h,0F9h,0E9h,099h,089h,0B9h,0A9h
+        db	058h,048h,078h,068h,018h,008h,038h,028h
+        db	0CBh,0DBh,0EBh,0FBh,08Bh,09Bh,0ABh,0BBh
+        db	04Ah,05Ah,06Ah,07Ah,00Ah,01Ah,02Ah,03Ah
+        db	0FDh,0EDh,0DDh,0CDh,0BDh,0ADh,09Dh,08Dh
+        db	07Ch,06Ch,05Ch,04Ch,03Ch,02Ch,01Ch,00Ch
+        db	0EFh,0FFh,0CFh,0DFh,0AFh,0BFh,08Fh,09Fh
+        db	06Eh,07Eh,04Eh,05Eh,02Eh,03Eh,00Eh,01Eh
 
-	;low bytes
-	db	000h,021h,042h,063h,084h,0A5h,0C6h,0E7h
-	db	008h,029h,04Ah,06Bh,08Ch,0ADh,0CEh,0EFh
-	db	031h,010h,073h,052h,0B5h,094h,0F7h,0D6h
-	db	039h,018h,07Bh,05Ah,0BDh,09Ch,0FFh,0DEh
-	db	062h,043h,020h,001h,0E6h,0C7h,0A4h,085h
-	db	06Ah,04Bh,028h,009h,0EEh,0CFh,0ACh,08Dh
-	db	053h,072h,011h,030h,0D7h,0F6h,095h,0B4h
-	db	05Bh,07Ah,019h,038h,0DFh,0FEh,09Dh,0BCh
-	db	0C4h,0E5h,086h,0A7h,040h,061h,002h,023h
-	db	0CCh,0EDh,08Eh,0AFh,048h,069h,00Ah,02Bh
-	db	0F5h,0D4h,0B7h,096h,071h,050h,033h,012h
-	db	0FDh,0DCh,0BFh,09Eh,079h,058h,03Bh,01Ah
-	db	0A6h,087h,0E4h,0C5h,022h,003h,060h,041h
-	db	0AEh,08Fh,0ECh,0CDh,02Ah,00Bh,068h,049h
-	db	097h,0B6h,0D5h,0F4h,013h,032h,051h,070h
-	db	09Fh,0BEh,0DDh,0FCh,01Bh,03Ah,059h,078h
-	db	088h,0A9h,0CAh,0EBh,00Ch,02Dh,04Eh,06Fh
-	db	080h,0A1h,0C2h,0E3h,004h,025h,046h,067h
-	db	0B9h,098h,0FBh,0DAh,03Dh,01Ch,07Fh,05Eh
-	db	0B1h,090h,0F3h,0D2h,035h,014h,077h,056h
-	db	0EAh,0CBh,0A8h,089h,06Eh,04Fh,02Ch,00Dh
-	db	0E2h,0C3h,0A0h,081h,066h,047h,024h,005h
-	db	0DBh,0FAh,099h,0B8h,05Fh,07Eh,01Dh,03Ch
-	db	0D3h,0F2h,091h,0B0h,057h,076h,015h,034h
-	db	04Ch,06Dh,00Eh,02Fh,0C8h,0E9h,08Ah,0ABh
-	db	044h,065h,006h,027h,0C0h,0E1h,082h,0A3h
-	db	07Dh,05Ch,03Fh,01Eh,0F9h,0D8h,0BBh,09Ah
-	db	075h,054h,037h,016h,0F1h,0D0h,0B3h,092h
-	db	02Eh,00Fh,06Ch,04Dh,0AAh,08Bh,0E8h,0C9h
-	db	026h,007h,064h,045h,0A2h,083h,0E0h,0C1h
-	db	01Fh,03Eh,05Dh,07Ch,09Bh,0BAh,0D9h,0F8h
-	db	017h,036h,055h,074h,093h,0B2h,0D1h,0F0h
-
-ENDIF  
+        ;low bytes
+        db	000h,021h,042h,063h,084h,0A5h,0C6h,0E7h
+        db	008h,029h,04Ah,06Bh,08Ch,0ADh,0CEh,0EFh
+        db	031h,010h,073h,052h,0B5h,094h,0F7h,0D6h
+        db	039h,018h,07Bh,05Ah,0BDh,09Ch,0FFh,0DEh
+        db	062h,043h,020h,001h,0E6h,0C7h,0A4h,085h
+        db	06Ah,04Bh,028h,009h,0EEh,0CFh,0ACh,08Dh
+        db	053h,072h,011h,030h,0D7h,0F6h,095h,0B4h
+        db	05Bh,07Ah,019h,038h,0DFh,0FEh,09Dh,0BCh
+        db	0C4h,0E5h,086h,0A7h,040h,061h,002h,023h
+        db	0CCh,0EDh,08Eh,0AFh,048h,069h,00Ah,02Bh
+        db	0F5h,0D4h,0B7h,096h,071h,050h,033h,012h
+        db	0FDh,0DCh,0BFh,09Eh,079h,058h,03Bh,01Ah
+        db	0A6h,087h,0E4h,0C5h,022h,003h,060h,041h
+        db	0AEh,08Fh,0ECh,0CDh,02Ah,00Bh,068h,049h
+        db	097h,0B6h,0D5h,0F4h,013h,032h,051h,070h
+        db	09Fh,0BEh,0DDh,0FCh,01Bh,03Ah,059h,078h
+        db	088h,0A9h,0CAh,0EBh,00Ch,02Dh,04Eh,06Fh
+        db	080h,0A1h,0C2h,0E3h,004h,025h,046h,067h
+        db	0B9h,098h,0FBh,0DAh,03Dh,01Ch,07Fh,05Eh
+        db	0B1h,090h,0F3h,0D2h,035h,014h,077h,056h
+        db	0EAh,0CBh,0A8h,089h,06Eh,04Fh,02Ch,00Dh
+        db	0E2h,0C3h,0A0h,081h,066h,047h,024h,005h
+        db	0DBh,0FAh,099h,0B8h,05Fh,07Eh,01Dh,03Ch
+        db	0D3h,0F2h,091h,0B0h,057h,076h,015h,034h
+        db	04Ch,06Dh,00Eh,02Fh,0C8h,0E9h,08Ah,0ABh
+        db	044h,065h,006h,027h,0C0h,0E1h,082h,0A3h
+        db	07Dh,05Ch,03Fh,01Eh,0F9h,0D8h,0BBh,09Ah
+        db	075h,054h,037h,016h,0F1h,0D0h,0B3h,092h
+        db	02Eh,00Fh,06Ch,04Dh,0AAh,08Bh,0E8h,0C9h
+        db	026h,007h,064h,045h,0A2h,083h,0E0h,0C1h
+        db	01Fh,03Eh,05Dh,07Ch,09Bh,0BAh,0D9h,0F8h
+        db	017h,036h,055h,074h,093h,0B2h,0D1h,0F0h

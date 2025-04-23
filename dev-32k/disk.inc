@@ -11,25 +11,26 @@
 
 ; DOS1 compile options
 ; --------------------
-;
-; FAT16DOS1	Include FAT16 for the DOS 1 kernel
+; FAT16DOS1	Include FAT16 for the DOS 1 kernel (mandatory for JIO driver)
 
 
 ; DOS2 compile options
 ; --------------------
-;
-; OPTM
-; 0 = original code
-; 1 = optimized code
+; OPTM		0 = original code, 1 = optimized code
 ; Optimization goal is first smaller code size and then improved performance
 ; The fat16.com patch program won't work with optimized code.
 ;
 ; FAT16		Include FAT16 for the DOS 2 kernel
 ; NODOS1	Remove DOS 1 msxdos.sys entry points to free rom space
 ; FASTALLOC	Calculate max 4K free clusters for large drives in ALLOC function to avoid slow DIR command
+
+
+; IDE driver compile options
+; --------------------------
 ; BOOTCODE	Check for bootloader signature in the MBR and if present execute the boot code
 ; BOOTCHOICE	Show boot menu / drive choice
 ; BTWAIT	Boot menu wait time-out (default $5000 is appr. 3 sec for MSX/3.58Mhz)
+
 
 ; Apply to all targets
 	OPTM	EQU	1	; use optimized code
@@ -52,7 +53,6 @@ ENDIF
 IFDEF JIO
 	DEFINE	FAT16
 	DEFINE	FAT16DOS1
-	DEFINE	BOOTCODE
 	MOD1	EQU	'x'	; eXended
 	MOD2	EQU	'r'	; JIO Remote disk
 ENDIF
