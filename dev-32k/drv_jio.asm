@@ -13,7 +13,7 @@
         INCLUDE	"msx.inc"	; MSX constants and definitions
 
 ; ----------------------------------------
-; Included file 'flags.inc'
+; Included file 'drv_jio.inc'
 ; ----------------------------------------
 
 #define FLAG_RX_CRC                 (1 << 0)
@@ -30,10 +30,15 @@
 #define COMMAND_DRIVE_READ		      16
 #define COMMAND_DRIVE_WRITE		      17
 #define COMMAND_DRIVE_INFO		      18
+#define COMMAND_DRIVE_DISK_CHANGED	      19
+#define RESULT_DRIVE_DISK_CHANGED             20
+#define RESULT_DRIVE_DISK_UNCHANGED           21
 
-#define DRIVE_ACKNOWLEDGE_WRITE_OK            0x1111
-#define DRIVE_ACKNOWLEDGE_WRITE_FAILED        0x2222
-#define DRIVE_ACKNOWLEDGE_WRITE_PROTECTED     0x3333
+#define DRIVE_ANSWER_WRITE_OK                 0x1111
+#define DRIVE_ANSWER_WRITE_FAILED             0x2222
+#define DRIVE_ANSWER_WRITE_PROTECTED          0x3333
+#define DRIVE_ANSWER_DISK_CHANGED             0x4444
+#define DRIVE_ANSWER_DISK_UNCHANGED           0x5555
 
         SECTION	DRV_JIO
 
@@ -51,7 +56,7 @@
         PUBLIC	SECLEN
         PUBLIC	INIHRD
         PUBLIC	BOOTMBR
-	PUBLIC	BOOTMENU
+        PUBLIC	BOOTMENU
 
         EXTERN	GETWRK	; Get address of disk driver's work area
         EXTERN	GETSLT	; Get slot of this interface
@@ -82,20 +87,14 @@ uiTransmit:
 	BIT	1,(IX+8)
 	JR	Z,_0001
 _0000:
-	LD	E,2
-	CALL	vSetCPU
 	LD	L,(IX+10)
 	LD	H,(IX+11)
 	PUSH	HL
-	LD	E,(IX+2)
-	LD	D,(IX+3)
 	CALL	uiXModemCRC16
 	POP	AF
 	LD	(IX+10),L
 	LD	(IX+11),H
 _0001:
-	LD	E,0
-	CALL	vSetCPU
 	LD	C,(IX+4)
 	LD	B,(IX+5)
 	LD	E,(IX+2)
@@ -120,34 +119,27 @@ _0003:
 	JP	_LEAVE_DIRECT_L09
 ucReceive:
 	CALL	_ENT_PARM_DIRECT_L09
-	LD	A,2
-	XOR	C
-	OR	B
-	JR	Z,_0007
-_0006:
-	LD	E,0
-	CALL	vSetCPU
+_0058:
 _0007:
-_0009:
 	LD	C,(IX+4)
 	LD	B,(IX+5)
 	LD	E,(IX+2)
 	LD	D,(IX+3)
 	CALL	bJIOReceive
 	OR	A
-	JR	NZ,_0008
-_0010:
-	BIT	2,(IX+8)
-	JR	Z,_0007
-_0011:
-	LD	A,3
-	JR	_0013
-_0012:
+	JR	NZ,_0006
 _0008:
+	BIT	2,(IX+8)
+	JR	Z,_0058
+_0009:
+	LD	A,3
+	JR	_0011
+_0010:
+_0006:
 	XOR	A
-_0013:
+_0011:
 	JP	_LEAVE_DIRECT_L09
-ucReadOrWriteSectors:
+ucDoCommand:
 	CALL	_ENT_AUTO_DIRECT_L09
 	DEFW	65510
 	PUSH	IY
@@ -156,13 +148,11 @@ ucReadOrWriteSectors:
 	LD	B,(IX+13)
 	ADD	HL,BC
 	LD	D,(HL)
-	LD	(IX-4),D
+	LD	IYH,D
 	LD	HL,W_COMMAND
 	ADD	HL,BC
 	LD	B,(HL)
-	LD	IYH,B
-	CALL	eGetCPU
-	LD	(IX-6),A
+	LD	(IX-4),B
 	LD	(IX-18),74
 	LD	(IX-17),73
 	LD	(IX-16),79
@@ -193,23 +183,25 @@ ucReadOrWriteSectors:
 	ADD	HL,HL
 	LD	(IX-26),L
 	LD	(IX-25),H
-_0016:
-	LD	B,IYH
+_0014:
+	LD	B,(IX-4)
 	LD	(IX-14),B
-	LD	A,IYH
+	LD	A,B
 	CP	18
-	JR	NZ,_0042
-	LD	A,1
-	JR	_0043
-_0042:
+	JR	Z,_0016
+	CP	19
+	JR	Z,_0016
 	XOR	A
-_0043:
+	JR	_0017
+_0016:
+	LD	A,1
+_0017:
 	LD	C,A
 	PUSH	BC
 	LD	HL,0
 	PUSH	HL
-	LD	L,(IX-4)
-	PUSH	HL
+	LD	C,IYH
+	PUSH	BC
 	LD	BC,5
 	LD	L,16
 	ADD	HL,SP
@@ -218,15 +210,54 @@ _0043:
 	POP	AF
 	POP	AF
 	POP	AF
-	LD	A,IYH
+	LD	A,(IX-4)
+	CP	19
+	JR	NZ,_0019
+_0018:
+	LD	C,IYH
+	PUSH	BC
+	LD	BC,2
+	LD	HL,27
+	ADD	HL,SP
+	EX	DE,HL
+	CALL	ucReceive
+	POP	HL
+	LD	IYL,A
+	OR	A
+	JR	NZ,_0027
+_0020:
+	LD	HL,17476
+	LD	C,(IX-3)
+	LD	B,(IX-2)
+	AND	A
+	SBC	HL,BC
+	JR	NZ,_0023
+_0022:
+	LD	IYL,20
+	JR	_0027
+_0023:
+	LD	HL,21845
+	AND	A
+	SBC	HL,BC
+	JR	NZ,_0026
+_0025:
+	LD	IYL,21
+	JR	_0027
+_0026:
+	LD	IYL,5
+_0027:
+_0024:
+_0021:
+	JP	_0051
+_0019:
 	CP	17
-	JR	NZ,_0018
-_0017:
+	JR	NZ,_0030
+_0029:
 	LD	C,0
 	PUSH	BC
 	PUSH	HL
-	LD	L,(IX-4)
-	PUSH	HL
+	LD	C,IYH
+	PUSH	BC
 	LD	BC,7
 	LD	HL,21
 	ADD	HL,SP
@@ -238,8 +269,8 @@ _0017:
 	LD	C,1
 	PUSH	BC
 	PUSH	HL
-	LD	L,(IX-4)
-	PUSH	HL
+	LD	C,IYH
+	PUSH	BC
 	LD	C,(IX-26)
 	LD	B,(IX-25)
 	LD	E,(IX+10)
@@ -248,47 +279,56 @@ _0017:
 	POP	AF
 	POP	AF
 	POP	AF
-	LD	L,(IX-4)
-	PUSH	HL
+	LD	C,IYH
+	PUSH	BC
 	LD	BC,2
-	LD	HL,28
+	LD	HL,27
 	ADD	HL,SP
 	EX	DE,HL
 	CALL	ucReceive
 	POP	HL
 	LD	IYL,A
 	OR	A
-	JR	NZ,_0022
-_0019:
-	LD	HL,4369
-	LD	C,(IX-2)
-	LD	B,(IX-1)
+	JR	NZ,_0040
+_0031:
+	LD	HL,8738
+	LD	C,(IX-3)
+	LD	B,(IX-2)
 	AND	A
 	SBC	HL,BC
-	JR	Z,_0022
-_0021:
+	JR	NZ,_0034
+_0033:
 	LD	HL,13107
 	AND	A
 	SBC	HL,BC
-	JR	NZ,_0024
+	JR	NZ,_0036
 	LD	A,1
-	JR	_0025
-_0024:
+	JR	_0037
+_0036:
 	LD	A,11
-_0025:
+_0037:
 	LD	IYL,A
-_0022:
-_0020:
-	JR	_0036
-_0018:
+	JR	_0051
+_0034:
+	LD	HL,4369
+	AND	A
+	SBC	HL,BC
+	JR	Z,_0051
+_0039:
+	LD	IYL,5
+_0040:
+_0038:
+_0032:
+	JR	_0051
+_0030:
 	CP	16
-	JR	NZ,_0028
-_0027:
+	JR	NZ,_0043
+_0042:
 	LD	C,1
 	PUSH	BC
 	PUSH	HL
-	LD	L,(IX-4)
-	PUSH	HL
+	LD	C,IYH
+	PUSH	BC
 	LD	BC,7
 	LD	HL,21
 	ADD	HL,SP
@@ -297,9 +337,9 @@ _0027:
 	POP	AF
 	POP	AF
 	POP	AF
-_0028:
-	LD	L,(IX-4)
-	PUSH	HL
+_0043:
+	LD	C,IYH
+	PUSH	BC
 	LD	C,(IX-26)
 	LD	B,(IX-25)
 	LD	E,(IX+10)
@@ -308,14 +348,15 @@ _0028:
 	POP	HL
 	LD	IYL,A
 	OR	A
-	JR	NZ,_0036
-	BIT	0,(IX-4)
-	JR	Z,_0036
-_0032:
-_0031:
-_0029:
-	LD	L,(IX-4)
-	PUSH	HL
+	JR	NZ,_0051
+	LD	B,IYH
+	BIT	0,B
+	JR	Z,_0051
+_0047:
+_0046:
+_0044:
+	LD	C,IYH
+	PUSH	BC
 	LD	BC,2
 	LD	HL,6
 	ADD	HL,SP
@@ -324,11 +365,10 @@ _0029:
 	POP	HL
 	LD	IYL,A
 	OR	A
-	JR	NZ,_0036
-_0033:
-	LD	E,2
-	CALL	vSetCPU
-	LD	HL,0
+	JR	NZ,_0051
+_0048:
+	LD	L,A
+	LD	H,A
 	PUSH	HL
 	LD	C,(IX-26)
 	LD	B,(IX-25)
@@ -340,25 +380,33 @@ _0033:
 	LD	B,(IX-23)
 	AND	A
 	SBC	HL,BC
-	JR	Z,_0036
-_0035:
+	JR	Z,_0051
+_0050:
 	LD	IYL,5
-_0036:
-_0034:
-_0030:
-_0026:
+_0051:
+_0049:
+_0045:
+_0041:
+_0028:
 	LD	B,IYL
 	INC	B
 	DEC	B
-	JR	Z,_0038
-_0037:
+	JR	Z,_0053
+	LD	A,IYL
+	CP	20
+	JR	Z,_0053
+	CP	21
+	JR	Z,_0053
+_0055:
+_0054:
+_0052:
 	LD	(IX-14),B
 	LD	C,1
 	PUSH	BC
 	LD	HL,0
 	PUSH	HL
-	LD	L,(IX-4)
-	PUSH	HL
+	LD	C,IYH
+	PUSH	BC
 	LD	BC,5
 	LD	L,16
 	ADD	HL,SP
@@ -367,16 +415,20 @@ _0037:
 	POP	AF
 	POP	AF
 	POP	AF
-_0038:
+_0053:
 	LD	B,IYL
 	INC	B
 	DEC	B
-	JR	Z,_0014
-	BIT	3,(IX-4)
-	JP	NZ,_0016
-_0014:
-	LD	E,(IX-6)
-	CALL	vSetCPU
+	JR	Z,_0012
+	LD	A,IYL
+	CP	20
+	JR	Z,_0012
+	CP	21
+	JR	Z,_0012
+	LD	B,IYH
+	BIT	3,B
+	JP	NZ,_0014
+_0012:
 	LD	A,IYL
 	POP	IY
 	JP	_LEAVE_DIRECT_L09
@@ -488,7 +540,8 @@ DRIVES_Retry:
         ld      (ix+W_COMMAND),COMMAND_DRIVE_INFO
         ld      b,1
         ld	hl,PART_BUF
-        call	ReadOrWriteSectors
+        di
+        call	DoCommand
         jr	c,DRIVES_Retry
 
         ld	hl,PART_BUF
@@ -508,12 +561,12 @@ DRIVES_Retry:
 DRIVES_Exit:
         ld	a,(ix+W_DRIVES)
 IFDEF IDEDOS1
-	or	a
-	jr	nz,r206
-	inc	a			; Return value of 0 drives is not allowed in DOS 1
+        or	a
+        jr	nz,r206
+        inc	a			; Return value of 0 drives is not allowed in DOS 1
 r206:
 ENDIF
-	ld	l,a
+        ld	l,a
         pop     de
         pop     bc
         pop     af
@@ -584,7 +637,10 @@ TestInterface:	ld	a,(hl)
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 
-DSKIO:	push	hl
+DSKIO:
+        di
+
+        push	hl
         push	bc
         push	af
         call	GETWRK
@@ -598,7 +654,7 @@ DSKIO:	push	hl
 WriteFlag:
 
 IFDEF IDEDOS1
-	ld	(ix+W_DRIVE),a		; save drive number
+        ld	(ix+W_DRIVE),a		; save drive number
 rw_loop:
         bit	7,h
         jr	nz,rw_multi
@@ -610,10 +666,10 @@ rw_loop:
         jr	nz,sec_write
         push	hl
         ld	hl,(SSECBUF)
-	ld	a,(ix+W_DRIVE)		; load drive number
-        call	ReadOrWriteSectors
+        ld	a,(ix+W_DRIVE)		; load drive number
+        call	DoCommand
         pop	de
-        jr	nz,sec_err
+        jr	c,sec_err
         ld	hl,(SSECBUF)
         ld	bc,$0200
         call	XFER
@@ -629,17 +685,17 @@ sec_write:
         pop	bc
         pop	de
         ld	hl,(SSECBUF)
-	ld	a,(ix+W_DRIVE)		; load drive number
-        call	ReadOrWriteSectors
+        ld	a,(ix+W_DRIVE)		; load drive number
+        call	DoCommand
         pop	hl
-        jr	nz,sec_err
+        jr	c,sec_err
         inc	h
 sec_next:
         xor	a
 sec_err:
         pop	de
         pop	bc
-        jr	nz,r405
+        ret     c
         inc	e
         jr	nz,sec_loop
         inc	d
@@ -650,13 +706,14 @@ sec_loop:
         xor	a
         ret
 
-r405:	ld	a,$04	; Error 4 = Data (CRC) error (abort,retry,ignore message)
-        scf
-        ret
-
 rw_multi:
 ENDIF
-        jp	ReadOrWriteSectors
+        push    bc
+        call	DoCommand
+        pop     bc
+        ret     c
+        ld      b,0
+        ret
 
 ;********************************************************************************************************************************
 ; DSKCHG - Disk change
@@ -676,21 +733,57 @@ ENDIF
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 DSKCHG:
-IFDEF IDEDOS1
-        push	af
+IFDEF IDEDOS1 
+	; In IDEDOS1 whenever the current drive is changed this routine returns that the disk has changed in order
+	; to flush the FAT cache, this is a deviation from the original MSX-DOS 1.03 without FAT swapper.
+	; In case of multiple drives (i.e. fixed disk) it is assumed that the DPB for each drive is never changed.
+	; The initial value for ix+W_CURDRV is 0xFF (set in INIENV) to make sure that the FAT cache is flushed at boot.
+        di
+        ld	b,a			; save drive
+	push	bc
+	push	hl
         call	GETWRK
-        pop	af
-        cp	(ix+W_CURDRV)	; current drive
+	pop	hl
+	pop	bc
+	ld	a,b			; restore drive
+        cp	(ix+W_CURDRV)		; current drive
         ld	(ix+W_CURDRV),a
         jr	nz,DiskChanged
-        ld	b,$01	; unchanged
+
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_DISK_CHANGED
+	push	bc
+	push	hl
+        call	DoCommand
+	pop	hl
+	pop	bc
+        cp      RESULT_DRIVE_DISK_UNCHANGED-1
+        jr	z,DiskNotChanged
+        cp      RESULT_DRIVE_DISK_CHANGED-1
+	jr	nz,DiskChangeError
+
+; Update DPB if disk for current drive has changed
+UpdateDPB:
+	ld	a,b			; restore drive
+	call	GETDPB			; returns updated DPB pointed to by HL
+	jr	c,DiskChangeError	; if cx then error reading boot sector
+
+DiskChanged:
+        ld	b,0xFF			; disk (drive) changed
         xor	a
         ret
 
-DiskChanged:	ld	b,$FF	; changed
-        xor	a
+DiskNotChanged:
+        ld      b,1
+	xor	a
+	ret
+
+DiskChangeError:
+        ld      b,0
+        scf
         ret
+
 ELSE
+	; DOS 2 uses internal routines to detect disk change by comparing serial numbers and media byte.
         ; Always return unchanged for DOS2 (disks are not hot-pluggable)
         ld	b,$01
         xor	a
@@ -698,18 +791,20 @@ ELSE
 ENDIF
 
 
+;********************************************************************************************************************************
+
 ; CDE : Sector
 ; B   : Length
 ; HL  : Address
 
-ReadOrWriteSectors:
+DoCommand:
         push    ix              ; _pucFlagsAndCommand
         push    hl              ; _pvAddress
         push    bc              ; _uiLength
 
         ld      b,a             ; _ulSector in BCDE
 
-        call    ucReadOrWriteSectors
+        call    ucDoCommand
         pop hl
         pop hl
         pop hl
@@ -721,35 +816,29 @@ ReadOrWriteSectors:
         ret
 
 ;********************************************************************************************************************************
-;********************************************************************************************************************************
-
-eGetCPU:
-        ld	a,(GETCPU)
-        cp	$C3
-        ret     nz
-        jp      GETCPU
-
-;********************************************************************************************************************************
-;********************************************************************************************************************************
-
-vSetCPU:
-        ld	a,(CHGCPU)
-        cp	$C3
-        ret     nz
-        ld      a,e
-        jp      CHGCPU
-
-;********************************************************************************************************************************
 ; IN:  HL = DATA
 ;      BC = LENGTH
 ;********************************************************************************************************************************
 
 vJIOTransmit:
+        exx
+        push    bc
+        push    de
+        exx
+
+        call vJIOTransmit2
+
+        exx
+        pop     de
+        pop     bc
+        exx
+        ret
+
+vJIOTransmit2:
         ex      de,hl
         inc	bc
         exx
         ld	a,15
-        di
         out	($a0),a
         in	a,($a2)
         or	4
@@ -860,7 +949,6 @@ bJIOReceive:
         ld	ix,0
         add	ix,sp
         ld	a,15
-        di
         out	($a0),a
         in	a,($a2)
         or	64
@@ -1030,7 +1118,6 @@ RX_PE:	in	f,(c)	; 14
 
 ; compute CRC with lookup table
 uiXModemCRC16:
-        ei
         ld	l,c
         ld	h,b
         ld	b,l
@@ -1044,6 +1131,10 @@ uiXModemCRC16:
         ld      l,(ix+4)
         ld      h,(ix+5)
         pop     ix
+
+        ex      af,af'
+        push    af
+        ex      af,af'
 
 crc16:
         ld	a,l
@@ -1061,6 +1152,10 @@ crc16:
         djnz	crc16
         dec	c
         jp	nz,crc16
+
+        ex      af,af'
+        pop     af
+        ex      af,af'
         ret
 
 ; ------------------------------------------
