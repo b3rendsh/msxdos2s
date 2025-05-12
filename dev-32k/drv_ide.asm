@@ -184,6 +184,19 @@ DSKIO:		ei
 		push	de
 		push	bc
 		push	af
+	IFDEF ROM16K
+		cp	$80			; system partition?
+		jr	nz,no_system
+		call	GETWRK			; base address of workarea in hl and ix
+		pop	af
+		jr	c,r404			; system partition is readonly
+		ld	(ix+W_RWFLAG),$00
+		pop	bc
+		pop	de
+		pop	hl
+		jp	rw_loop
+no_system:
+	ENDIF
 		cp	$08			; Max 8 drives (partitions) supported
 		jr	nc,r404
 		call	GETWRK			; base address of workarea in hl and ix

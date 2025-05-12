@@ -23,6 +23,7 @@
 ; FAT16		Include FAT16 for the DOS 2 kernel
 ; NODOS1	Remove DOS 1 msxdos.sys entry points to free rom space
 ; FASTALLOC	Calculate max 4K free clusters for large drives in ALLOC function to avoid slow DIR command
+; ROM16K	Split 32K DOS ROM in 16K ROM and load 16K kernel code from designated area on disk
 
 
 ; IDE driver compile options

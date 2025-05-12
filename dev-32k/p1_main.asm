@@ -5292,6 +5292,15 @@ RAMD_DSKFMT:	LD      A,0CH
 ; *** Bank S1 code starts here ***
 ; ------------------------------------------------------------------------------
 
+	IFDEF ROM16K
+KernelPanic:	LD	DE,PanicMsg
+		CALL    C4D7D			; string to screen
+		DI
+		HALT
+	
+PanicMsg:	DB	12,"No kernel on disk",0
+	ENDIF
+
 ; C4103/J410F - Install disksystem routines
 J410F:		DI
 		PUSH	AF			; save slot of page 2 for later
@@ -5299,10 +5308,12 @@ J410F:		DI
 		CALL    NC,PH_INIT		; initialize paging helper routines
 		POP	HL
 		RET     C			; c=error
+	IFNDEF ROM16K
 		PUSH	HL
 		CALL	C4E05			; get slot of page 1 (this ROM)
 		LD	H,080H			; enable page 2
 		CALL	ENASLT
+	ENDIF
 		LD      A,1
 		LD      (CUR_DRV),A              ; default drive = A:
 		LD      A,(IDBYT0)
@@ -5316,6 +5327,7 @@ J410F:		DI
 		LD      BC,4
 		LDIR
 		LD      A,(CODE_S)              ; BDOS code segment
+	IFNDEF ROM16K
 		CALL    PUT_P0
 		CALL    P0_RAM                  ; enable DOS memory on page 0
 		LD	HL,K1_BEGIN		; Source
@@ -5325,52 +5337,33 @@ J410F:		DI
 		POP	AF
 		LD	H,080H			; restore page 2 slot (ie. RAM)
 		CALL	ENASLT			; uses the ENASLT routine of the just loaded disk rom
+	ELSE
+		CALL	PUT_P2
+		LD	A,$80			; select system partition
+		LD	B,32			; transfer 32 sectors (16K)
+		LD	C,0
+		LD	D,0
+		LD	E,1			; kernel code is at first sector after MBR
+		OR	A			; reset c-flag (read data)
+		LD	HL,$8000		; transfer address
+		CALL	DSKIO+1			; retrieve code segment from disk (skip ei at beginning of routine)
+		JR	C,KernelPanic
+		LD	A,($BFFF)		; check kernel signature / version
+		CP	$02
+		JR	NZ,KernelPanic
+		LD	A,($BFFE)
+		CP	$20
+		JR	NZ,KernelPanic
+		LD	A,(CODE_S)
+		CALL	PUT_P0
+		CALL	P0_RAM
+	ENDIF
 
 ; Mod: initialize RAM page 2 after rom copy
 		LD      A,(DATA_S)              ; BDOS data segment
 		CALL    PUT_P2
 		CALL    C418C			; initialize characterset
-
 I416E:		CALL    0                       ; initialize BDOS code
-
-IFDEF FAT16
-; DPB+1E init patch:
-; change from '00,FF,00' to 'FF,FF,00'
-		PUSH	AF
-		LD      A,(DATA_S)              ; BDOS data segment
-		CALL    PUT_P2
-		LD	BC,0801h		; check 8 drives (B), counting from 1 (C)
-DIRINT:	        PUSH	BC
-		LD	B,0
-		LD	HL,I_BA23		; page 2
-		ADD	HL,BC
-		ADD	HL,BC
-		LD	E,(HL)
-		INC	HL
-		LD	A,(HL)
-		LD	D,A
-		LD	HL,001Eh
-		ADD	HL,DE
-		XOR	A
-		CP	(HL)			;(DPB+1Eh),00
-		JR	NZ,DIRIN_
-		INC	HL
-		DEC	A
-		CP	(HL)			;(DPB+1Fh),FFh
-		JR	NZ,DIRIN_
-		INC	HL
-		INC	A
-		CP	(HL)			;(DPB+20h),00h
-		JR	NZ,DIRIN_
-		DEC	HL
-		DEC	HL
-		DEC	A
-		LD	(HL),A			;(DPB+1Eh),FFh
-DIRIN_:	        POP	BC
-		INC	C
-		DJNZ	DIRINT
-		POP	AF
-ENDIF
 		EX      AF,AF'
 		DI
 		LD      A,(EXPTBL+0)

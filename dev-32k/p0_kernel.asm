@@ -255,6 +255,9 @@ J01AE:		ADD	HL,HL
 		EX	AF,AF'
 		LD	(IX+6),A
 		INC	A
+	IFDEF FAT16
+		LD	(IX+30),0FFH
+	ENDIF
 		LD	(IX+31),0FFH
 		DJNZ	J017F
 		XOR	A
@@ -4682,7 +4685,7 @@ C1B27:		PUSH	DE
 	IF OPTM = 0
 		LD	HL,I1B5E
 	ELSE
-		LD	HL,I254C
+		LD	HL,I254D
 	ENDIF
 		LD	A,10H
 		CALL	C1B69
@@ -4692,7 +4695,7 @@ C1B27:		PUSH	DE
 	IF OPTM = 0
 		LD	HL,I1B5D
 	ELSE
-		LD	HL,I254D
+		LD	HL,I254C
 	ENDIF
 		LD	BC,(D_BBE8)
 		LD	A,10H
@@ -11092,6 +11095,11 @@ RW_16:		DB	0		; bit16-23 for DISKIO
 
 ; ------------------------------------------------------------------------------
 ENDIF ; FAT16
+
+	IFDEF ROM16K
+		DEFS	$3FFE-$,0
+		DW	$0220		; DOS kernel version / signature
+	ENDIF
 
 	DEPHASE
 
