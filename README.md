@@ -47,12 +47,15 @@ The IDE driver is split into a common DOS layer and a low level disk interface l
 #### TASTE.COM
 IDE performance test and diagnostics utility. It works with the BEER and SODA interfaces.
 
-## Hardware 
+## Disk interfaces 
 [BEER-232 IDE interface](hardware/beer-232/)  
 The BEER-232 cartridge is derived from the BEER-202 and supports 2x 32K disk ROM  instead of a  single 16K ROM.
 
 [SODA IDE interface](https://github.com/Danjovic/Soda-IDE)  
 The SODA IDE cartridge design is based on a RCBus Compact Flash module. Danjovic adapted this design for MSX and made the PCB layout.  
+
+MSX JIO (under construction)  
+Remote serial disk solution from Louthrax. It consists of a disk image server on a PC or android phone, a MSX client and a serial connection over the MSX joystick (gpio) port 2 using a ftdi cable or bluetooth adapter. This repository contains MSX DOS 1 and MSX DOS 2 client interface sources.
 
 ## Older versions
 
