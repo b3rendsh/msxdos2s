@@ -28,8 +28,18 @@ Floppy image
 ------------
 You can convert a 720k floppy image to a BEER disk image by inserting the
 mbr720k image file before the floppy image file e.g. from a command prompt:
-copy /b mbr720k.img + floppy.dsk harddisk.dsk".
+copy /b mbr720k.img + floppy.dsk harddisk.dsk
 Do this before using the dsk_dos2.py script above.
+
+
+openMSX v20 
+-----------
+1. Copy beer_16k.rom to openMSX/share/extensions/hddrom.rom
+2. Start openMSX with your favorite MSX machine (at least 128KB ram mapper)
+3. Load extension "SOLiD BEER IDE" in slot A or B
+4. Menu: machine / power off
+5. Set the HD image to test720k_dos2_16k.dsk (or other converted disk image)
+6. Menu: machine / power on
 
 
 Notes
