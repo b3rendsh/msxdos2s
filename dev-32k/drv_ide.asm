@@ -21,6 +21,7 @@
 		PUBLIC	DSKIO		; Disk I/O routine
 		PUBLIC	DSKCHG		; Disk change routine
 		PUBLIC	READSEC		; Read sector (MBR / bootsector) routine
+		PUBLIC	DSKABSRW	; Read/write absolute sectors on disk
 		PUBLIC	DRVMEM		; Memory for hardware interface variables
 
 		EXTERN	GETWRK		; Get address of disk driver's work area
@@ -184,19 +185,6 @@ DSKIO:		ei
 		push	de
 		push	bc
 		push	af
-	IFDEF ROM16K
-		cp	$80			; system partition?
-		jr	nz,no_system
-		call	GETWRK			; base address of workarea in hl and ix
-		pop	af
-		jr	c,r404			; system partition is readonly
-		ld	(ix+W_RWFLAG),$00
-		pop	bc
-		pop	de
-		pop	hl
-		jp	rw_loop
-no_system:
-	ENDIF
 		cp	$08			; Max 8 drives (partitions) supported
 		jr	nc,r404
 		call	GETWRK			; base address of workarea in hl and ix
@@ -359,6 +347,37 @@ ENDIF
 READSEC:	call	ideSetSector
 		ret	c
 		jp	dosReadSector
+
+; ------------------------------------------
+; DSKABSRW - IDE disk absolute sector read/write
+; Input:
+;   Carry flag = clear ==> read, set ==> write
+;   B  = number of sectors to transfer
+;   C  = if bit7 is set then media descriptor byte
+;        else first logical sector number bit 16..22
+;   DE = first logical sector number (bit 0..15)
+;   HL = transfer address
+; Output:
+;   Carry flag = clear ==> successful, set ==> error
+;   If error then 
+;     A = error code
+;     B = remaining sectors
+; May corrupt: AF,BC,DE,HL,IX,IY
+; Note: currently only used to load the kernel code with ROM16K option
+; ------------------------------------------
+DSKABSRW:	push	hl
+		push	de
+		push	bc
+		push	af
+		call	GETWRK			; base address of workarea in hl and ix
+		pop	af
+		ld	(ix+W_RWFLAG),$00
+		jr	nc,rwflag_set
+		ld	(ix+W_RWFLAG),$01
+rwflag_set:	pop	bc
+		pop	de
+		pop	hl
+		jp	rw_loop
 
 ; ------------------------------------------
 ; DOS error code handler

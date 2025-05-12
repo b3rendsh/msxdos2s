@@ -59,6 +59,9 @@
 		; Additional symbol defined by the ide driver module
 		EXTERN	BOOTMBR
 		EXTERN	BOOTMENU
+	IFDEF ROM16K
+		EXTERN	DSKABSRW
+	ENDIF
 
 		; Routine used in the paging helper module
 		PUBLIC	ALLOCMEM
@@ -5339,14 +5342,13 @@ J410F:		DI
 		CALL	ENASLT			; uses the ENASLT routine of the just loaded disk rom
 	ELSE
 		CALL	PUT_P2
-		LD	A,$80			; select system partition
 		LD	B,32			; transfer 32 sectors (16K)
 		LD	C,0
 		LD	D,0
 		LD	E,1			; kernel code is at first sector after MBR
 		OR	A			; reset c-flag (read data)
 		LD	HL,$8000		; transfer address
-		CALL	DSKIO+1			; retrieve code segment from disk (skip ei at beginning of routine)
+		CALL	DSKABSRW		; retrieve code segment from disk
 		JR	C,KernelPanic
 		LD	A,($BFFF)		; check kernel signature / version
 		CP	$02
