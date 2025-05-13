@@ -5,7 +5,7 @@
 - Disk hardware interface designs
 
 ## Introduction
-This repository contains a re-composition of the MSX DOS 2.2 disk ROM that can be used as a 32K ROM without a ROM mapper and includes enhancements for large disks.
+This repository contains a re-composition of the MSX DOS 2.2 disk ROM that can be used as a 32K ROM without a ROM mapper (or 16K ROM for the BEER interface) and includes enhancements for large disks. 
 
 There is also a version of MSX DOS 1.03 which contains enhancements that are derived work from the 16K BEER IDE disk ROM that SOLiD created.
 
@@ -31,7 +31,8 @@ Following DOS and driver enhancements are included:
 #### MSX DOS 2 changes
 1. Added FAT16 support based on OKEI's patch with following changes: the free disk space calculation and algorithm to determine if a partition is FAT12 or FAT16 are replaced, the code size is optimized and the format and ramdisk functions are still available.
 2. Kanji support and ROM check ("call dos2memchk" in BASIC) are removed to reduce the size of the ROM.
-3. The ROM mapper code is removed and all the code is consolidated in a contiguous 32K ROM space. 
+3. The ROM mapper code is removed and all the code is consolidated in a contiguous 32K ROM space.
+4. On FAT16 partitions the free disk space calculation can be cut off to improve speed on slower interfaces. 
 
 #### MSX DOS 1 changes
 1. Added FAT16 support from SOLiD, some bugs and limitations have been fixed. Maximum root directory entries (files) is still 255.
@@ -43,18 +44,23 @@ The IDE driver is split into a common DOS layer and a low level disk interface l
 2. Detection of hardware and I/O ports for the SODA interface.
 3. Includes support for extended partitions and up to 8 drives.
 4. Currently one IDE disk is supported. No master/slave or ATAPI (CDROM) drives. The SODA interface works with CF cards only.
+5. Optional execution of boot code in the MBR, in addition or as a replacement for the boot menu.
 
 #### TASTE.COM
 IDE performance test and diagnostics utility. It works with the BEER and SODA interfaces.
 
 ## Disk interfaces 
-[BEER-232 IDE interface](hardware/beer-232/)  
+**BEER-202 IDE interface**  
+This is the original BEER interface, there are several designs with small variations that you can build yourself.  
+The [16K MSX-DOS 1 disk ROM](rom/) and [16K MSX-DOS 2 disk ROM](dev-16k/) can be used with this interface.  
+  
+[**BEER-232 IDE interface**](hardware/beer-232/)  
 The BEER-232 cartridge is derived from the BEER-202 and supports 2x 32K disk ROM  instead of a  single 16K ROM.
-
-[SODA IDE interface](https://github.com/Danjovic/Soda-IDE)  
+  
+[**SODA IDE interface**](https://github.com/Danjovic/Soda-IDE)  
 The SODA IDE cartridge design is based on a RCBus Compact Flash module. Danjovic adapted this design for MSX and made the PCB layout.  
-
-MSX JIO (under construction)  
+  
+**MSX JIO (under construction)**  
 Remote serial disk solution from Louthrax. It consists of a disk image server on a PC or android phone, a MSX client and a serial connection over the MSX joystick (gpio) port 2 using a ftdi cable or bluetooth adapter. This repository contains MSX DOS 1 and MSX DOS 2 client interface sources.
 
 ## Older versions
