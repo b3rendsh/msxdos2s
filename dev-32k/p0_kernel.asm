@@ -18,6 +18,7 @@
 ; 05. Use Microsoft standards to determine if partition is FAT16 or FAT12 (DPBSET)
 ; 06. Changed the free disk calculation routine for FAT16 partitions
 ; 07. Removed unused code (OPTM)
+; 08. Added DOSV231 option
 
 
 		INCLUDE "disk.inc"		; Assembler directives
@@ -315,7 +316,7 @@ J01FF:		INC	BC
 		INC	BC
 		JR	J0217
 
-J0203:		LD	A,0DEH
+J0203:		LD	A,_NORAM
 		INC	BC
 		INC	BC
 		LD	HL,(D_B064)
@@ -409,7 +410,7 @@ K_BDOS:		EI
 		CALL	H_BDOS
 		CALL	C0278
 		LD	(DSBBFD),A
-J0277:		RET
+		RET
 
 ; Subroutine BDOS handler (basic)
 C0278:		PUSH	HL
@@ -439,7 +440,7 @@ J0299:		POP	BC
 ; ---------------------------------------------------------
 ; Subroutine to handle invalid BDOS function calls
 ; ---------------------------------------------------------
-K_INVALID:	LD	A,0DCH
+K_INVALID:	LD	A,_IBDOS
 J029E:		LD	HL,0
 		RET
 
@@ -631,7 +632,7 @@ F_AUXIN:	LD	B,3
 		LD	L,B
 		LD	H,A
 		RET	Z
-J0439:		LD	C,9BH
+J0439:		LD	C,_INERR
 		JR	J044F
 
 ; ---------------------------------------------------------
@@ -651,7 +652,7 @@ J0446:		CALL	C1D22
 		LD	L,A
 		LD	H,A
 		RET	Z
-		LD	C,9CH
+		LD	C,_OUTERR
 J044F:		LD	B,A
 		LD	A,C
 		CALL	C3723
@@ -1437,7 +1438,7 @@ C08C5:		CP	10H
 		CP	03H
 		LD	A,00H
 		RET	NZ
-J08DC:		LD	A,9EH
+J08DC:		LD	A,_CTRLC
 		LD	B,00H
 		CALL	C3723
 J08E3:		JR	J08E3
@@ -1538,7 +1539,7 @@ J0979:		INC	HL
 		LD	(D_BB78),HL
 		LD	B,A
 		CP	0AH
-		LD	A,0B9H
+		LD	A,_EOL
 		RET	Z
 		XOR	A
 		RET
@@ -1546,7 +1547,7 @@ J0979:		INC	HL
 J0985:		LD	B,A
 		LD	(HL),00H
 		LD	(D_BB78),HL
-		LD	A,0C7H
+		LD	A,_EOF
 		RET
 
 ; CON device output handler
@@ -1600,7 +1601,7 @@ J09CE:		CALL	KB_AUXIN
 		CP	1AH
 		JR	Z,J0A14
 		CP	0DH
-		LD	A,0B9H
+		LD	A,_EOL
 		RET	Z
 		XOR	A
 		RET
@@ -1621,7 +1622,7 @@ I09E2:		JP	J0A12
 J09F1:  	CALL	KB_LPTOUT
 		JR	NC,J0A1A
 		RES	0,(IY+10)
-		LD	A,9FH
+		LD	A,_STOP
 		RET
 
 ; LST/PRN device check if output ready handler
@@ -1638,7 +1639,7 @@ I0A03:		JP	J0A12
 		JP	J0A17
 
 J0A12:		LD	B,1AH
-J0A14:		LD	A,0C7H
+J0A14:		LD	A,_EOF
 		RET
 
 J0A17:		LD	DE,0
@@ -1854,7 +1855,7 @@ KB_CHECK_STOP:	PUSH	AF
 J0B65:		LD	(INTFLG),A
 		LD	IX,KILBUF
 		CALL	K_BIOS
-		LD	A,9FH
+		LD	A,_STOP
 		LD	B,00H
 		CALL	C3723
 J0B76:		JR	J0B76
@@ -1914,7 +1915,7 @@ F_DSKRST:	LD	B,0FFH
 ; ---------------------------------------------------------
 F_SELDSK:	INC	E
 		LD	A,E
-		LD	C,0DBH
+		LD	C,_IDRV
 		CALL	NZ,C3606
 		JR	Z,J0BBF
 		LD	A,(HL)
@@ -2333,7 +2334,7 @@ F_RAMD:		PUSH	BC
 		LD	HL,(D_BA33)
 		LD	A,H
 		OR	L
-		LD	C,0BCH
+		LD	C,_RAMDX
 		JP	NZ,J0E2F
 		CALL	C0E35
 		LD	DE,I_BE02
@@ -2355,7 +2356,7 @@ J0DB6:		EXX
 J0DCA:		LD	A,(D_BE00)
 		OR	A
 		LD	A,C
-		LD	C,0DEH
+		LD	C,_NORAM
 		JP	Z,J0E2F
 		LD	HL,(D_BBFB)
 		LD	(D_BA33),HL
@@ -2465,7 +2466,7 @@ F_ASSIGN:	LD	HL,I_BA1A
 		OR	A
 		JR	Z,J0EAC
 		CP	09H
-		LD	A,0DBH
+		LD	A,_IDRV
 		RET	NC
 		LD	C,B
 		LD	B,0
@@ -2476,7 +2477,7 @@ F_ASSIGN:	LD	HL,I_BA1A
 		DEC	A
 		JR	Z,J0EA8
 		CP	09H
-		LD	A,0DBH
+		LD	A,_IDRV
 		RET	NC
 		LD	C,D
 J0EA8:		LD	(HL),C
@@ -2512,7 +2513,11 @@ J0EC2:		LD	A,(DSK_CHK)
 ; Function $6F _DOSVER
 ; ---------------------------------------------------------
 F_DOSVER:	LD	B,02H
+	IFDEF DOSV231
+		LD	C,31H		; MSXDOS version 2.31
+	ELSE
 		LD	C,20H		; MSXDOS version 2.20
+	ENDIF
 		XOR	A
 		LD	H,A
 		LD	L,A
@@ -2705,10 +2710,10 @@ J0FA8:		CALL	C1003
 		BIT	0,C
 		JR	NZ,J0FBB
 		BIT	4,C
-		LD	A,0C0H
+		LD	A,_IENV
 		JR	NZ,J0FC5
 J0FBB:		DJNZ	J0FA8
-		LD	A,0BFH
+		LD	A,_ELONG
 		JR	J0FC5
 
 J0FC1:		DEC	A
@@ -2725,7 +2730,7 @@ C0FC8:		PUSH	HL
 J0FCA:		LD	A,B
 		DEC	B
 		OR	A
-		LD	A,0BFH
+		LD	A,_ELONG
 		JR	Z,J0FDB
 		LD	A,(DE)
 		CALL	C1012
@@ -2867,7 +2872,7 @@ J1083:		LD	A,E
 		RET
 
 J1091:		LD	C,0FFH
-		LD	A,0BEH
+		LD	A,_IDATE
 		RET
 
 I1096:		DEFB	31,28,31,30,31,30,31,31,30,31,30,31
@@ -2888,13 +2893,13 @@ F_GTIME:	CALL	C111B
 ; Function $2D _STIME
 ; ---------------------------------------------------------
 F_STIME:	LD	A,H
-		CP	18H
+		CP	24			; 24 hours
 		JR	NC,J10C5
 		LD	A,L
-		CP	3CH
+		CP	60			; 60 minutes
 		JR	NC,J10C5
 		LD	A,D
-		CP	3CH
+		CP	60			; 60 seconds
 		JR	NC,J10C5
 		LD	B,H
 		LD	C,L
@@ -2905,7 +2910,7 @@ F_STIME:	LD	A,H
 		RET
 
 J10C5:		LD	C,0FFH
-		LD	A,0BDH
+		LD	A,_ITIME
 		RET
 
 ; ---------------------------------------------------------
@@ -3312,7 +3317,7 @@ J12D7:		LD	D,A
 		JR	Z,J12E9
 		LD	D,A
 		BIT	7,(IY+32)
-		LD	A,0DBH
+		LD	A,_IDRV
 		RET	NZ
 J12E9:		LD	(IX+25),D
 		BIT	3,(IX+31)
@@ -3596,8 +3601,10 @@ C14F4:		PUSH	BC
 		LD	(IX+26),L
 		LD	(IX+27),H
 		PUSH	HL
+	IF OPTM = 0
 		LD	BC,0
 		ADD	HL,BC
+	ENDIF
 		LD	C,(HL)
 		INC	HL
 		LD	B,(HL)
@@ -3703,7 +3710,7 @@ C159F:		CALL	C16BC
 ; ---------------------------------------------------------
 ; Subroutine next directory
 ; ---------------------------------------------------------
-C15A6:		LD	A,0D9H
+C15A6:		LD	A,_IPATH
 		BIT	3,B
 		RET	Z
 		BIT	5,B
@@ -3725,7 +3732,7 @@ J15B2:		JR	Z,J15C9
 J15C4:		CALL	C1C8A
 		JR	NC,J15B2
 J15C9:		POP	DE
-		LD	A,0D6H
+		LD	A,_NODIR
 		RET
 
 J15CD:		POP	AF
@@ -3830,7 +3837,7 @@ J1640:		PUSH	HL
 		OR	A
 		CALL	NZ,C1698
 		POP	HL
-		LD	A,0C1H
+		LD	A,_IDEV
 		JR	C,J1666
 		LD	BC,0B09H
 		BIT	3,(IX+31)
@@ -3880,7 +3887,7 @@ J168C:		CP	20H
 J1692:		XOR	A
 		RET
 
-J1694:		LD	A,0DAH
+J1694:		LD	A,_IFNM
 		OR	A
 		RET
 
@@ -3968,7 +3975,7 @@ J16F9:		DEC	HL
 		JR	Z,J1723
 		OR	A
 		JR	NZ,J16F9
-		LD	A,0D9H
+		LD	A,_IPATH
 		JR	J172B
 
 J1706:		PUSH	HL
@@ -3982,7 +3989,7 @@ J1706:		PUSH	HL
 		POP	HL
 J1714:		LD	A,(HL)
 		CP	02H
-		LD	A,0D8H
+		LD	A,_PLONG
 		JR	Z,J172B
 		LD	A,(DE)
 		LD	(HL),A
@@ -4103,7 +4110,7 @@ C17AE:		RES	4,C
 		JR	NZ,J17D1
 		RES	2,C
 		SET	1,C
-		CALL	C17D6
+		CALL	C17D6X		; if v2.31 call extra routine
 		JR	C,J17D1
 		RES	1,C
 		BIT	0,C
@@ -4120,10 +4127,20 @@ J17D1:		OR	A
 ; ---------------------------------------------------------
 ; Subroutine check for double byte header character if enabled
 ; ---------------------------------------------------------
+C17D6X:
+	IFDEF DOSV231
+		; extra routine in DOS v2.31
+		PUSH	HL
+		LD	HL,I17DC
+		JR	J17DD
+I17DC:		DB	080H,0A0H
+		DB	0E0H,0FDH
+	ENDIF
+
 C17D6:		CALL	H_16CH
 		PUSH	HL
 		LD	HL,KANJTA
-		CP	(HL)
+J17DD:		CP	(HL)
 		INC	HL
 		JR	C,J17E4
 		CP	(HL)
@@ -4211,7 +4228,7 @@ F_CHDIR:	XOR	A
 		CALL	C12C3
 		RET	NZ
 		OR	C
-		LD	A,0D9H
+		LD	A,_IPATH
 		RET	NZ
 		LD	BC,30
 		ADD	HL,BC
@@ -4310,7 +4327,7 @@ J18C1:		LD	(DSBBAF),A
 		CALL	C12C3
 		RET	NZ
 		OR	C
-		LD	A,0D9H
+		LD	A,_IPATH
 		RET	NZ
 		JR	J191F
 
@@ -4321,7 +4338,7 @@ J18D5:		PUSH	HL
 		LD	C,(IX+25)
 		POP	IX
 		JP	NZ,J196D
-		LD	A,0C1H
+		LD	A,_IDEV
 		JP	C,J196D
 		PUSH	HL
 		LD	HL,11
@@ -4329,7 +4346,7 @@ J18D5:		PUSH	HL
 		LD	A,(HL)
 		POP	HL
 		BIT	4,A
-		LD	A,0CFH
+		LD	A,_IATTR
 		JR	Z,J196D
 		BIT	3,B
 		JR	NZ,J196D
@@ -4369,7 +4386,7 @@ J191F:		BIT	2,(IY+47)
 		LD	DE,I_B91B
 		CALL	C13FF
 		OR	A
-		LD	A,0DAH
+		LD	A,_IFNM
 		RET	NZ
 		PUSH	HL
 		LD	HL,I_B926
@@ -4468,10 +4485,10 @@ J19C2:		XOR	A
 		CALL	C12C3
 		RET	NZ
 		OR	C
-		LD	A,0D9H
+		LD	A,_IPATH
 		RET	NZ
 		BIT	5,B
-		LD	A,0DAH
+		LD	A,_IFNM
 		RET	NZ
 		LD	DE,I_B926
 		CALL	C1A49
@@ -4482,7 +4499,7 @@ J19DE:		PUSH	DE
 		CALL	C19F8
 		RET	NZ
 		BIT	3,(IX+31)
-		LD	A,0CFH
+		LD	A,_IATTR
 		RET	NZ
 		XOR	A
 J19ED:		OR	A
@@ -4587,7 +4604,7 @@ J1A7A:		PUSH	HL
 ; Subroutine get next directory entry
 ; Input:  DE = pointer to file name buffer
 C1A87:		BIT	7,(IX+30)
-		LD	A,0D7H
+		LD	A,_NOFIL
 		RET	NZ
 		SET	1,(IY+41)
 		LD	(D_BBAD),DE
@@ -4614,13 +4631,13 @@ J1ABC:		LD	B,A
 		BIT	3,(IY+47)
 		JR	NZ,J1AD3
 		BIT	2,B
-		LD	A,0CDH
+		LD	A,_SYSX
 		JR	NZ,J1B25
 		BIT	4,B
-		LD	A,0CCH
+		LD	A,_DIRX
 		JR	NZ,J1B25
 		BIT	4,(IX+31)
-J1AD3:		LD	A,0CBH
+J1AD3:		LD	A,_FILEX
 		JR	NZ,J1B25
 		CALL	C1C70
 		XOR	A
@@ -4857,7 +4874,7 @@ J1C0D:
 		LD	DE,(D_BBE6)
 		BIT	7,D
 	ENDIF
-		LD	A,0D5H
+		LD	A,_DRFUL
 		JR	NZ,J1C2E
 		LD	A,0FFH
 		LD	BC,1
@@ -5309,7 +5326,7 @@ F_IOCTL:	EX	AF,AF'
 		JR	Z,J1EE1
 		DEC	A
 		JR	Z,J1EFB
-J1E95:		LD	A,0B8H
+J1E95:		LD	A,_ISBFN
 		RET
 
 J1E98:		BIT	7,(IX+30)
@@ -5592,8 +5609,13 @@ J201C:		XOR	A
 ; ---------------------------------------------------------
 ; Function $60 _FORK
 ; ---------------------------------------------------------
-F_FORK:		LD	HL,64
+F_FORK:		
+	IF OPTM = 0
+		LD	HL,64
 		ADD	HL,HL
+	ELSE
+		LD	HL,128
+	ENDIF
 		CALL	K_ALLOC_P2
 		RET	NZ
 		LD	DE,(D_BBF0)
@@ -5645,7 +5667,7 @@ F_JOIN:		LD	A,B
 		JR	Z,J2071
 		LD	HL,D_BBFE
 		CP	(HL)
-		LD	A,0C5H
+		LD	A,_IPROC
 		RET	NC
 J2071:		CALL	C1290
 		LD	HL,(D_BBF0)
@@ -5801,10 +5823,10 @@ C2136:		LD	A,B
 		LD	A,D
 		OR	E
 		SCF
-		LD	A,0C2H
+		LD	A,_NOPEN
 		RET
 
-J2158:		LD	A,0C3H
+J2158:		LD	A,_IHAND
 		OR	A
 		RET
 
@@ -5816,7 +5838,7 @@ C215C:		LD	A,(IX-1)
 		XOR	A
 		RET
 
-J2167:		LD	A,0C4H
+J2167:		LD	A,_NHAND
 		OR	A
 		RET
 
@@ -6104,6 +6126,21 @@ STOR4A:		POP	HL
 		XOR	A
 		SBC	HL,DE
 		ADD	HL,DE
+	IFDEF DOSV231
+		RET	NZ
+		PUSH	HL
+		PUSH	BC
+		LD	HL,25
+		ADD	HL,DE
+		EX	DE,HL
+		PUSH	IX
+		POP	HL
+		LD	BC,26
+		ADD	HL,BC
+		CALL	C32F3		; compare volume-id
+		POP	BC
+		POP	HL
+	ENDIF
 		RET
 
 ; Subroutine mark current directory entry deleted and remove FAT chain
@@ -6120,7 +6157,7 @@ C2332:		LD	C,A
 		LD	B,(HL)
 		POP	HL
 		BIT	0,B
-		LD	A,0D1H
+		LD	A,_FILRO
 		RET	NZ
 		BIT	4,B
 		JR	Z,J236A
@@ -6131,7 +6168,7 @@ C2332:		LD	C,A
 		CALL	C1C53
 J235A:		JR	Z,J2367
 		CALL	C2535
-		LD	A,0D0H
+		LD	A,_DIRNE
 		RET	NZ
 		CALL	C1C8A
 		JR	NC,J235A
@@ -6180,7 +6217,7 @@ C2398:		XOR	A
 		CALL	C13FF
 		POP	DE
 		OR	A
-		LD	A,0DAH
+		LD	A,_IFNM
 		RET	NZ
 		PUSH	HL
 		LD	HL,I_B91B
@@ -6197,7 +6234,7 @@ C2398:		XOR	A
 		CALL	C1BE6
 		CALL	C1C53
 		CALL	C1BC8
-		LD	A,0D3H
+		LD	A,_DUPF
 		RET	C
 		CALL	C1BFA
 		CALL	C1C70
@@ -6272,16 +6309,16 @@ J2430:		LD	(HL),A
 		CALL	C12C3
 		RET	NZ
 		OR	C
-		LD	A,0D9H
+		LD	A,_IPATH
 		RET	NZ
 		BIT	1,(IY+47)
-		LD	A,0D2H
+		LD	A,_DIRE
 		RET	NZ
 		CALL	C1C53
 		LD	BC,I_B91B
 		LD	(D_BBAD),BC
 		CALL	C1BC8
-		LD	A,0D3H
+		LD	A,_DUPF
 		RET	C
 		CALL	C1BFA
 		RET	NZ
@@ -6362,7 +6399,7 @@ C24DF:		XOR	A
 		LD	B,0D8H
 J24F7:		XOR	C
 		AND	B
-		LD	A,0CFH
+		LD	A,_IATTR
 		JR	NZ,J2502
 		LD	(HL),C
 		CALL	C2C38
@@ -6420,7 +6457,7 @@ C2535:		PUSH	HL
 		CALL	C15D2
 J2547:		POP	BC
 		POP	HL
-		LD	A,0CEH
+		LD	A,_DOT
 		RET
 
 I254C:		DEFB	"."
@@ -6448,7 +6485,7 @@ F_WRABS:	XOR	A
 		ADD	A,H
 		JR	C,J2570
 		ADD	A,H
-J2570:		LD	A,0C9H
+J2570:		LD	A,_OV64K
 J2572:		RET	C
 		PUSH	HL
 J2574:		LD	IX,I_B9DA
@@ -7023,10 +7060,10 @@ C285F:		LD	C,(IX+30)
 		JP	(HL)
 
 ; Subroutine read/write file
-C2863:		LD	A,0BAH
+C2863:		LD	A,_HDEAD
 		BIT	3,(IX+49)
 		RET	NZ
-		LD	A,0C6H
+		LD	A,_ACCV
 		BIT	0,(IY+68)
 		JR	Z,J2879
 		BIT	1,(IX+49)
@@ -7035,14 +7072,14 @@ C2863:		LD	A,0BAH
 
 J2879:		BIT	0,(IX+49)
 		RET	NZ
-		LD	A,0D1H
+		LD	A,_FILRO
 		BIT	0,(IX+14)
 		RET	NZ
 J2885:		BIT	0,(IY+127)
 		JR	Z,J2892
 		LD	HL,(D_BBC2)
 		ADD	HL,BC
-		LD	A,0C9H
+		LD	A,_OV64K
 		RET	C
 J2892:		LD	C,(IX+25)
 		LD	B,1
@@ -7443,7 +7480,7 @@ J2B27:		DJNZ	J2B22
 		LD	E,A
 		LD	A,C
 		DEFB	021H
-J2B35:		LD	A,0C8H
+J2B35:		LD	A,_FILE
 		POP	BC
 		POP	HL
 		RET
@@ -7476,7 +7513,7 @@ J2B59:		LD	A,B
 		JR	Z,J2B59
 		DEFB	03EH
 J2B65:		POP	HL
-		LD	A,0C8H
+		LD	A,_FILE
 		OR	A
 		RET
 
@@ -7966,7 +8003,7 @@ C2D86A:		CALL	C2E37
 		JR	Z,J2D9B
 J2D8B:		XOR	A
 		LD	(D_BBEA),A
-		LD	A,0F2H
+		LD	A,_IFAT
 		LD	DE,0FFFFH
 		CALL	C3686
 		JR	Z,J2D8B
@@ -9379,7 +9416,7 @@ J34F9:		LD	(D_BBEA),A
 		OR	A
 		RET
 
-J351D:		LD	A,0DFH
+J351D:		LD	A,_INTER
 		OR	A
 		RET
 

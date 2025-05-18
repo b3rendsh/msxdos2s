@@ -12,6 +12,7 @@
 ; ------------------------------------------------------------------------------
 ; Modifications:
 ; 01. Moved init of paging helper routines to separate module
+; 02. Added TURBOR option
 
 
 		INCLUDE "disk.inc"	; Assembler directives
@@ -113,6 +114,23 @@ J42DE:		LD      A,(CODE_S)              ; BDOS code segment
 		LD      HL,R011F+1
 		ADD     HL,DE
 		LD      (HL),A			; Write slot# ram p3 in bits 1+2 and 5+6 to 'OR #' instruction
+	IFDEF TURBOR
+		; if turbo R then set/reset Z80 mode when calling disk driver routine
+		LD	A,(IDBYT2)
+		CP	3
+		JR	NZ,EndTurboPatch
+		LD	HL,TZ80_ON
+		ADD	HL,DE
+		LD	(HL),B			; Replace 'JR TZ80_END' instruction with 'NOP'
+		INC	HL
+		LD	(HL),B
+		LD	HL,TZ80_OFF
+		ADD	HL,DE
+		LD	(HL),B			; Replace 'JR C00A7' instruction with 'NOP'
+		INC	HL
+		LD	(HL),B
+EndTurboPatch:
+	ENDIF
 		LD      A,(RAMAD3)
 		BIT     7,A			; Expanded slot?
 		JR      Z,J4356			; z=no
@@ -402,6 +420,76 @@ PH_JPVEC:	EI
 ; ---------------------------------------------------------
 ; Subroutine interslot call with PROMPT routine (F1DF)
 ; ---------------------------------------------------------
+	IFDEF TURBOR
+PH_GODRV:	EX	AF,AF'
+T007B:		CALL	C00DD
+TZ80_ON:	JR	TZ80_END
+		PUSH	IX
+		LD	IX,GETCPU
+		CALL	P0_CALL
+		PUSH	AF
+		XOR	A
+		LD	IX,CHGCPU
+		CALL	P0_CALL
+		POP	AF
+		POP	IX
+		PUSH	AF
+TZ80_END:	EX	AF,AF'
+		CALL	CALSLT
+TZ80_OFF:	JR	C00A7
+		EX	AF,AF'
+		POP	AF
+		PUSH	IX
+		LD	IX,CHGCPU
+		CALL	P0_CALL
+		POP	IX
+		EX	AF,AF'
+C00A7:		EX	AF,AF'
+		LD	A,(SDOSOF)
+T00AB:		CALL	C00DF
+		EX	AF,AF'
+		RET
+
+J00B0:		POP	AF
+T00B1:		CALL	C00A7
+		PUSH	IY
+		PUSH	DE
+		CALL	GETSLT
+		PUSH	AF
+T00BB:		CALL	PH_GETP2
+		PUSH	AF
+T00BF:		CALL	PH_PUTUS
+		LD	IY,(MASTER-1)
+		LD	IX,(SPROMPT)
+		CALL	CALSLT
+T00CD:		CALL	PH_PUTBD
+		POP	AF
+T00D1:		CALL	PH_PUTP2
+		POP	AF
+		LD	H,40H
+		CALL	ENASLT
+		POP	DE
+		POP	IY
+
+C00DD:		LD	A,0C9H
+C00DF:		LD	(SDOSON),A
+		EXX
+		LD	HL,H_PROM
+T00E6:		LD	DE,T00F6
+		LD	B,3
+J00EB:		LD	C,(HL)
+		LD	A,(DE)
+		LD	(HL),A
+		LD	A,C
+		LD	(DE),A
+		INC	HL
+		INC	DE
+		DJNZ	J00EB
+		EXX
+		RET
+T00F6:		JP	J00B0
+
+	ELSE
 PH_GODRV:	EXX
 		EX      AF,AF'
 R007D:		CALL    C00BA
@@ -452,6 +540,7 @@ J00C7:		LD      C,(HL)
 		RET
 
 R00D1:		JP      J0093
+	ENDIF ; TURBOR
 
 ; ---------------------------------------------------------
 ; Subroutine call routine in BDOS code segment
@@ -544,6 +633,12 @@ PH_P0CALL:	EX      AF,AF'
 		PUSH    AF
 R0156:		CALL    C0235
 R0159: 		NOP				; May be patched with PUSH AF
+	IFDEF DOSV231
+T017F:		CALL	PH_GETP2
+		PUSH	AF
+T0183:		CALL	PH_GETP0
+		PUSH	AF
+	ENDIF
 		LD      A,(P0_TPA)
 R015D:		CALL    PH_PUTP0
 		LD      A,(P2_TPA)
@@ -553,10 +648,17 @@ R0163:		CALL    PH_PUTP2
 		CALL    CLPRM1
 		EX      AF,AF'
 R016C:		CALL    PH_P0RAM
+	IFDEF DOSV231
+		POP	AF
+R0172:		CALL	PH_PUTP0
+		POP	AF
+R0178:		CALL	PH_PUTP2
+	ELSE
 		LD      A,(CODE_S)
 R0172:		CALL    PH_PUTP0
 		LD      A,(DATA_S)
 R0178:		CALL    PH_PUTP2
+	ENDIF
 R017B: 		JR      J0181			; May be patched with NOP (2x)
 
 		POP     AF
@@ -1134,9 +1236,18 @@ I485F:		DEFW    PH_RDLDI	; F1D3 RD_LDI / JUMPB transfer to/from page 1
 ; ------------------------------------------------------------------------------
 ; Patchtable relocated code
 ; ------------------------------------------------------------------------------
-I489F:		DEFW    R001C+1,R007D+1,R008D+1,R0094+1,R009B+1,R009F+1,R00AD+1,R00B1+1
-		DEFW    R00C2+1,R00D1+1,R00D4+1,R00DC+1,R00F7+1,R00FD+1,R0123+1,R0129+1
-		DEFW    R012F+1,R0138+1,R013E+1,R0146+1,R014E+1,R0156+1,R015D+1,R0163+1
+I489F:		DEFW    R001C+1
+	IFDEF TURBOR
+		DEFW	T007B+1,T00AB+1,T00B1+1,T00BB+1,T00BF+1,T00CD+1,T00D1+1,T00E6+1,T00F6+1
+	ELSE
+		DEFW	R007D+1,R008D+1,R0094+1,R009B+1,R009F+1,R00AD+1,R00B1+1,R00C2+1,R00D1+1
+	ENDIF
+		DEFW    R00D4+1,R00DC+1,R00F7+1,R00FD+1,R0123+1,R0129+1
+		DEFW    R012F+1,R0138+1,R013E+1,R0146+1,R014E+1,R0156+1
+	IFDEF DOSV231
+		DEFW	T017F+1,T0183+1
+	ENDIF
+		DEFW	R015D+1,R0163+1
 		DEFW    R016C+1,R0172+1,R0178+1,R017E+1,R0185+1,R018C+1,R0195+1,R01A1+1
 		DEFW    R01AC+1,R01AF+1,R01B5+1,R01D5+1,R01DE+1,R01E6+1,R01EA+1,R01F2+1
 		DEFW    R01F6+1,R01FD+1,R0203+1,R0209+1,R0211+1,R0215+1,R0219+1,R0221+1

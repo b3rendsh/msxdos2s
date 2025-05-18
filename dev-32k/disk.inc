@@ -24,6 +24,8 @@
 ; NODOS1	Remove DOS 1 msxdos.sys entry points to free rom space
 ; FASTALLOC	Calculate max 4K free clusters for large drives in ALLOC function to avoid slow DIR command
 ; ROM16K	Split 32K DOS ROM in 16K ROM and load 16K kernel code from designated area on disk
+; DOSV231	Include DOS v2.31 changes
+; TURBOR	Include turbo R specific DOS v2.31 changes
 
 
 ; IDE driver compile options
@@ -36,7 +38,6 @@
 ; Apply to all targets
 	OPTM	EQU	1	; use optimized code
 	BTWAIT	EQU	$5000
-
 
 IF PPIDE || JIO || UART
 	DEFINE	FASTALLOC
@@ -52,6 +53,7 @@ IF CFIDE || PPIDE
 ENDIF
 
 IFDEF JIO
+	DEFINE	TURBOR
 	DEFINE	FAT16
 	DEFINE	FAT16DOS1
 	MOD1	EQU	'x'	; eXended
@@ -76,4 +78,8 @@ ENDIF
 IFDEF TEST
 	MOD1	EQU	't'	; Test
 	MOD2	EQU	' '	; 
+ENDIF
+
+IFDEF TURBOR
+	DEFINE	DOSV231
 ENDIF

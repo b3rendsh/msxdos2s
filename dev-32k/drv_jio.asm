@@ -75,8 +75,8 @@ MYSIZE		equ	$6
 SECLEN		equ	512
 PART_BUF	equ	TMPSTK		; Copy of disk info / Master Boot Record
 
-CHGCPU          equ	$180
-GETCPU          equ	$183
+;CHGCPU          equ	$180
+;GETCPU          equ	$183
 
 
 ; ----------------------------------------
