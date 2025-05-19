@@ -75,9 +75,6 @@ MYSIZE		equ	$6
 SECLEN		equ	512
 PART_BUF	equ	TMPSTK		; Copy of disk info / Master Boot Record
 
-;CHGCPU          equ	$180
-;GETCPU          equ	$183
-
 
 ; ----------------------------------------
 ; Included file 'drv_jio_c.asm'
@@ -733,26 +730,26 @@ ENDIF
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 DSKCHG:
-IFDEF IDEDOS1 
-	; In IDEDOS1 whenever the current drive is changed this routine returns that the disk has changed in order
-	; to flush the FAT cache, this is a deviation from the original MSX-DOS 1.03 without FAT swapper.
-	; In case of multiple drives (i.e. fixed disk) it is assumed that the DPB for each drive is never changed.
-	; The initial value for ix+W_CURDRV is 0xFF (set in INIENV) to make sure that the FAT cache is flushed at boot.
         di
         ld	b,a			; save drive
 	push	bc
 	push	hl
         call	GETWRK
+IFDEF IDEDOS1 
+	; In IDEDOS1 whenever the current drive is changed this routine returns that the disk has changed in order
+	; to flush the FAT cache, this is a deviation from the original MSX-DOS 1.03 without FAT swapper.
+	; In case of multiple drives (i.e. fixed disk) it is assumed that the DPB for each drive is never changed.
+	; The initial value for ix+W_CURDRV is 0xFF (set in INIENV) to make sure that the FAT cache is flushed at boot.
 	pop	hl
 	pop	bc
 	ld	a,b			; restore drive
         cp	(ix+W_CURDRV)		; current drive
         ld	(ix+W_CURDRV),a
         jr	nz,DiskChanged
-
-        ld      (ix+W_COMMAND),COMMAND_DRIVE_DISK_CHANGED
 	push	bc
 	push	hl
+ENDIF
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_DISK_CHANGED
         call	DoCommand
 	pop	hl
 	pop	bc
@@ -781,15 +778,6 @@ DiskChangeError:
         ld      b,0
         scf
         ret
-
-ELSE
-	; DOS 2 uses internal routines to detect disk change by comparing serial numbers and media byte.
-        ; Always return unchanged for DOS2 (disks are not hot-pluggable)
-        ld	b,$01
-        xor	a
-        ret
-ENDIF
-
 
 ;********************************************************************************************************************************
 

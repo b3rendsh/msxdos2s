@@ -8716,120 +8716,133 @@ RC0B7:
 
 		PHASE  	IBOOTCODE+RC0B7-RC01E
 
-; Subroutine check disk change
+; Subroutine validate FIB / check disk change
 ; Input:  C  = drive
 ;         B  = type (0 = for disk, 1 = for file, 2 = flush dirty sector buffers)
 ;         IX = pointer to FIB
+; VAL_FIB:
 C318D:		LD	A,C
-		CALL	C3606
+		CALL	C3606			; logical to physical drive
 		LD	(D_BBEB),A
 		LD	E,(HL)
 		INC	HL
-		LD	D,(HL)
+		LD	D,(HL)			; de = pointer to drive table
 		LD	A,D
 		OR	E
 		LD	A,C
-		RET	Z
+		RET	Z			; z=invalid drive
 		PUSH	DE
-		DEC	B
-		JR	NZ,J320B
+		DEC	B			; validate for file?
+		JR	NZ,J320B		; nz=no
+
+		; validate for file
 J319F:		PUSH	IX
-		POP	HL
+		POP	HL			; hl =  pointer in FIB
 		LD	BC,26
 		ADD	HL,BC
-		EX	DE,HL
+		EX	DE,HL			; de = pointer to disk serial in FIB
 		POP	HL
-		CALL	C3627
+		CALL	C3627			; update disk change counter for all drives
 		PUSH	IX
 		PUSH	HL
 		LD	C,9
 		ADD	HL,BC
-		LD	A,(HL)
+		LD	A,(HL)			; a = disk change counter
 		OR	A
-		JR	Z,J31C6
+		JR	Z,J31C6			; z=skip test same disk
 		LD	C,16
 		ADD	HL,BC
 		LD	C,A
 		PUSH	DE
-		CALL	C32F3
+		CALL	C32F3			; compare disk serial of drive table and FIB
 		POP	DE
-		JR	Z,J31CF
+		JR	Z,J31CF			; z=same serial
 		LD	A,(D_BBEB)
-		CALL	C2C4A
+		CALL	C2C4A			; flush sector buffers of physical drive
 J31C6:		POP	HL
-		CALL	C32FD
+		CALL	C32FD			; read boot sector and make valid
 		PUSH	HL
-		LD	C,1
+		LD	C,1			; set flag to update drive table
 		JR	J31E1
 
 J31CF:		POP	HL
 		PUSH	HL
 		DEC	C
-		JR	Z,J31DC
+		JR	Z,J31DC			; z=skip check, treat as disk changed
 		DEC	C
-		JR	NZ,J31F9
-		CALL	C3294
-		JR	Z,J31F9
-J31DC:		CALL	C32FD
-		LD	C,00H
-J31E1:		CALL	C3255
+		JR	NZ,J31F9		; nz=skip check, winit 0.5s of last disk operation of drive
+		CALL	C3294			; get driver disk change status
+		JR	Z,J31F9			; z=unchanged
+J31DC:		CALL	C32FD			; read boot sector and make valid
+		LD	C,00H			; reset flag to update drive table
+J31E1:		CALL	C3255			; restart disk change counter
 		PUSH	DE
-		CALL	C32CB
+		CALL	C32CB			; get pointer to disk serial in boot sector
 		POP	DE
-		CALL	C32F3
+		CALL	C32F3			; compare disk serial
 J31EC:		POP	HL
 		PUSH	HL
-		JR	NZ,J31FB
+		JR	NZ,J31FB		; nz=not same disk
 		DEC	C
-		JR	NZ,J31F9
-		CALL	C3401
-		CALL	C2C59
-J31F9:		JR	J324A
+		JR	NZ,J31F9		; nz=don't update drive table
+		CALL	C3401			; update drive table and BPB
+		CALL	C2C59			; mark sector buffers of drive table unused
+J31F9:		JR	J324A			; done
 
-J31FB:		LD	A,0F4H
+J31FB:		LD	A,_WFILE		; wrong disk for file
 		LD	DE,0FFFFH
-		CALL	C3689
+		CALL	C3689			; handle error
 		POP	HL
-		JR	NZ,J3231
+		JR	NZ,J3231		; nz=ignore, update drive table and serials
 		POP	IX
 		PUSH	HL
-		JR	J319F
+		JR	J319F			; retry
 
+		; validate for disk
 J320B:		POP	HL
-		CALL	C2C49
-		CALL	C3627
+		CALL	C2C49			; flush sector buffers of drive table
+		CALL	C3627			; update disk change counter for all drives
 		PUSH	IX
 		PUSH	HL
 		LD	DE,9
 		ADD	HL,DE
-		LD	A,(HL)
+		LD	A,(HL)			; a = disk change counter
 		POP	HL
+	IFDEF DOSV231
+		; 1st check validation type then process disk change counter
+		; this prevents unnecessary boot sector read and drive table update 
+		DEC	B
+		JR	Z,J3237			; z=flush dirty sector buffers only
+		OR	A
+		JR	Z,J322E			; z=initialize, treat as disk changed
+	ELSE
 		OR	A
 		JR	Z,J322E
 		DEC	B
 		JR	Z,J3237
+	ENDIF
 		DEC	A
-		JR	Z,J322E
+		JR	Z,J322E			; z=invalid, treat as disk changed
 		DEC	A
-		JR	NZ,J323A
-		CALL	C3294
-		JR	C,J322E
-		JR	Z,J323A
-J322E:		CALL	C32FD
-J3231:		CALL	C3401
-		CALL	C2C59
-J3237:		CALL	C3255
+		JR	NZ,J323A		; nz=within 0.5s of last disk operation of drive
+		CALL	C3294			; get driver disk change status
+		JR	C,J322E			; c=driver doesn't know, treat as disk changed
+		JR	Z,J323A			; z=unchanged
+J322E:		CALL	C32FD			; read boot sector and make valid
+J3231:		CALL	C3401			; uppdate drive table and BPB
+		CALL	C2C59			; mark sector buffers of drive table unused
+J3237:		CALL	C3255			; restart disk change counter
 J323A:		POP	DE
 		PUSH	DE
 		PUSH	HL
 		LD	BC,25
-		ADD	HL,BC
+		ADD	HL,BC			; disk serial of drive table
 		EX	DE,HL
 		LD	C,26
-		ADD	HL,BC
+		ADD	HL,BC			; disk serial of FIB
 		EX	DE,HL
 		LD	C,4
-		LDIR
+		LDIR				; update FIB disk serial
 J324A:		POP	HL
 		POP	IX
 		XOR	A
@@ -8841,10 +8854,10 @@ C324F:		CALL	C3264
 	IFDEF FAT16
 		CALL	C34D8
 	ELSE
-		CALL	C34D4		;  call disk driver function
+		CALL	C34D4			;  call disk driver function
 	ENDIF
 
-; Subroutine next 0.5 seconds no disk change
+; Subroutine restart disk change counter / next 0.5 seconds no disk change
 C3255:		PUSH	HL
 		CALL	C3627
 		EX	(SP),IX
@@ -8862,20 +8875,20 @@ C3264:		CALL	C3627
 		LD	DE,9
 		ADD	HL,DE
 		LD	A,2
-		CP	(HL)
+		CP	(HL)			; disk change counter: init or invalid?
 		POP	HL
-		JR	C,J3291
+		JR	C,J3291			; c=yes, quit
 		PUSH	BC
-		CALL	Z,C3294
-		JR	Z,J3290
+		CALL	Z,C3294			; z=get disk change status from driver
+		JR	Z,J3290			; z=unchanged
 		PUSH	IX
-J327C:		CALL	C32FD
-		CALL	C32B5
+J327C:		CALL	C32FD			; read boot sector and make valid
+		CALL	C32B5			; compare disk serial with drive table
 		JR	Z,J328E
-		LD	A,0F5H
+		LD	A,_WDISK		; wrong disk
 		LD	DE,0FFFFH
-		CALL	C3689
-		JR	J327C
+		CALL	C3689			; handle error
+		JR	J327C			; retry
 
 J328E:		POP	IX
 J3290:		POP	BC
@@ -8888,10 +8901,10 @@ J3291:		POP	DE
 ;		Cx = set: disk driver does not know
 C3294:		PUSH	BC
 		PUSH	DE
-		LD	A,2		; DSKCHG
-		CALL	C34D4		; call disk driver function
+		LD	A,2			; DSKCHG
+		CALL	C34D4			; call disk driver function
 		JR	Z,J32A7
-		CP	0FCH
+		CP	_NRDY			; not ready?
 		LD	DE,0FFFFH
 		CALL	Z,C3689
 		LD	B,0FFH
@@ -8928,13 +8941,13 @@ J32C9:		POP	HL
 ; Output: HL = pointer to disk serial
 C32CB:		PUSH	IX
 		POP	HL
-		LD	DE,32
+		LD	DE,32			; bootrecord offset to volume_id
 		ADD	HL,DE
 		LD	DE,I32E8
 		LD	B,6
 J32D7:		LD	A,(DE)
-		CP	(HL)
-		JR	NZ,J32E2
+		CP	(HL)			; bootsector contains "VOL_ID" string?
+		JR	NZ,J32E2		; nz=no
 		INC	HL
 		INC	DE
 		DJNZ	J32D7
@@ -8948,9 +8961,9 @@ J32E2:
 		POP	HL
 		LD	DE,000Ah
 		ADD	HL,DE
-		LD	A,(HL)		; UNDEL FLG (DOS1,FAT16)
-		CP	01h
-		JR	Z,PAT_47
+		LD	A,(HL)			; UNDEL FLG (DOS1,FAT16)
+		CP	01h			; FAT16 partition?
+		JR	Z,PAT_47		; z=yes
 		XOR	A
 PAT_47:		LD	HL,I32E8+6
 		LD	(HL),A
