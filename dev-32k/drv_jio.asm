@@ -43,10 +43,10 @@
         SECTION	DRV_JIO
 
         ; Mandatory symbols defined by the disk hardware interface driver
-        PUBLIC	DRIVES	; Initialize hardware interface driver
-        PUBLIC	INIENV	; Initialize driver environment
-        PUBLIC	DSKIO	; Disk I/O routine
-        PUBLIC	DSKCHG	; Disk change routine
+        PUBLIC	DRIVES		; Initialize hardware interface driver
+        PUBLIC	INIENV		; Initialize driver environment
+        PUBLIC	DSKIO		; Disk I/O routine
+        PUBLIC	DSKCHG		; Disk change routine
         PUBLIC	GETDPB
         PUBLIC	CHOICE
         PUBLIC	DSKFMT
@@ -58,9 +58,9 @@
         PUBLIC	BOOTMBR
         PUBLIC	BOOTMENU
 
-        EXTERN	GETWRK	; Get address of disk driver's work area
-        EXTERN	GETSLT	; Get slot of this interface
-        EXTERN	MYSIZE	; "
+        EXTERN	GETWRK		; Get address of disk driver's work area
+        EXTERN	GETSLT		; Get slot of this interface
+        EXTERN	MYSIZE		; "
 
 ; Hardware driver variables
 
@@ -73,7 +73,7 @@ W_DRIVE		equ	$5	; DSKIO save drive number (DOS1)
 MYSIZE		equ	$6
 
 SECLEN		equ	512
-PART_BUF	equ	TMPSTK		; Copy of disk info / Master Boot Record
+PART_BUF	equ	TMPSTK	; Copy of disk info / Master Boot Record
 
 
 ; ----------------------------------------
@@ -475,9 +475,9 @@ _ENT_PARM_DIRECT_L09:
 ; Note: the workbuffer is not available yet so most of the initialization is moved to the DRIVES routine.
 ; ------------------------------------------
 INIHRD:		ld	a,$06
-                call	SNSMAT			; Check if CTRL key is pressed
+                call	SNSMAT		; Check if CTRL key is pressed
                 and	2
-                jr	z,r101			; z=yes: exit disk init
+                jr	z,r101		; z=yes: exit disk init
                 xor	a
                 ret
 r101:		inc	sp
@@ -518,7 +518,7 @@ ELSE
         db	12,"JIO MSX-DOS 2",13,10
 ENDIF
         db	"Rev.: "
-        INCLUDE	"rdate.inc"	; Revision date
+        INCLUDE	"rdate.inc"		; Revision date
         db	13,10
         db	"Waiting for server,",13,10
         db	"press [ESC] to cancel",0
@@ -576,14 +576,14 @@ ENDIF
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 
-INIENV:	call	GETWRK	; HL and IX point to work buffer
+INIENV:	call	GETWRK			; HL and IX point to work buffer
         xor	a
-        or	(ix+W_DRIVES)	; number of drives 0?
+        or	(ix+W_DRIVES)		; number of drives 0?
         ret	z
         ld	(ix+W_CURDRV),$ff	; Init current drive
         call	GETSLT
         ld 	hl,DRVTBL
-        ld	b,a	; B = this disk interface slot number
+        ld	b,a			; B = this disk interface slot number
         ld	c,$00
 
 TestInterface:	ld	a,(hl)
@@ -592,7 +592,7 @@ TestInterface:	ld	a,(hl)
         inc	hl
         ld	a,(hl)
         inc	hl
-        cp	b	; this interface?
+        cp	b			; this interface?
         jr	nz,TestInterface	; nz=no
 
         dec	hl
@@ -836,7 +836,8 @@ vJIOTransmit2:
         ld	c,$a1
 
         db	$3e
-JIOTransmitLoop:	ret	nz
+JIOTransmitLoop:
+	ret	nz
         out	(c),e
         exx
         ld	a,(hl)
@@ -932,7 +933,7 @@ bJIOReceive:
         ld      de,0
 
         dec	hl
-        ld	b,(hl)	; What if HL=0 ?
+        ld	b,(hl)		; What if HL=0 ?
         ld	c,$a2
         ld	ix,0
         add	ix,sp
@@ -948,9 +949,9 @@ bJIOReceive:
         jp	pe,HeaderPE
 ;________________________________________________________________________________________________________________________________
 
-HeaderPO:	dec	de	;  7
-        ld	a,d	;  5
-        or	e	;  5
+HeaderPO:	dec	de		;  7
+        ld	a,d			;  5
+        or	e			;  5
         jr	z,ReceiveTimeOut	;  8
 
         in	f,(c)	; 14
@@ -964,57 +965,57 @@ WU_PO:	in	f,(c)	; 14
         pop	de
         push	de
 
-RX_PO:	in	f,(c)	; 14
+RX_PO:	in	f,(c)		; 14
         jp	po,RX_PO	; 11   LOOP=25
-        ld	(hl),b	;  8  = 33 CYCLES
+        ld	(hl),b		;  8  = 33 CYCLES
 
-        in	a,(c)	; 14   Bit 0
-        nop		;  5
-        rrca		;  5
-        dec	de	;  7 = 31 CYCLES
+        in	a,(c)		; 14   Bit 0
+        nop			;  5
+        rrca			;  5
+        dec	de		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 1
-        xor	b	;  5
-        rrca		;  5
-        inc	hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 1
+        xor	b		;  5
+        rrca			;  5
+        inc	hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 2
-        xor	b	;  5
-        rrca		;  5
-        ld	sp,hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 2
+        xor	b		;  5
+        rrca			;  5
+        ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 3
-        xor	b	;  5
-        rrca	                             	;  5
-        ld	sp,hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 3
+        xor	b		;  5
+        rrca			;  5
+        ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 4
-        xor	b	;  5
-        rrca		;  5
-        ld	sp,hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 4
+        xor	b		;  5
+        rrca			;  5
+        ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 5
-        xor	b	;  5
-        rrca		;  5
-        ld	sp,hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 5
+        xor	b		;  5
+        rrca			;  5
+        ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 6
-        xor	b	;  5
-        rrca		;  5
-        ld	sp,hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 6
+        xor	b		;  5
+        rrca			;  5
+        ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 7
-        xor	b	;  5
-        rrca		;  5
+        in	b,(c)		; 14   Bit 7
+        xor	b		;  5
+        rrca			;  5
 
-        ld	b,a	;  5
-        ld	a,d	;  5
-        or	e	;  5
+        ld	b,a		;  5
+        ld	a,d		;  5
+        or	e		;  5
         jp	nz,RX_PO	; 11
 ;________________________________________________________________________________________________________________________________
 
 ReceiveOK:
-        ld  (hl),b
+        ld	(hl),b
         ld	sp,ix
 
         pop	de
@@ -1030,68 +1031,68 @@ ReceiveTimeOut:
 
 ;________________________________________________________________________________________________________________________________
 
-HeaderPE:	dec	de	;  7
-        ld	a,d	;  5
-        or	e	;  5
+HeaderPE:	dec	de		;  7
+        ld	a,d			;  5
+        or	e			;  5
         jr	z,ReceiveTimeOut	;  8
 
-        in	f,(c)	; 14
+        in	f,(c)		; 14
         jp	pe,HeaderPE	; 11   LOOP= 50 (2-CLOCKS)
-        rlc	a	; 10
-        in	f,(c)	; 14
+        rlc	a		; 10
+        in	f,(c)		; 14
         jp	pe,HeaderPE	; 11   At least 2 clocks needed to be down
 
-WU_PE:	in	f,(c)	; 14
+WU_PE:	in	f,(c)		; 14
         jp	po,WU_PE	; 11   LOOP=25
         pop	de
         push	de
 
-RX_PE:	in	f,(c)	; 14
+RX_PE:	in	f,(c)		; 14
         jp	pe,RX_PE	; 11   LOOP=25
-        ld	(hl),b	;  8 = 33 CYCLES
+        ld	(hl),b		;  8 = 33 CYCLES
 
-        in	a,(c)	; 14   Bit 0
-        cpl		;  5
-        rrca		;  5
-        dec	de	;  7 = 31 CYCLES
+        in	a,(c)		; 14   Bit 0
+        cpl			;  5
+        rrca			;  5
+        dec	de		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 1
-        xor	b	;  5
-        rrca		;  5
-        inc	hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 1
+        xor	b		;  5
+        rrca			;  5
+        inc	hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 2
-        xor	b	;  5
-        rrca		;  5
-        ld	sp,hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 2
+        xor	b		;  5
+        rrca			;  5
+        ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 3
-        xor	b	;  5
-        rrca		;  5
-        ld	sp,hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 3
+        xor	b		;  5
+        rrca			;  5
+        ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 4
-        xor	b	;  5
-        rrca		;  5
-        ld	sp,hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 4
+        xor	b		;  5
+        rrca			;  5
+        ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 5
-        xor	b	;  5
-        rrca		;  5
-        ld	sp,hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 5
+        xor	b		;  5
+        rrca			;  5
+        ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 6
-        xor	b	;  5
-        rrca		;  5
-        ld	sp,hl	;  7 = 31 CYCLES
+        in	b,(c)		; 14   Bit 6
+        xor	b		;  5
+        rrca			;  5
+        ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)	; 14   Bit 7
-        xor	b	;  5
-        rrca		;  5
+        in	b,(c)		; 14   Bit 7
+        xor	b		;  5
+        rrca			;  5
 
-        ld	b,a	;  5
-        ld	a,d	;  5
-        or	e	;  5
+        ld	b,a		;  5
+        ld	a,d		;  5
+        or	e		;  5
         jp	nz,RX_PE	; 11
 
         jr	ReceiveOK

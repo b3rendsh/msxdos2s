@@ -993,8 +993,12 @@ J0649:		LD	(HL),E
 		LD	A,E
 		INC	B
 		CALL	C0836
+	IF OPTM = 0
 		CALL	C0821
 		RET
+	ELSE
+		JP	C0821
+	ENDIF
 
 J0653:		LD	A,E
 		CALL	C17D6
@@ -1833,16 +1837,24 @@ KB_LPTSTAT:	CALL	H_LSTS
 ; Subroutine get character from AUX device
 KB_AUXIN:	CALL	K_CHARFLUSH
 		LD	HL,SAUXIN
+	IF OPTM = 0
 		CALL	C3726
 		RET
+	ELSE
+		JP	C3726
+	ENDIF
 
 KB_AUXOUTC:	LD	A,C
 
 ; Subroutine output character to AUX device
 KB_AUXOUT:	CALL	K_CHARFLUSH
 		LD	HL,SAUXOUT
+	IF OPTM = 0
 		CALL	C3726
 		RET
+	ELSE
+		JP	C3726
+	ENDIF
 
 ; Subroutine check and handle CTRL-STOP
 KB_CHECK_STOP:	PUSH	AF
@@ -3696,16 +3708,24 @@ J1582:		POP	HL
 		LD	(HL),00H
 J1597:		POP	HL
 		POP	BC
+	IF OPTM = 0
 		JR	NZ,C159F
 		CALL	C1C40
 		RET
+	ELSE
+		JP	Z,C1C40
+	ENDIF
 
 ; ---------------------------------------------------------
 ; Subroutine initialize whole path buffer and select root directory
 ; ---------------------------------------------------------
 C159F:		CALL	C16BC
+	IF OPTM = 0
 		CALL	C1C3D
 		RET
+	ELSE
+		JP	C1C3D
+	ENDIF
 
 ; ---------------------------------------------------------
 ; Subroutine next directory
@@ -3736,8 +3756,12 @@ J15C9:		POP	DE
 		RET
 
 J15CD:		POP	AF
+	IF OPTM = 0
 		CALL	C1C30
 		RET
+	ELSE
+		JP	C1C30
+	ENDIF
 
 ; ---------------------------------------------------------
 ; Subroutine does directory entry match the search
@@ -5088,8 +5112,12 @@ J1D39:		EX	AF,AF'
 		LD	(DE),A
 		LD	BC,1
 		LD	A,0FFH
+	IF OPTM = 0
 		CALL	C2753
 		RET
+	ELSE
+		JP	C2753
+	ENDIF
 
 ; Subroutine read from file handle
 C1D47:		CALL	C2136
@@ -5399,8 +5427,12 @@ J1F05:		LD	BC,12
 F_DELETE:	CALL	C19B2
 		RET	NZ
 		LD	A,0FFH
+	IF OPTM = 0
 		CALL	C2332
 		RET
+	ELSE
+		JP	C2332
+	ENDIF
 
 ; ---------------------------------------------------------
 ; Function $52 _HDELETE
@@ -5416,8 +5448,12 @@ F_HDELETE:	CALL	C2136
 		RET	NZ
 		CALL	C1C70
 		LD	A,0FFH
+	IF OPTM = 0
 		CALL	C2332
 		RET
+	ELSE
+		JP	C2332
+	ENDIF
 
 ; ---------------------------------------------------------
 ; Function $4E _RENAME
@@ -5426,8 +5462,12 @@ F_RENAME:	PUSH	HL
 		CALL	C19B2
 		POP	BC
 		RET	NZ
+	IF OPTM = 0
 		CALL	C2398
 		RET
+	ELSE
+		JP	C2398
+	ENDIF
 
 ; ---------------------------------------------------------
 ; Function $53 _HRENAME
@@ -5457,8 +5497,12 @@ F_MOVE:		PUSH	HL
 		CALL	C19B2
 		POP	BC
 		RET	NZ
+	IF OPTM = 0
 		CALL	C23FD
 		RET
+	ELSE
+		JP	C23FD
+	ENDIF
 
 ; ---------------------------------------------------------
 ; Function $54 _HMOVE
@@ -8476,8 +8520,12 @@ J2FCF:		LD	A,B
 		PUSH	BC
 		LD	B,A
 J2FD7:		PUSH	BC
+	IF OPTM = 0
 		JR	NZ,J2FDD
 		CALL	C2CB7
+	ELSE
+		CALL	Z,C2CB7
+	ENDIF
 J2FDD:		LD	B,00H
 	IFDEF FAT16
 		CALL	BUF_2F
@@ -8640,10 +8688,14 @@ J30D7:		LD	DE,0
 		LD	A,(DATA_S)
 		LD	C,A
 		LD	A,1		; DSKIO write
+	IF OPTM = 0
 		CALL	C34D4		; call disk driver function
 		RET
+	ELSE
+		JP	C34D4
+	ENDIF
 
-J30E6:		LD	A,0F6H
+J30E6:		LD	A,_NDOS
 		RET
 
 	IF OPTM = 0
@@ -8742,12 +8794,12 @@ J319F:		PUSH	IX
 		ADD	HL,BC
 		EX	DE,HL			; de = pointer to disk serial in FIB
 		POP	HL
-		CALL	C3627			; update disk change counter for all drives
+		CALL	C3627			; update disk change tick counter for all drives
 		PUSH	IX
 		PUSH	HL
 		LD	C,9
 		ADD	HL,BC
-		LD	A,(HL)			; a = disk change counter
+		LD	A,(HL)			; a = disk change tick counter
 		OR	A
 		JR	Z,J31C6			; z=skip test same disk
 		LD	C,16
@@ -8775,7 +8827,7 @@ J31CF:		POP	HL
 		JR	Z,J31F9			; z=unchanged
 J31DC:		CALL	C32FD			; read boot sector and make valid
 		LD	C,00H			; reset flag to update drive table
-J31E1:		CALL	C3255			; restart disk change counter
+J31E1:		CALL	C3255			; restart disk change tick counter
 		PUSH	DE
 		CALL	C32CB			; get pointer to disk serial in boot sector
 		POP	DE
@@ -8801,15 +8853,15 @@ J31FB:		LD	A,_WFILE		; wrong disk for file
 		; validate for disk
 J320B:		POP	HL
 		CALL	C2C49			; flush sector buffers of drive table
-		CALL	C3627			; update disk change counter for all drives
+		CALL	C3627			; update disk change tick counter for all drives
 		PUSH	IX
 		PUSH	HL
 		LD	DE,9
 		ADD	HL,DE
-		LD	A,(HL)			; a = disk change counter
+		LD	A,(HL)			; a = disk change tick counter
 		POP	HL
 	IFDEF DOSV231
-		; 1st check validation type then process disk change counter
+		; 1st check validation type then process disk change tick counter
 		; this prevents unnecessary boot sector read and drive table update 
 		DEC	B
 		JR	Z,J3237			; z=flush dirty sector buffers only
@@ -8831,7 +8883,7 @@ J320B:		POP	HL
 J322E:		CALL	C32FD			; read boot sector and make valid
 J3231:		CALL	C3401			; uppdate drive table and BPB
 		CALL	C2C59			; mark sector buffers of drive table unused
-J3237:		CALL	C3255			; restart disk change counter
+J3237:		CALL	C3255			; restart disk change tick counter
 J323A:		POP	DE
 		PUSH	DE
 		PUSH	HL
@@ -8857,7 +8909,7 @@ C324F:		CALL	C3264
 		CALL	C34D4			;  call disk driver function
 	ENDIF
 
-; Subroutine restart disk change counter / next 0.5 seconds no disk change
+; Subroutine restart disk change tick counter / next 0.5 seconds no disk change
 C3255:		PUSH	HL
 		CALL	C3627
 		EX	(SP),IX
@@ -8868,6 +8920,7 @@ C3255:		PUSH	HL
 		RET
 
 ; Subroutine validate if same disk
+; VAL_SAME:
 C3264:		CALL	C3627
 		PUSH	AF
 		PUSH	DE
@@ -8875,7 +8928,7 @@ C3264:		CALL	C3627
 		LD	DE,9
 		ADD	HL,DE
 		LD	A,2
-		CP	(HL)			; disk change counter: init or invalid?
+		CP	(HL)			; disk change tick counter: init or invalid?
 		POP	HL
 		JR	C,J3291			; c=yes, quit
 		PUSH	BC
@@ -8939,6 +8992,8 @@ J32C9:		POP	HL
 ; Subroutine get pointer to disk serial
 ; Input:  IX = pointer to bootsector
 ; Output: HL = pointer to disk serial
+;         Zx set if DOS2 boot sector
+; GET_VOLID:
 C32CB:		PUSH	IX
 		POP	HL
 		LD	DE,32			; bootrecord offset to volume_id
@@ -8956,27 +9011,41 @@ J32D7:		LD	A,(DE)
 		RET
 
 J32E2:  
-	IFDEF FAT16 ; GETVOL
+	IFDEF FAT16 ; GETVOL (1/2)
+		; Mod: check EBS byte instead of last byte of OEM name
+		; IF EBS valid then use the serial in the Extended BPB
 		PUSH	IX
 		POP	HL
-		LD	DE,000Ah
+		LD	DE,0026H		; Extended Boot Signature offset
 		ADD	HL,DE
-		LD	A,(HL)			; UNDEL FLG (DOS1,FAT16)
-		CP	01h			; FAT16 partition?
-		JR	Z,PAT_47		; z=yes
-		XOR	A
-PAT_47:		LD	HL,I32E8+6
-		LD	(HL),A
-		INC	HL
-	ELSE
-		LD	HL,I32EF
+		LD	A,(HL)			; Get EBS
+		EX	DE,HL			; Save pointer for later
+		AND	0FEH			; EBS can be 0x28 or 0x29
+		CP	028H			; EBS?
+		JR	Z,FAT16VOL		; z=yes
 	ENDIF
+		LD	HL,I32EF
 		XOR	A
 		DEC	A
 		RET
 
-I32E8:		DEFB	"VOL_ID",0
-I32EF:		DEFW	0FFFFH,0FFFFH
+I32E8:		DEFB	"VOL_ID"
+		DEFB	0			; undelete flag
+I32EF:		DEFW	0FFFFH,0FFFFH		; default serial
+
+	IFDEF FAT16 ; GETVOL (2/2)
+
+FAT16VOL:	LD	HL,EBSER
+		PUSH	HL
+		EX	DE,HL			; Reload EBS pointer in HL
+		INC	HL			; offset for serial
+		LD	BC,4
+		LDIR				; Copy serial number
+		POP	HL
+		XOR	A
+		DEC	A
+		RET
+	ENDIF
 
 ; Subroutine compare disk serials
 C32F3:		LD	B,4
@@ -9645,7 +9714,8 @@ J3614:		LD	HL,I_BA1A
 		OR	A
 		RET
 
-; Subroutine update counter of all drives
+; Subroutine update tick counter of all drives
+; UD_TICK:
 C3627:		PUSH	AF
 		PUSH	HL
 		LD	HL,(SSECBUF)
@@ -9653,6 +9723,8 @@ C3627:		PUSH	AF
 		LD	A,(HL)
 		INC	A
 		JR	NZ,J364D
+
+		; FAT flag invalid, verify physical drive
 		LD	(HL),00H
 		LD	A,(TARGET)
 		PUSH	DE
@@ -9671,37 +9743,39 @@ C3627:		PUSH	AF
 		OR	A
 		JR	Z,J364D
 		LD	(HL),01H
+
+		; update tick counter of all drives
 J364D:		LD	HL,TIM_TI
 		DI
 		LD	A,(HL)
 		EI
 		LD	(HL),00H
 		OR	A
-		JR	Z,J3683
+		JR	Z,J3683			; z=no new ticks, quit
 		PUSH	BC
 		PUSH	DE
 		PUSH	IX
 		LD	C,A
 		LD	HL,I_BA25
-		LD	B,8
+		LD	B,8			; maximum drives
 J3662:		LD	E,(HL)
 		INC	HL
 		LD	D,(HL)
 		INC	HL
 		LD	A,D
 		OR	E
-		JR	Z,J367D
+		JR	Z,J367D			; z=invalid drive, next
 		PUSH	DE
 		POP	IX
-		LD	A,(IX+9)
+		LD	A,(IX+9)		; get timer
 		SUB	02H
-		JR	C,J367D
-		SUB	C
-		JR	NC,J3678
+		JR	C,J367D			; if timer <= 2 then no change
+		SUB	C			; decrement by number of ticks
+		JR	NC,J3678		; result should not be less then 0
 		XOR	A
 J3678:		ADD	A,2
-		LD	(IX+9),A
-J367D:		DJNZ	J3662
+		LD	(IX+9),A		; update timer
+J367D:		DJNZ	J3662			; next drive
 		POP	IX
 		POP	DE
 		POP	BC
@@ -10256,15 +10330,23 @@ C3A15:		LD	IX,I_B9DA
 		INC	DE
 		LD	A,(DE)
 		LD	(IX+31),02H
+	IF OPTM = 0
 		CALL	C173A
 		RET
+	ELSE
+		JP	C173A
+	ENDIF
 
 ; Subroutine transfer record from sequential read buffer
 C3A26:		LD	DE,(DTA_AD)
 		LD	BC,128
 		LD	A,1
+	IF OPTM = 0
 		CALL	C26F3
 		RET
+	ELSE
+		JP	C26F3
+	ENDIF
 
 ; Subroutine get directory entry and setup FIB
 ; Input:  DE = pointer to FCB
@@ -10426,8 +10508,12 @@ C3B0F:		EX	AF,AF'
 		LD	BC,128
 		LD	IX,I_B9DA
 		LD	DE,(DTA_AD)
+	IF OPTM = 0
 		CALL	C275B
 		RET
+	ELSE
+		JP	C275B
+	ENDIF
 
 ; Subroutine get pointer to record if it is in the sequential read buffer
 C3B4E:		CALL	C3B85
@@ -11142,6 +11228,8 @@ SDIR_1:		DB	0		; BBE2h	bit16-23
 SDIR_2:		DB	0		; BBD2h+4 bit16-23
 SDIR_3:		DB	0		; BBC6h+4 bit16-23
 RW_16:		DB	0		; bit16-23 for DISKIO
+		DB	1		; undelete flag
+EBSER:		DW	0,0		; EBPB serial
 
 ; ------------------------------------------------------------------------------
 ENDIF ; FAT16
