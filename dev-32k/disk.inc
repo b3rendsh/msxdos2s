@@ -17,9 +17,6 @@
 ; DOS2 compile options
 ; --------------------
 ; OPTM		0 = original code, 1 = optimized code
-; Optimization goal is first smaller code size and then improved performance
-; The fat16.com patch program won't work with optimized code.
-;
 ; FAT16		Include FAT16 for the DOS 2 kernel
 ; NODOS1	Remove DOS 1 msxdos.sys entry points to free rom space
 ; FASTALLOC	Calculate max 4K free clusters for large drives in ALLOC function to avoid slow DIR command
@@ -36,7 +33,7 @@
 
 
 ; Apply to all targets
-	OPTM	EQU	1	; use optimized code
+	OPTM	EQU	1
 	BTWAIT	EQU	$5000
 
 IF PPIDE || JIO || UART

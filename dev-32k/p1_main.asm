@@ -1,9 +1,9 @@
 ; ------------------------------------------------------------------------------
 ; p1_main.asm
-; DOS 2.20 kernel page 1: initialization and Disk BASIC
-; Based on ASCII DOS 2.20 codebase s0 and s1
+; DOS 2.20 / DOS 2.31 kernel page 1: initialization and Disk BASIC
+; Based on ASCII DOS 2.20 / DOS 2.31 codebase s0 and s1
 ;
-; Code Copyrighted by ASCII, OKEI and maybe others
+; Code copyrighted by ASCII and others
 ; Source origin is the msxsyssrc repository by Arjen Zeilemaker
 ; Restructure, modifications and additional comments by H.J. Berends
 ;
@@ -11,17 +11,18 @@
 ; Recreation NOT permitted without authorisation of the copyrightholders
 ; ------------------------------------------------------------------------------
 ; Modifications:
-; 01. Kanji, rom mapper, self check and unused code is removed
+; 01. Kanji, rom mapper and self check code removed
 ; 02. Removed MSX2 check
 ; 03. Removed Kanji error messages 
 ; 04. Simplified international character generator
-; 05. Initialize FAT16 kernel and workspace patches based on FAT16 v0.12 by OKEI
+; 05. Added FAT16 option
 ; 06. Restructured codebase segments 0 and 1 into one main segment p1
 ; 07. Relocate code to unused space between msxdos 1 entry points
 ; 08. Added BOOTMENU option
 ; 09. Check if boot sector contains a valid boot loader or extended boot signature (FAT16)
 ; 10. Added BOOTCODE option
-; 11. Added TURBOR option (not included: rom disk driver, boot logic, DOS1 mode, Kanji)
+; 11. Added TURBOR and DOSV231 options (not included: rom disk driver, boot logic, DOS1 mode, Kanji)
+; 12. Optmized code / removed unused code (OPTM)
 
 
 		INCLUDE "disk.inc"	; Assembler directives

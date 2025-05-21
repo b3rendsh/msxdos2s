@@ -37,3 +37,4 @@ Address labels
 3. camelCase labels:
   Subroutines with non MSX standard names, may start with object prefix.
   Address labels with a local range inside a subroutine start with _ or r.
+4. Some subroutine names are based on Nextor source code.

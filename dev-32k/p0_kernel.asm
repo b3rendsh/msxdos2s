@@ -1,9 +1,9 @@
 ; ------------------------------------------------------------------------------
 ; p0_kernel.asm
-; DOS 2.20 kernel page 0: BDOS functions
-; Based on ASCII DOS 2.20 codebase s2
+; DOS 2.20 / DOS 2.31 kernel page 0: BDOS functions
+; Based on ASCII DOS 2.20 / DOS 2.31 codebase s2
 ;
-; Code Copyrighted by ASCII, OKEI and maybe others
+; Code copyrighted by ASCII and others
 ; Source origin is the msxsyssrc repository by Arjen Zeilemaker
 ; Restructure, modifications and additional comments by H.J. Berends
 ; 
@@ -12,12 +12,12 @@
 ; ------------------------------------------------------------------------------
 ; Modifications:
 ; 01. The rom bank switching code is removed
-; 02. FAT16 kernel changes based on FAT16 v0.12 by OKEI
+; 02. Added FAT16 option, partly based on FAT16 v0.12 by OKEI
 ; 03. Optimized FAT16 code to free space for format and ramdisk routines
-; 04. Relocated format boot sector code if using FAT16 option
+; 04. Use Extended BPB serial on FAT16 partitions
 ; 05. Use Microsoft standards to determine if partition is FAT16 or FAT12 (DPBSET)
 ; 06. Changed the free disk calculation routine for FAT16 partitions
-; 07. Removed unused code (OPTM)
+; 07. Optmized code / removed unused code (OPTM)
 ; 08. Added DOSV231 option
 
 
@@ -993,12 +993,7 @@ J0649:		LD	(HL),E
 		LD	A,E
 		INC	B
 		CALL	C0836
-	IF OPTM = 0
-		CALL	C0821
-		RET
-	ELSE
-		JP	C0821
-	ENDIF
+		JP	C0821			; OPTM: call/ret=jp
 
 J0653:		LD	A,E
 		CALL	C17D6
@@ -1837,24 +1832,14 @@ KB_LPTSTAT:	CALL	H_LSTS
 ; Subroutine get character from AUX device
 KB_AUXIN:	CALL	K_CHARFLUSH
 		LD	HL,SAUXIN
-	IF OPTM = 0
-		CALL	C3726
-		RET
-	ELSE
-		JP	C3726
-	ENDIF
+		JP	C3726			; OPTM: call/ret=jp
 
 KB_AUXOUTC:	LD	A,C
 
 ; Subroutine output character to AUX device
 KB_AUXOUT:	CALL	K_CHARFLUSH
 		LD	HL,SAUXOUT
-	IF OPTM = 0
-		CALL	C3726
-		RET
-	ELSE
-		JP	C3726
-	ENDIF
+		JP	C3726			; OPTM: call/ret=jp
 
 ; Subroutine check and handle CTRL-STOP
 KB_CHECK_STOP:	PUSH	AF
@@ -2673,6 +2658,7 @@ J0F71:		POP	BC
 I0F76:		DEFW	0
 
 	IF OPTM = 0
+		; Unused code
 		LD	HL,(D_BBEE)
 J0F7B:		LD	A,H
 		OR	L
@@ -3720,12 +3706,7 @@ J1597:		POP	HL
 ; Subroutine initialize whole path buffer and select root directory
 ; ---------------------------------------------------------
 C159F:		CALL	C16BC
-	IF OPTM = 0
-		CALL	C1C3D
-		RET
-	ELSE
-		JP	C1C3D
-	ENDIF
+		JP	C1C3D			; OPTM: call/ret=jp
 
 ; ---------------------------------------------------------
 ; Subroutine next directory
@@ -3756,12 +3737,7 @@ J15C9:		POP	DE
 		RET
 
 J15CD:		POP	AF
-	IF OPTM = 0
-		CALL	C1C30
-		RET
-	ELSE
-		JP	C1C30
-	ENDIF
+		JP	C1C30			; OPTM: call/ret=jp
 
 ; ---------------------------------------------------------
 ; Subroutine does directory entry match the search
@@ -5112,12 +5088,7 @@ J1D39:		EX	AF,AF'
 		LD	(DE),A
 		LD	BC,1
 		LD	A,0FFH
-	IF OPTM = 0
-		CALL	C2753
-		RET
-	ELSE
-		JP	C2753
-	ENDIF
+		JP	C2753			; OPTM: call/ret=jp
 
 ; Subroutine read from file handle
 C1D47:		CALL	C2136
@@ -5427,12 +5398,7 @@ J1F05:		LD	BC,12
 F_DELETE:	CALL	C19B2
 		RET	NZ
 		LD	A,0FFH
-	IF OPTM = 0
-		CALL	C2332
-		RET
-	ELSE
-		JP	C2332
-	ENDIF
+		JP	C2332			; OPTM: call/ret=jp
 
 ; ---------------------------------------------------------
 ; Function $52 _HDELETE
@@ -5448,12 +5414,7 @@ F_HDELETE:	CALL	C2136
 		RET	NZ
 		CALL	C1C70
 		LD	A,0FFH
-	IF OPTM = 0
-		CALL	C2332
-		RET
-	ELSE
-		JP	C2332
-	ENDIF
+		JP	C2332			; OPTM: call/ret=jp
 
 ; ---------------------------------------------------------
 ; Function $4E _RENAME
@@ -5462,12 +5423,7 @@ F_RENAME:	PUSH	HL
 		CALL	C19B2
 		POP	BC
 		RET	NZ
-	IF OPTM = 0
-		CALL	C2398
-		RET
-	ELSE
-		JP	C2398
-	ENDIF
+		JP	C2398			; OPTM: call/ret=jp
 
 ; ---------------------------------------------------------
 ; Function $53 _HRENAME
@@ -5497,12 +5453,7 @@ F_MOVE:		PUSH	HL
 		CALL	C19B2
 		POP	BC
 		RET	NZ
-	IF OPTM = 0
-		CALL	C23FD
-		RET
-	ELSE
-		JP	C23FD
-	ENDIF
+		JP	C23FD			; OPTM: call/ret=jp
 
 ; ---------------------------------------------------------
 ; Function $54 _HMOVE
@@ -8520,12 +8471,7 @@ J2FCF:		LD	A,B
 		PUSH	BC
 		LD	B,A
 J2FD7:		PUSH	BC
-	IF OPTM = 0
-		JR	NZ,J2FDD
-		CALL	C2CB7
-	ELSE
-		CALL	Z,C2CB7
-	ENDIF
+		CALL	Z,C2CB7			; OPTM: jr nz;call = call z
 J2FDD:		LD	B,00H
 	IFDEF FAT16
 		CALL	BUF_2F
@@ -8688,12 +8634,7 @@ J30D7:		LD	DE,0
 		LD	A,(DATA_S)
 		LD	C,A
 		LD	A,1		; DSKIO write
-	IF OPTM = 0
-		CALL	C34D4		; call disk driver function
-		RET
-	ELSE
-		JP	C34D4
-	ENDIF
+		JP	C34D4		; call disk driver function	OPTM: call/ret=jp
 
 J30E6:		LD	A,_NDOS
 		RET
@@ -10330,23 +10271,13 @@ C3A15:		LD	IX,I_B9DA
 		INC	DE
 		LD	A,(DE)
 		LD	(IX+31),02H
-	IF OPTM = 0
-		CALL	C173A
-		RET
-	ELSE
-		JP	C173A
-	ENDIF
+		JP	C173A			; OPTM: call/ret=jp
 
 ; Subroutine transfer record from sequential read buffer
 C3A26:		LD	DE,(DTA_AD)
 		LD	BC,128
 		LD	A,1
-	IF OPTM = 0
-		CALL	C26F3
-		RET
-	ELSE
-		JP	C26F3
-	ENDIF
+		JP	C26F3			; OPTM: call/ret=jp
 
 ; Subroutine get directory entry and setup FIB
 ; Input:  DE = pointer to FCB
@@ -10508,12 +10439,7 @@ C3B0F:		EX	AF,AF'
 		LD	BC,128
 		LD	IX,I_B9DA
 		LD	DE,(DTA_AD)
-	IF OPTM = 0
-		CALL	C275B
-		RET
-	ELSE
-		JP	C275B
-	ENDIF
+		JP	C275B			; OPTM: call/ret=jp
 
 ; Subroutine get pointer to record if it is in the sequential read buffer
 C3B4E:		CALL	C3B85

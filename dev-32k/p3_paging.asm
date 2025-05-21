@@ -1,9 +1,9 @@
 ; ------------------------------------------------------------------------------
 ; p3_paging.asm
-; DOS 2.20 kernel: paging helper routines
+; DOS 2.20 / DOS 2.31 kernel: paging helper routines
 ; Based on ASCII DOS 2.20 codebase s1
 ;
-; Code Copyrighted by ASCII and maybe others
+; Code copyrighted by ASCII and others
 ; Source origin is the msxsyssrc repository by Arjen Zeilemaker
 ; Restructure, modifications and additional comments by H.J. Berends
 ;
@@ -12,7 +12,7 @@
 ; ------------------------------------------------------------------------------
 ; Modifications:
 ; 01. Moved init of paging helper routines to separate module
-; 02. Added TURBOR option
+; 02. Added TURBOR and DOSV231 options
 
 
 		INCLUDE "disk.inc"	; Assembler directives
