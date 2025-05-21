@@ -1,17 +1,17 @@
 # msxdos2s
-- Enhanced MSX DOS 2.2 in a 32K ROM package
-- Enhanced MSX DOS 1.03
+- Enhanced MSX DOS 2.2 / 2.31 in a 32K ROM package
+- Enhanced MSX DOS 1
 - Optimized BEER and SODA IDE interface drivers
 - Disk hardware interface designs
 
 ## Introduction
-This repository contains a re-composition of the MSX DOS 2.2 disk ROM that can be used as a 32K ROM without a ROM mapper (or 16K ROM for the BEER interface) and includes enhancements for large disks. 
+This repository contains a re-composition of the MSX DOS 2 disk ROM that can be used as a 32K ROM without a ROM mapper (or 16K ROM for the BEER interface) and includes enhancements for large disks. 
 
-There is also a version of MSX DOS 1.03 which contains enhancements that are derived work from the 16K BEER IDE disk ROM that SOLiD created.
+There is also a version of MSX DOS 1 which contains enhancements that are based on the 16K BEER IDE disk ROM that SOLiD created.
 
 And thirdly it includes a disk driver for MSX-DOS 1 and 2 that can be used with the BEER and SODA disk interfaces.
 
-All functions of MSX DOS 1 and MSX DOS 2.2 as originally distributed by ASCII have been retained and should work 100% the same except for the changes that are mentioned below.
+All functions of MSX DOS 1 and MSX DOS 2 as originally distributed by ASCII have been retained and should work 100% the same except for the changes that are mentioned below.
 The disk ROM works with the original msxdos(2).sys and command(2).com loaded from disk media such as a floppy or IDE disk / compact flash card. 
 The disk ROM also works if there are other disk interfaces in the machine and it is compliant with the MSX standards to determine which disk interface will be the master.
 
@@ -29,13 +29,13 @@ Following DOS and driver enhancements are included:
 6. Support for standard DOS 2 or Nextor partitions and disk format.
 
 #### MSX DOS 2 changes
-1. Added FAT16 support based on OKEI's patch with following changes: the free disk space calculation and algorithm to determine if a partition is FAT12 or FAT16 are replaced, the code size is optimized and the format and ramdisk functions are still available.
-2. Kanji support and ROM check ("call dos2memchk" in BASIC) are removed to reduce the size of the ROM.
+1. Added support for [FAT16 partitions](docs/FAT16%20partitions.txt)
+2. Kanji and ROM check ("call dos2memchk" in BASIC) are removed to reduce the size of the ROM.
 3. The ROM mapper code is removed and all the code is consolidated in a contiguous 32K ROM space.
-4. On FAT16 partitions the free disk space calculation can be cut off to improve speed on slower interfaces. 
+4. If the turbo R specific changes are included with the DOS v2.31 option then the ROM still works on older machines.
 
 #### MSX DOS 1 changes
-1. Added FAT16 support from SOLiD, some bugs and limitations have been fixed. Maximum root directory entries (files) is still 255.
+1. Added support for [FAT16 partitions](docs/FAT16%20partitions.txt)
 2. Added FAT swapper from SOLiD to support partitions larger than 16MB.
 
 #### Universal IDE driver
@@ -76,7 +76,7 @@ The main changes compared to ASCII's MSXDOS 2.2 are that this ROM works without 
 The main improvement compared to the 1.9 driver is that it will work with other disk systems in the machine that have higher DOS versions e.g. a SUNRISE IDE with MSX DOS 2.2 or Nextor. Some other nasty bugs have been fixed. In the source code all the differences between v1.9 and v2.0 are marked and commented in detail.
 
 ## Limitations
-The source files are provided and modified for study only and the ROM files are provided for testing only. This repository contains a re-composition of the creative work of ASCII, SOLiD, OKEI and maybe others. It is provided freely and "as it is" in the hope that it will be useful, but without any warranty of any kind, either expressed or implied. Use at own risk!  
+The source files are provided and modified for study only and the ROM files are provided for testing only. This repository contains a re-composition of the creative work of ASCII and others. It is provided freely and "as it is" in the hope that it will be useful, but without any warranty of any kind, either expressed or implied. Use at own risk!  
 
 ## References
 MSX system sources:  
