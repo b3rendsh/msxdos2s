@@ -14,7 +14,7 @@ Free disk space calculation on large FAT16 partitions is very slow, mostly
 noticable when doing a directory listing with the DIR command.
 The number of root directory entries should not exceed 255, on standard
 formatted FAT16 partitions this is typically set to 512. The directoy entries
-higher than 255 or not visible.
+higher than 255 are not visible.
 Subdirectories are not supported.
 
 
