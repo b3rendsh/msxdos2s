@@ -64,13 +64,14 @@
 
 ; Hardware driver variables
 
-W_CURDRV	equ	$0	; Current drive
+W_CURDRV	equ	$0	; Current drive (DOS1)
 W_BOOTDRV	equ	$1	; Boot drive (partition)
 W_DRIVES	equ	$2	; Number of drives (partitions) on disk
 W_FLAGS		equ	$3
 W_COMMAND	equ	$4
 W_DRIVE		equ	$5	; DSKIO save drive number (DOS1)
-MYSIZE		equ	$6
+W_DSKCHG	equ	$6	; Partition changed flags
+MYSIZE		equ	$7
 
 SECLEN		equ	512
 PART_BUF	equ	TMPSTK	; Copy of disk info / Master Boot Record
@@ -581,6 +582,7 @@ INIENV:	call	GETWRK			; HL and IX point to work buffer
         or	(ix+W_DRIVES)		; number of drives 0?
         ret	z
         ld	(ix+W_CURDRV),$ff	; Init current drive
+        ld	(ix+W_DSKCHG),$00	; Init partition changed flags
         call	GETSLT
         ld 	hl,DRVTBL
         ld	b,a			; B = this disk interface slot number
@@ -735,20 +737,6 @@ DSKCHG:
 	push	bc
 	push	hl
         call	GETWRK
-IFDEF IDEDOS1 
-	; In IDEDOS1 whenever the current drive is changed this routine returns that the disk has changed in order
-	; to flush the FAT cache, this is a deviation from the original MSX-DOS 1.03 without FAT swapper.
-	; In case of multiple drives (i.e. fixed disk) it is assumed that the DPB for each drive is never changed.
-	; The initial value for ix+W_CURDRV is 0xFF (set in INIENV) to make sure that the FAT cache is flushed at boot.
-	pop	hl
-	pop	bc
-	ld	a,b			; restore drive
-        cp	(ix+W_CURDRV)		; current drive
-        ld	(ix+W_CURDRV),a
-        jr	nz,DiskChanged
-	push	bc
-	push	hl
-ENDIF
         ld      (ix+W_COMMAND),COMMAND_DRIVE_DISK_CHANGED
         call	DoCommand
 	pop	hl
@@ -756,28 +744,61 @@ ENDIF
         cp      RESULT_DRIVE_DISK_UNCHANGED-1
         jr	z,DiskNotChanged
         cp      RESULT_DRIVE_DISK_CHANGED-1
-	jr	nz,DiskChangeError
-
-; Update DPB if disk for current drive has changed
-UpdateDPB:
-	ld	a,b			; restore drive
-	call	GETDPB			; returns updated DPB pointed to by HL
-	jr	c,DiskChangeError	; if cx then error reading boot sector
-
-DiskChanged:
-        ld	b,0xFF			; disk (drive) changed
-        xor	a
-        ret
-
-DiskNotChanged:
-        ld      b,1
-	xor	a
-	ret
+	jr	z,DiskChanged
 
 DiskChangeError:
         ld      b,0
         scf
         ret
+
+DiskNotChanged:
+	call	GetDriveMask
+	and	(ix+W_DSKCHG)		; partition changed?
+	jr	nz,PartitionChanged	; nz=yes
+IFDEF IDEDOS1
+	; In IDEDOS1 whenever the current drive is changed this routine returns that the disk has changed in order
+	; to flush the FAT cache, this is a deviation from the original MSX-DOS 1.03 without FAT swapper.
+	ld	a,b			; restore drive
+        cp	(ix+W_CURDRV)		; current drive changed?
+        ld	(ix+W_CURDRV),a		; update current drive
+        jr	nz,RetChanged
+ENDIF
+        ld      b,1
+	xor	a
+	ret
+
+DiskChanged:
+	ld	(ix+W_DSKCHG),0xFF	; set changed flag for all partitions
+	call	GetDriveMask
+
+PartitionChanged:
+	cpl
+	and	(ix+W_DSKCHG)
+	ld	(ix+W_DSKCHG),a		; clear changed flag for this partition
+IFDEF IDEDOS1
+	; In DOS1 the DPB of the drive must be updated if the partition has changed
+	ld	a,b
+        ld	(ix+W_CURDRV),a		; update current drive
+	call	GETDPB			; returns updated DPB pointed to by HL
+	jr	c,DiskChangeError	; if cx then error reading boot sector
+ENDIF
+
+RetChanged:
+        ld	b,0xFF
+        xor	a
+        ret
+
+GetDriveMask:
+	push	hl
+	ld	hl,masks
+	ld	e,b
+	ld	d,0
+	add	hl,de
+	ld	a,(hl)
+	pop	hl
+	ret
+
+masks:	db	0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80
 
 ;********************************************************************************************************************************
 
