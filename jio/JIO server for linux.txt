@@ -1,0 +1,14 @@
+JIO server for linux
+====================
+
+Install/run
+-----------
+Unzip jio_linux.zip and start jio.sh in the jio folder.
+
+ 
+Notes
+-----
+1. Ini file (.ini) included with default connection set to USB instead of bluetooth.
+2. Some Linux distributions require installation of libxcb-cursor-dev package.
+3. Add user to dialout group if access to USB port is denied.
+4. Tested with Fedora, Lubuntu and Mint.
