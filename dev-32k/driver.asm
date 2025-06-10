@@ -13,18 +13,27 @@
 ; + Maps up to 8 partitions to drives
 ; + Extended partition support
 ; + Boot drive selection (boot menu)
-; The driver is split in a DOS section (this file) and hardware interface driver
+; The driver is split into a DOS module and hardware interface driver.
+; The driver routines are grouped in ipl (boot) and system (runtime) sections.
 ; ------------------------------------------------------------------------------
 
+	IF !(CXDOS1 || CXDOS2)
 	        INCLUDE "disk.inc"	; Assembler directives
 		INCLUDE	"msx.inc"	; MSX constants and definitions
-
+		DEFINE	DRV_IPL		; Include driver ipl routines
+		DEFINE	DRV_SYS		; Include driver system routines
 		SECTION	DRIVER
+	ENDIF
+
+	IFDEF DRV_IPL
+; ------------------------------------------------------------------------------
+; Driver ipl routines
+; ------------------------------------------------------------------------------
 
 		; Mandatory symbols defined by the DOS driver
 		PUBLIC	INIHRD
 		PUBLIC	DRIVES
-		PUBLIC	GETDPB
+		PUBLIC	INIENV
 		PUBLIC	CHOICE
 		PUBLIC	DSKFMT
 		PUBLIC	MTOFF
@@ -36,21 +45,17 @@
 		; Additional symbols defined by the DOS driver
 		PUBLIC	BOOTMBR
 		PUBLIC	BOOTMENU
+		PUBLIC	DRVINIT
 		PUBLIC	W_CURDRV
 		PUBLIC	W_BOOTDRV
 		PUBLIC	W_DRIVES
 		PUBLIC	DRVSIZE
-		PUBLIC	PART_BUF
-		PUBLIC	PrintMsg
-		PUBLIC	PrintCRLF
-		PUBLIC	PrintString
-		PUBLIC	MakeDec
 
 		; Hardware interface symbols used by the DOS driver
 		EXTERN	DRVMEM
-		EXTERN	DRVINIT
-		EXTERN	DSKIO
 		EXTERN	READSEC
+		EXTERN	ideInit
+		EXTERN	ideInfo
 
 		; Disk routines used by driver
 		EXTERN	GETWRK		; Get address of disk driver's work area
@@ -323,107 +328,55 @@ PartitionExt:	cp	$05			; Extended partition (CHS,LBA)
 		ret
 
 ; ------------------------------------------
-; GETDPB - Set DPB using sector 0 / bootsector of partition
-; Called by DOS 1 only, not used by DOS 2.2
-; Input:
-;   A  = Drive number
-;   B  = First byte of FAT
-;   C  = Media descriptor
-;   HL = Base address of DPB
-; Output:
-;   [HL+1] .. [HL+18] = DPB fo the specified drive
+; INIENV - Initialize the work area (environment)
+; Input : None
+; Output: None
+; May corrupt: AF,BC,DE,HL,IX,IY
 ; ------------------------------------------
-	IFNDEF IDEDOS1
-GETDPB:		EQU	SUBRET
-	ELSE
-GETDPB:		ei
-		push	hl
-		ld	de,0			; first logical sector
-		ld	hl,(SSECBUF)		; transfer address
-		ld	b,1			; number of sectors is 1
-		or	a			; carry flag cleared ==> read sector
-		call	DSKIO
-		pop	iy
-		ret	c
-		ld	ix,(SSECBUF)
-		ld	a,(ix+$15)		; Media ID
-		ld	(iy+$01),a
-		ld	(iy+$02),$00		; Sector size is 0200h
-		ld	(iy+$03),$02
-		ld	(iy+$04),$0f		; Directory mask 00fh: 512/32-1
-		ld	(iy+$05),$04		; Directory shift 004h
-		ld	a,(ix+$0d)		; Cluster size (in sectors)
-		dec	a
-		ld	(iy+$06),a		; Cluster mask
-		ld	c,$00
-r601:		inc	c
-		rra
-		jr	c,r601
-		ld	(iy+$07),c		; Cluster shift
-		ld	l,(ix+$0e)		; Number of unused sectors
-		ld	h,(ix+$0f)
-		ld	(iy+$08),l		; FIRFAT - first FAT sector
-		ld	(iy+$09),h
-		ld	e,(ix+$16)		; Size of FAT (in sectors)
-		ld	(iy+$10),e		; FATSIZ - Sectors per FAT
-		ld	d,$00
-		ld	b,(ix+$10)		; Number of FATs
-		ld	(iy+$0A),b
-r602:		add	hl,de
-		djnz	r602
-		ld	(iy+$11),l		; FIRDIR - First directory sector
-		ld	(iy+$12),h
-		ld	a,(ix+$12)		; Number of directory entries (high byte)
-		ex	de,hl
-		ld	h,a
-		ld	l,(ix+$11)		; Number of directory entries (low byte)
-		ld	bc,$000f
-		add	hl,bc
-		add	hl,hl
-		add	hl,hl
-		add	hl,hl
-		add	hl,hl			; 16 directory entries per sector
-		ld	l,h
-		ld	h,$00
-		ex	de,hl
-		or	a			; number of directory entries < 256?
-		jr	z,r603			; z=yes
-		ld	a,$ff			; set max 255 directory entries
-		jr	r604 
-r603:		ld	a,(ix+$11)		; set max directory entries to directory entries low byte
-r604:		ld	(iy+$0b),a		; MAXENT - Max directory entries
-		add	hl,de
-		ld	(iy+$0c),l		; FIRREC - first data sector
-		ld	(iy+$0d),h
-		ex	de,hl
-		ld	l,(ix+$13)		; Total number of sectors
-		ld	h,(ix+$14)
-		ld	bc,$0000
-		ld	a,l
-		or	h
-		jr	nz,r605
-		ld	l,(ix+$20)
-		ld	h,(ix+$21)
-		ld	c,(ix+$22)
-		ld	b,(ix+$23)
-r605: 		or	a
-		sbc	hl,de
-		jr	nc,r606
-		dec	bc
-r606:		ld	a,(iy+$07)
-r607:	  	dec	a
-		jr	z,r608
-		srl	b
-		rr	c
-		rr	h
-		rr	l
-		jr	r607
-r608:		inc	hl
-		ld	(iy+$0e),l		; MAXCLUS - number of clusters + 1
-		ld 	(iy+$0f),h
+INIENV:		call	GETWRK			; HL and IX point to work buffer
 		xor	a
-		ret
+		or	(ix+W_DRIVES)		; number of drives 0?
+		ret	z
+		ld	(ix+W_CURDRV),$ff	; Init current drive
+		call	PrintMsg
+		db	"Drives: ",0
+		ld	a,(ix+W_DRIVES)
+		add	a,'0'
+		rst	$18
+		call	PrintCRLF
+	IFNDEF CXDOS1
+		; determine interface offset for the boot drive number
+		call	GETSLT
+		ld 	hl,DRVTBL
+		ld	b,a			; B = this disk interface slot number
+		ld	c,$00
+r301:		ld	a,(hl)
+		add	a,c
+		ld	c,a
+		inc	hl
+		ld	a,(hl)
+		inc	hl
+		cp	b			; this interface?
+		jr	nz,r301			; nz=no
+		dec	hl
+		dec	hl
+		ld	a,c
+		sub	(hl)
+		ld	b,(ix+W_BOOTDRV)	; Get boot drive
+		add	a,b
+		ld	(ix+W_BOOTDRV),a	; Set boot drive
+
+		; delay loop to view the driver info
+		ld	b,$04
+r302:		ld	hl,$0000
+r303:		dec	hl
+		ld	a,h
+		or	l
+		jr	nz,r303
+		djnz	r302
 	ENDIF
+		ret
+
 ; ------------------------------------------
 ; CHOICE - Choice for FORMAT 
 ; Input : None
@@ -616,6 +569,78 @@ nokey:		or	$ff
 
 	ENDIF ; BOOTCHOICE
 
+; ------------------------------------------
+; DRVINIT - Initialize hardware interface driver
+; Input:  None
+; Output:
+;   Zero flag  = Z: interface detected/active	NZ: not active
+;   Carry flag = NC: successfully initialized   C: interface error / time-out
+; May corrupt: AF,BC,DE,HL
+; ------------------------------------------
+DRVINIT:	call	ideInit
+		ret	nz
+
+		ld	hl,PART_BUF
+		call	ideInfo
+		ret	c
+		call	PrintMsg
+	IFDEF PPIDE
+		db	12,"BEER  : PPI IDE "
+	ELIFDEF CFIDE
+		db	12,"SODA  : CF IDE "
+	ELSE
+		db	12,"CORE  : "
+	ENDIF
+	IFDEF IDEDOS1
+		db	"DOS 1",13,10
+	ELSE
+		db	"DOS 2",13,10
+	ENDIF
+		db	"Rev.  : "
+		INCLUDE	"rdate.inc"		; Revision date
+		db	13,10
+		db	"Master: ",0
+		ld	c,$4d
+		ld	hl,(PART_BUF+$79)
+		ld	a,(PART_BUF+$7b)
+		srl	a
+		rr	h
+		rr	l
+		srl	a
+		rr	h
+		rr	l
+		srl	a
+		rr	h
+		rr	l
+		or	a
+		jr	z,r721
+		ld	c,$47
+		ld	l,h
+		ld	h,a
+		srl	h
+		rr	l
+		srl	h
+		rr	l
+r721:		call	MakeDec
+		ld	a,c
+		rst	$18
+		call 	PrintMsg
+		db	13,10,"        ",0
+		ld	hl,PART_BUF+$36		; +$2e=firmware +$36=model
+		ld	b,$0a
+r722:		inc	hl
+		ld	a,(hl)
+		rst	$18
+		dec	hl
+		ld	a,(hl)
+		rst	$18
+		inc	hl
+		inc	hl
+		djnz	r722
+		call	PrintCRLF
+		xor	a
+		ret
+
 ; ------------------------------------------------------------------------------
 ; *** Print subroutines ***
 ; ------------------------------------------------------------------------------
@@ -674,3 +699,122 @@ r734:		ld	b,$01
 r735:		dec	b
 		jr	z,r734
 		ret
+
+; ------------------------------------------------------------------------------
+	ENDIF ; DRV_IPL
+
+
+	IFDEF DRV_SYS
+; ------------------------------------------------------------------------------
+; Driver system routines (called by kernel)
+; ------------------------------------------------------------------------------
+
+		PUBLIC	GETDPB
+
+		EXTERN	DSKIO
+
+; ------------------------------------------
+; GETDPB - Set DPB using sector 0 / bootsector of partition
+; Called by DOS 1 only, not used by DOS 2.2
+; Input:
+;   A  = Drive number
+;   B  = First byte of FAT
+;   C  = Media descriptor
+;   HL = Base address of DPB
+; Output:
+;   [HL+1] .. [HL+18] = DPB fo the specified drive
+; ------------------------------------------
+	IFNDEF IDEDOS1
+GETDPB:		ret
+	ELSE
+GETDPB:		ei
+		push	hl
+		ld	de,0			; first logical sector
+		ld	hl,(SSECBUF)		; transfer address
+		ld	b,1			; number of sectors is 1
+		or	a			; carry flag cleared ==> read sector
+		call	DSKIO
+		pop	iy
+		ret	c
+		ld	ix,(SSECBUF)
+		ld	a,(ix+$15)		; Media ID
+		ld	(iy+$01),a
+		ld	(iy+$02),$00		; Sector size is 0200h
+		ld	(iy+$03),$02
+		ld	(iy+$04),$0f		; Directory mask 00fh: 512/32-1
+		ld	(iy+$05),$04		; Directory shift 004h
+		ld	a,(ix+$0d)		; Cluster size (in sectors)
+		dec	a
+		ld	(iy+$06),a		; Cluster mask
+		ld	c,$00
+r601:		inc	c
+		rra
+		jr	c,r601
+		ld	(iy+$07),c		; Cluster shift
+		ld	l,(ix+$0e)		; Number of unused sectors
+		ld	h,(ix+$0f)
+		ld	(iy+$08),l		; FIRFAT - first FAT sector
+		ld	(iy+$09),h
+		ld	e,(ix+$16)		; Size of FAT (in sectors)
+		ld	(iy+$10),e		; FATSIZ - Sectors per FAT
+		ld	d,$00
+		ld	b,(ix+$10)		; Number of FATs
+		ld	(iy+$0A),b
+r602:		add	hl,de
+		djnz	r602
+		ld	(iy+$11),l		; FIRDIR - First directory sector
+		ld	(iy+$12),h
+		ld	a,(ix+$12)		; Number of directory entries (high byte)
+		ex	de,hl
+		ld	h,a
+		ld	l,(ix+$11)		; Number of directory entries (low byte)
+		ld	bc,$000f
+		add	hl,bc
+		add	hl,hl
+		add	hl,hl
+		add	hl,hl
+		add	hl,hl			; 16 directory entries per sector
+		ld	l,h
+		ld	h,$00
+		ex	de,hl
+		or	a			; number of directory entries < 256?
+		jr	z,r603			; z=yes
+		ld	a,$ff			; set max 255 directory entries
+		jr	r604
+r603:		ld	a,(ix+$11)		; set max directory entries to directory entries low byte
+r604:		ld	(iy+$0b),a		; MAXENT - Max directory entries
+		add	hl,de
+		ld	(iy+$0c),l		; FIRREC - first data sector
+		ld	(iy+$0d),h
+		ex	de,hl
+		ld	l,(ix+$13)		; Total number of sectors
+		ld	h,(ix+$14)
+		ld	bc,$0000
+		ld	a,l
+		or	h
+		jr	nz,r605
+		ld	l,(ix+$20)
+		ld	h,(ix+$21)
+		ld	c,(ix+$22)
+		ld	b,(ix+$23)
+r605: 		or	a
+		sbc	hl,de
+		jr	nc,r606
+		dec	bc
+r606:		ld	a,(iy+$07)
+r607:	  	dec	a
+		jr	z,r608
+		srl	b
+		rr	c
+		rr	h
+		rr	l
+		jr	r607
+r608:		inc	hl
+		ld	(iy+$0e),l		; MAXCLUS - number of clusters + 1
+		ld 	(iy+$0f),h
+		xor	a
+		ret
+	ENDIF ; IDEDOS1
+
+; ------------------------------------------------------------------------------
+	ENDIF ; DRV_SYS

@@ -10,33 +10,24 @@
 ; but without any warranty of any kind, either expressed or implied.
 ; ------------------------------------------------------------------------------
 
+	IF !(CXDOS1 || CXDOS2)
 	        INCLUDE "disk.inc"	; Assembler directives
 		INCLUDE	"msx.inc"	; MSX constants and definitions
-
 		SECTION	DRV_IDE
+	ENDIF
 
 		; Mandatory symbols defined by the disk hardware interface driver
-		PUBLIC	DRVINIT		; Initialize hardware interface driver
-		PUBLIC	INIENV		; Initialize driver environment
 		PUBLIC	DSKIO		; Disk I/O routine
 		PUBLIC	DSKCHG		; Disk change routine
 		PUBLIC	READSEC		; Read sector (MBR / bootsector) routine
 		PUBLIC	DSKABSRW	; Read/write absolute sectors on disk
 		PUBLIC	DRVMEM		; Memory for hardware interface variables
+		PUBLIC	ideInit
+		PUBLIC	ideInfo
 
 		EXTERN	GETWRK		; Get address of disk driver's work area
-		EXTERN	GETSLT		; Get slot of this interface
 		EXTERN	DRVSIZE		; DOS driver workarea size (offset)
 		EXTERN	W_CURDRV	; Workarea variable defined by the DOS driver
-		EXTERN	W_BOOTDRV	; "
-		EXTERN	W_DRIVES	; "
-
-		; Driver routines, use in DRVINIT/INIENV only
-		EXTERN	PART_BUF
-		EXTERN	PrintMsg
-		EXTERN	PrintCRLF
-		EXTERN	PrintString
-		EXTERN	MakeDec
 
 ; Hardware driver variables
 W_RWFLAG	equ	DRVSIZE+$00	; Read/Write flag
@@ -44,124 +35,6 @@ W_IODATA	equ	DRVSIZE+$01	; IDE IO data port/register
 W_IOCTL		equ	DRVSIZE+$02	; IODE IO control port/register
 ;
 DRVMEM		equ	$03		; Workarea memory for hardware interface variables
-
-; ------------------------------------------
-; DRVINIT - Initialize hardware interface driver
-; Input:  None
-; Output: 
-;   Zero flag  = Z: interface detected/active	NZ: not active
-;   Carry flag = NC: successfully initialized   C: interface error / time-out
-; May corrupt: AF,BC,DE,HL
-; ------------------------------------------
-DRVINIT:	call	ideInit
-		ret	nz
-
-		ld	hl,PART_BUF
-		call	ideInfo
-		ret	c
-		call	PrintMsg
-IFDEF PPIDE
-		db	12,"BEER  : PPI IDE "
-ELIFDEF CFIDE
-		db	12,"SODA  : CF IDE "
-ELSE
-		db	12,"CORE  : "
-ENDIF
-IFDEF IDEDOS1
-		db	"DOS 1",13,10
-ELSE
-		db	"DOS 2",13,10
-ENDIF
-		db	"Rev.  : "
-		INCLUDE	"rdate.inc"		; Revision date
-		db	13,10
-		db	"Master: ",0
-		ld	c,$4d
-		ld	hl,(PART_BUF+$79)
-		ld	a,(PART_BUF+$7b)
-		srl	a
-		rr	h
-		rr	l
-		srl	a
-		rr	h
-		rr	l
-		srl	a
-		rr	h
-		rr	l
-		or	a
-		jr	z,r721
-		ld	c,$47
-		ld	l,h
-		ld	h,a
-		srl	h
-		rr	l
-		srl	h
-		rr	l
-r721:		call	MakeDec
-		ld	a,c
-		rst	$18
-		call 	PrintMsg
-		db	13,10,"        ",0
-		ld	hl,PART_BUF+$36		; +$2e=firmware +$36=model
-		ld	b,$0a
-r722:		inc	hl
-		ld	a,(hl)
-		rst	$18
-		dec	hl
-		ld	a,(hl)
-		rst	$18
-		inc	hl
-		inc	hl
-		djnz	r722
-		call	PrintCRLF
-		xor	a
-		ret
-
-; ------------------------------------------
-; INIENV - Initialize the work area (environment)
-; Input : None
-; Output: None
-; May corrupt: AF,BC,DE,HL,IX,IY
-; ------------------------------------------
-INIENV:		call	GETWRK			; HL and IX point to work buffer
-		xor	a
-		or	(ix+W_DRIVES)		; number of drives 0?
-		ret	z
-		ld	(ix+W_CURDRV),$ff	; Init current drive
-		call	GETSLT
-		ld 	hl,DRVTBL
-		ld	b,a			; B = this disk interface slot number
-		ld	c,$00
-r301:		ld	a,(hl)
-		add	a,c
-		ld	c,a
-		inc	hl
-		ld	a,(hl)
-		inc	hl
-		cp	b			; this interface?
-		jr	nz,r301			; nz=no
-		dec	hl
-		dec	hl
-		ld	a,c
-		sub	(hl)
-		ld	b,(ix+W_BOOTDRV)	; Get boot drive
-		add	a,b
-		ld	(ix+W_BOOTDRV),a	; Set boot drive
-		call	PrintMsg
-		db	"Drives: ",0
-		ld	a,(ix+W_DRIVES)
-		add	a,'0'
-		rst	$18
-		call	PrintCRLF
-		; delay loop to view the driver info
-		ld	b,$04
-r302:		ld	hl,$0000
-r303:		dec	hl
-		ld	a,h
-		or	l
-		jr	nz,r303
-		djnz	r302
-		ret
 
 ; ------------------------------------------
 ; DSKIO - IDE Hard Disk Read/Write
@@ -316,7 +189,7 @@ wr01:		call	ideWriteSector
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ; ------------------------------------------
 DSKCHG:
-IFDEF IDEDOS1
+	IFDEF IDEDOS1
 		push	af
 		call	GETWRK
 		pop	af
@@ -330,12 +203,12 @@ IFDEF IDEDOS1
 r501:		ld	b,$FF			; changed
 		xor	a
 		ret
-ELSE
-; always return unchanged for DOS2 (disks are not hot-pluggable)
+	ELSE
+		; always return unchanged for DOS2 (disks are not hot-pluggable)
 		ld	b,$01
 		xor	a
 		ret
-ENDIF
+	ENDIF
 
 ; ------------------------------------------
 ; READSEC - Read (boot) sector
@@ -458,7 +331,7 @@ REG_STATUS	equ	$07	; r
 REG_COMMAND	equ	$07	; w
 REG_CONTROL	equ	$07	; r/w
 
-IFDEF PPIDE
+	IFDEF PPIDE
 ; ------------------------------------------------------------------------------
 ; *** PPI 8255 IDE routines ***
 ; ------------------------------------------------------------------------------
@@ -717,9 +590,9 @@ ppideOutput:	ex	af,af'
 		ex	af,af'
 		ret
 
-; END PPIDE
+	; END PPIDE
 
-ELIFDEF CFIDE
+	ELIFDEF CFIDE
 ; ------------------------------------------------------------------------------
 ; *** Compact Flash 8-BIT IDE routines ***
 ; ------------------------------------------------------------------------------
@@ -921,9 +794,9 @@ ideError:	ld	a,(ix+W_IODATA)
 		jp	dosError
 
 
-; END CFIDE
+	; END CFIDE
 
-ELSE
+	ELSE
 ; ------------------------------------------------------------------------------
 ; *** Dummy driver routines ***
 ; ------------------------------------------------------------------------------
@@ -939,4 +812,4 @@ ideWaitReady:
 ideWaitData:
 ideError:	ret
 
-ENDIF 
+	ENDIF 
