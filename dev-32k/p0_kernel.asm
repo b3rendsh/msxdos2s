@@ -14,11 +14,12 @@
 ; 01. The rom bank switching code is removed
 ; 02. Added FAT16 option, partly based on FAT16 v0.12 by OKEI
 ; 03. Optimized FAT16 code to free space for format and ramdisk routines
-; 04. Use Extended BPB serial on FAT16 partitions
+; 04. Use Extended BPB serial on FAT16 partitions (todo: FAT16_EBS)
 ; 05. Use Microsoft standards to determine if partition is FAT16 or FAT12 (DPBSET)
 ; 06. Changed the free disk calculation routine for FAT16 partitions
 ; 07. Optmized code / removed unused code (OPTM)
 ; 08. Added DOSV231 option
+; 09. Undelete flag for DOS1 / FAT16 partitions (DIRTYBIT)
 
 
 		INCLUDE "disk.inc"		; Assembler directives
@@ -8241,7 +8242,7 @@ C2E98:		XOR	A
 		RLA
 		RET
 
-; Subroutine reset deleted files status disk
+; Subroutine reset deleted files status disk (dirty bit = 0)
 C2EA2:		PUSH	HL
 		EX	(SP),IX
 		BIT	0,(IX+24)
@@ -8249,12 +8250,12 @@ C2EA2:		PUSH	HL
 		XOR	A
 		JR	J2EBF
 
-; Subroutine set deleted files status disk
+; Subroutine set deleted files status disk (dirty bit = 1)
 C2EAE:		PUSH	HL
 		EX	(SP),IX
-		BIT	7,(IX+25)
-	IFNDEF FAT16
-		JR	NZ,J2F16
+	IFNDEF DIRTYBIT ; FAT16
+		BIT	7,(IX+25)		; DOS2 partition (FAT12)?
+		JR	NZ,J2F16		; nz=no, don't use dirty bit
 	ENDIF
 		BIT	0,(IX+24)
 		JR	NZ,J2F16
@@ -8310,10 +8311,10 @@ J2EF6:		LD	A,B
 	IFDEF FAT16 ; CHKVOL
 		PUSH	AF
 		LD	A,(IX+19h)	; check VOL
-		CP	0FFh
+		CP	0FFh		; DOS2 boot sector?
 		LD	DE,002Eh
-		JR	NZ,VOL_1
-		LD	DE,0012h
+		JR	NZ,VOL_1	; nz=yes
+		LD	DE,0012h	; store dirty bit at offset 0x0A in boot sector
 VOL_1:		POP	AF
 	ELSE
 		LD	DE,46
@@ -8952,9 +8953,12 @@ J32D7:		LD	A,(DE)
 		RET
 
 J32E2:  
-	IFDEF FAT16 ; GETVOL (1/2)
+	IFDEF FAT16_EBS ; GETVOL (1/2)
 		; Mod: check EBS byte instead of last byte of OEM name
 		; IF EBS valid then use the serial in the Extended BPB
+		; todo:
+		; 1. dirty disk bit is stored at offset 0x0a
+		; 2. initialize drive table with correct serial number
 		PUSH	IX
 		POP	HL
 		LD	DE,0026H		; Extended Boot Signature offset
@@ -8964,8 +8968,22 @@ J32E2:
 		AND	0FEH			; EBS can be 0x28 or 0x29
 		CP	028H			; EBS?
 		JR	Z,FAT16VOL		; z=yes
-	ENDIF
 		LD	HL,I32EF
+	ELIFDEF FAT16 ; GETVOL
+		PUSH	IX
+		POP	HL
+		LD	DE,000AH
+		ADD	HL,DE
+		LD	A,(HL)			; UNDEL FLG (DOS1,FAT16)
+		CP	01h
+		JR	Z,PAT_47
+		XOR	A
+PAT_47:		LD	HL,I32E8+6
+		LD	(HL),A
+		INC	HL
+	ELSE
+		LD	HL,I32EF
+	ENDIF
 		XOR	A
 		DEC	A
 		RET
@@ -8974,7 +8992,7 @@ I32E8:		DEFB	"VOL_ID"
 		DEFB	0			; undelete flag
 I32EF:		DEFW	0FFFFH,0FFFFH		; default serial
 
-	IFDEF FAT16 ; GETVOL (2/2)
+	IFDEF FAT16_EBS ; GETVOL (2/2)
 
 FAT16VOL:	LD	HL,EBSER
 		PUSH	HL
@@ -11154,8 +11172,11 @@ SDIR_1:		DB	0		; BBE2h	bit16-23
 SDIR_2:		DB	0		; BBD2h+4 bit16-23
 SDIR_3:		DB	0		; BBC6h+4 bit16-23
 RW_16:		DB	0		; bit16-23 for DISKIO
-		DB	1		; undelete flag
+
+	IFDEF FAT16_EBS
+		DB	0		; don't use undelete flag (dirty bit)
 EBSER:		DW	0,0		; EBPB serial
+	ENDIF
 
 ; ------------------------------------------------------------------------------
 ENDIF ; FAT16

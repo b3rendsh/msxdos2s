@@ -23,6 +23,7 @@
 ; ROM16K	Split 32K DOS ROM in 16K ROM and load 16K kernel code from designated area on disk
 ; DOSV231	Include DOS v2.31 changes
 ; TURBOR	Include turbo R specific DOS v2.31 changes
+; DIRTYBIT	Enable undelete flag for DOS1 FAT12 and FAT16 partitions (slow on large FAT16 partitions!)
 
 
 ; IDE driver compile options
