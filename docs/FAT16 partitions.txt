@@ -1,6 +1,32 @@
 FAT16 partitions
 ================
 
+DOS 2
+-----
+The original DOS 2 versions don't support FAT16 partitions.
+In the development sources a FAT16 option is provided, which is partly
+based on OKEI's FAT16 patch v0.12.
+
+Differences with the FAT16 patch
+--------------------------------
+1. Integrated and optimized FAT16 code.
+2. FORMAT and RAMDISK functions are still available.
+3. Fast free disk space calculation, without using extra RAM segment.
+   Optional cut off for slow disk interfaces.
+4. Identification of FAT12 / FAT16 partitions compliant with MS standard.
+5. Enabled booting from FAT16 partition.
+6. Drive table init (DPB+1E patch) is applied in the kernel module to make
+   the RAMDISK accessible if it is initialized after boot.
+7. Undelete (dirty bit) is only active on DOS2 FAT12 partitions, not on
+   DOS1 FAT12 or FAT16 partitions to avoid very slow directory entry creation
+   on very large disks and/or slow disk interfaces.
+
+Known limitations
+-----------------
+The internal FORMAT function can only format standard DOS2 floppy disks.
+Some external commands don't work on FAT16 partitions e.g. CHKDSK or UNDEL.
+
+
 DOS 1
 -----
 The original DOS 1 doesn't support FAT16 partitions.
@@ -17,27 +43,3 @@ formatted FAT16 partitions this is typically set to 512. The directoy entries
 higher than 255 are not visible.
 Subdirectories are not supported.
 
-
-DOS 2
------
-The original DOS 2 versions don't support FAT16 partitions.
-In the development sources a FAT16 option is provided, which is partly
-based on OKEI's FAT16 patch v0.12.
-
-Differences with the FAT16 patch
---------------------------------
-1. Integrated and optimized FAT16 code.
-2. FORMAT and RAMDISK functions are still available.
-3. Fast free disk space calculation, without using extra RAM segment.
-   Optional cut off for slow disk interfaces.
-4. Identification of FAT12 / FAT16 partitions compliant with MS standard.
-5. Enabled booting from FAT16 partition.
-6. On FAT16 partitions the Extended BPB serial number is used for disk
-   change detection.
-7. Drive table init (DPB+1E patch) is applied in the kernel module to make
-   the RAMDISK accessible if it is initialized after boot.
-
-Known limitations
------------------
-The internal FORMAT function can only format standard DOS2 floppy disks.
-Some external commands don't work on FAT16 partitions e.g. CHKDSK.
