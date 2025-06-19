@@ -6,8 +6,6 @@
 ; JIO MSX-DOS 1 driver and CRC routines by H.J. Berends
 ; 115K2 transmit/receive routines based on code by Nyyrikki
 ; ------------------------------------------------------------------------------
-; Work in progress!!!
-; ------------------------------------------------------------------------------
 
 IF !(CXDOS1 || CXDOS2)
         INCLUDE	"disk.inc"	; Assembler directives

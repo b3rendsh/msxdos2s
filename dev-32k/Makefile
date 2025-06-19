@@ -12,7 +12,7 @@ ifdef ComSpec
 	RMD	:=
 	SEARCH	:= find
 	CP	:= copy /b
-	GETDATE	:= powershell get-date -format "{yyyyMMdd}" 
+	GETDATE	:= powershell get-date -format "{yyyy-MM-dd}" 
 	QUOTE	:= "
 	/	:= $(strip \)
 else
@@ -20,7 +20,7 @@ else
 	RMD	:= /*
 	SEARCH	:= grep
 	CP	:= cp
-	GETDATE	:= date +'%Y%m%d'
+	GETDATE	:= date +'%Y-%m-%d'
 	QUOTE	:= '"'
 	/	:= /
 endif 
