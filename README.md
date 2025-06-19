@@ -3,6 +3,7 @@
 - Enhanced MSX DOS 1
 - Optimized BEER and SODA IDE interface drivers
 - Disk hardware interface designs
+- MSX JIO client
 
 ## Introduction
 This repository contains a re-composition of the MSX DOS 2 disk ROM that can be used as a 32K ROM without a ROM mapper (or 16K ROM for the BEER interface) and includes enhancements for large disks. 
@@ -60,8 +61,8 @@ The BEER-232 cartridge is derived from the BEER-202 and supports 2x 32K disk ROM
 [**SODA IDE interface**](https://github.com/Danjovic/Soda-IDE)  
 The SODA IDE cartridge design is based on a RCBus Compact Flash module. Danjovic adapted this design for MSX and made the PCB layout.  
   
-**MSX JIO (under construction)**  
-Remote serial disk solution from Louthrax. It consists of a disk image server on a PC or android phone, a MSX client and a serial connection over the MSX joystick (gpio) port 2 using a ftdi cable or bluetooth adapter. This repository contains MSX DOS 1 and MSX DOS 2 client interface sources.
+[**MSX JIO**](https://github.com/louthrax/MSXJIO)  
+Remote serial disk solution from Louthrax. It consists of a disk image server on a PC or android phone, a MSX client and a serial connection over the MSX joystick (gpio) port 2 using a ftdi cable or bluetooth adapter. 
 
 ## Older versions
 
