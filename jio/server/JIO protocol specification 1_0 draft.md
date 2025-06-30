@@ -30,9 +30,12 @@ No rights can be derived from this publication.
 
 | Field     | Size        | Description                       |
 |:----------|:------------|:-----------------------------------
-| Sync      | 2 bytes     | Synchronization bytes `0xFF 0xF0` |
+| Delay     | 7 bytes     | Processing delay 7x `0xFF`        |
+| Sync      | 1 byte      | Synchronization byte `0xF0`       |
 | Response  | variable    | Server response data              |
-| CRC       | 2 bytes     | Present only if CRC flag is set   |
+
+The number of delay bytes may vary. The server default is 7.  
+The client should ignore all received `0xFF` delay bytes and proceed when it receives the `0xF0` sync byte.  
 
 **CRC details:**
 
@@ -56,7 +59,16 @@ No rights can be derived from this publication.
 
 **Response:**  
 Count * 512 bytes of raw data  
-  
+
+**RX CRC:**  
+IF the RX CRC flag is set then an additional CRC packet is received:
+
+| Field     | Size        | Description                       |
+|:----------|:------------|:-----------------------------------
+| Delay     | 7 bytes     | Processing delay 7x `0xFF`        |
+| Sync      | 1 byte      | Synchronization byte `0xF0`       |
+| CRC       | 2 bytes     | CRC value of the response data    |
+
   
 #### 0x11 — COMMAND DRIVE WRITE
 
