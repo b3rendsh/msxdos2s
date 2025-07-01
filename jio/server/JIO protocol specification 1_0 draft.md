@@ -13,6 +13,7 @@ No rights can be derived from this publication.
 - Commands can include an optional CRC.
 - Responses depend on the command and are typically data blocks or acknowledgments.
 - Data is transferred over a serial interface.
+- Word and long word values are provided in little endian format.
 
 ## Packet structure
 
@@ -50,12 +51,15 @@ The client should ignore all received `0xFF` delay bytes and proceed when it rec
 **Description:** Read block(s) of 512 bytes raw data
 
 **Payload:** 
-| Field     | Size        | Description                              |
-|:----------|:------------|:-----------------------------------------|
-| Partition | 1 byte      | Partition number                         |
-| Sector    | 3 bytes     | Starting sector number                   |
-| Count     | 1 byte      | Number of 512-bytes sectors to read      |
-| Address   | 2 bytes     | Client destination memory address info   |
+| Field     | Size        | Description                              | Example    |
+|:----------|:------------|:-----------------------------------------|:-----------|
+| Partition | 1 byte      | Partition number                         | `0x00`     |
+| Sector    | 3 bytes     | Starting sector number                   | `0x010203` |
+| Count     | 1 byte      | Number of 512-bytes sectors to read      | `0x10`     |
+| Address   | 2 bytes     | Client destination memory address info   | `0xE0F0`   |
+
+Note: the partition + sector is provided as a long word  
+Example payload: `0x03` `0x02` `0x01` `0x00` `0x10` `0xF0` `0xE0`  
 
 **Response:**  
 Count * 512 bytes of raw data  
@@ -82,6 +86,8 @@ IF the RX CRC flag is set then an additional CRC packet is received:
 | Count     | 1 byte      | Number of 512-bytes sectors to write   |
 | Address   | 2 bytes     | Client source memory address info      |
 | Data      | Count * 512 | Raw data to write                      |
+
+Note: the partition + sector is provided as a long word  
 
 **Response:**  
 `0x11 0x11`: CRC mismatch (if TX CRC is enabled)  
