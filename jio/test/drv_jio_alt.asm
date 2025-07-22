@@ -781,8 +781,17 @@ bJIOReceive:
         add	ix,sp
 
 IFDEF LPTIO
+	; probe the lpt port to determine receive method:
+	; 1. unused bits 0,2..7 are last written value on databus or always 0
+	; 2. unused bits 0,2..7 are always 1
 	ld	c,$90		; lpt i/o port
-        out	(c),0		; clear z80 data bus
+        out	(c),d		; clear z80 data bus (d=0)
+        in	a,(c)
+        and	$fd
+        jr	z,HeaderPO	; method 1
+        cp	$fd
+        jr	z,HeaderPE	; method 2
+        jr	RxTimeOut	; other, not supported
 ELSE
         ld	c,$a2
         ld	a,15		; PSG r15
@@ -867,7 +876,8 @@ RX_PO:	in	f,(c)		; 14
 IFDEF LPTIO
 	rrca			;  5 extra rotate because rx is bit 1
         ld	(hl),a		;  8 instruction uses data bus write
-        out	(c),0		; 14? clear z80 data bus
+        xor	a		;  5 
+        out	($90),a		; 12 clear z80 data bus
 ELSE
         ld	(hl),a		;  8
 ENDIF
@@ -892,8 +902,6 @@ RxTimeOut:
         ret
 
 ; ------------------------------------------------------------------------------
-
-IFNDEF LPTIO
 
 HeaderPE:	
 	dec	de		;  7
@@ -960,14 +968,16 @@ RX_PE:	in	f,(c)		; 14
         xor	b		;  5
         rrca			;  5
 
-        ld	(hl),a		;  8
-        ld	a,d		;  5
+IFDEF LPTIO
+	rrca			;  5 extra rotate because rx is bit 1
+ENDIF
+	ld	(hl),a		;  8 instruction uses data bus write
+
+	ld	a,d		;  5
         or	e		;  5
         jp	nz,RX_PE	; 11
 
         jr	ReceiveOK 
-
-ENDIF ; LPTIO
 
 ; ------------------------------------------------------------------------------
 
