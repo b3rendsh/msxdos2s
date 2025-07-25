@@ -9,13 +9,21 @@
 ; ------------------------------------------------------------------------------
 ; MSX disk info and test for use with BEER or SODA IDE interface.
 
-; DEFINE DEBUG	
+; DEFINE DEBUG
+; DEFINE BASBIN		
 
 		INCLUDE	"msx.inc"
 
-		ORG	$0100
-
+	IFDEF BASBIN
+		ORG	BOT32K-7		; 0x8000 - 7 bytes for BIN header
+		db	$fe			; ID
+		dw	BOT32K			; Start address
+		dw	TasteEnd		; End address
+		dw	main			; Execution address
+	ELSE
+		ORG	TBASE			; 0x0100: Start of TPA
 		jp	main
+	ENDIF
 
 ; jump table cf/ppi ide subroutines
 cf_info:	jp	0
@@ -34,6 +42,7 @@ main:		ld	ix,iobase		; workbuffer for dynamic IO addresses
 		ld	de,t_header
 		call	PrintText
 
+	IFNDEF BASBIN
 		; check for interface parameter 
                 ld      a,($005d)		; first character of commandline parameters:
 		cp	' '
@@ -54,7 +63,8 @@ check1:		cp	'B'			; B = beer interface
 
 help:		ld	de,t_help
 		call	PrintText
-		jr	main_exit		
+		jr	main_exit
+	ENDIF		
 
 autodetect:	call	cfideInit		; probe cf interface first
 		ld	a,$01
@@ -75,7 +85,12 @@ main_2:		ld	(itype),a
 		call	diag
 		jr	c,ide_error
 		call	z,speedtest
-main_exit:	rst	$00	
+main_exit:
+	IFDEF BASBIN
+		ret
+	ELSE
+		rst	$00	
+	ENDIF
 
 ide_error:	push	af
 		ld	de,t_error
@@ -241,9 +256,11 @@ speedtest1:	ld	de,t_speed
 		call	diskread
 		ret	c
 
+	IFNDEF BASBIN
                 ld      a,($005e)		; 2nd character of commandline parameters
 		cp	'X'
 		ret	nz
+	ENDIF
 
 		ld	de,t_block16k
 		call	PrintText
@@ -356,21 +373,27 @@ r11:		sll	c
 PrintC:		push	bc
 		push	de
 		push	hl
+	IFDEF BASBIN
+		call	CHPUT
+	ELSE
 		ld	c,6
 		ld	e,a
 		call	5
+	ENDIF
 		pop	hl
 		pop	de
 		pop	bc
 		ret
 		
-; Use BDOS to print string terminated with $
+; Print string terminated with $
 PrintText:	push	de
-		push	hl
-		ld	c,9
-		call	5
-		pop	hl
-		pop	de
+string_loop:	ld	a,(de)
+		inc	de
+		cp	'$'
+		jr	z,string_end
+		call	PrintC
+		jr	string_loop
+string_end:	pop	de
 		ret
 
 ; Use BDOS to move cursor to next line
@@ -1047,6 +1070,9 @@ america:	ds	1
 iobase:		ds	2
 itype:		ds	1
 ppireg:		ds	6
-
-		ALIGN	$100
 secbuf:		ds	512
+
+; ------------------------------------------------------------------------------
+TasteEnd:
+
+

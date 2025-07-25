@@ -89,6 +89,15 @@ jio2:	rdate
 	z88dk-appmake +rom -b obj/jio_dos2__.bin -o $(ROM)/jio_dos2.rom -s 32768 --org 0
 	@echo done
 
+pio2:	rdate
+	@echo Assembling PIO DOS2 / 32k jio printer remote disk rom..
+	$(RMF) obj$(RMD)
+	z80asm -b -d -l -m -DJIO -DLPTIO -Oobj -o=pio_dos2.bin p1_main.asm p3_paging.asm drv_jio.asm p0_kernel.asm
+	z88dk-appmake +glue -b obj/pio_dos2 --filler 0xFF --clean
+	z88dk-appmake +rom -b obj/pio_dos2__.bin -o $(ROM)/pio_dos2.rom -s 32768 --org 0
+	@echo done
+
+
 uart2:	rdate
 	@echo Assembling UART DOS2 / 32k uart 1655x remote disk rom..
 	$(RMF) obj$(RMD)
@@ -101,6 +110,8 @@ taste:
 	@echo Assembling taste program..
 	z80asm -b -m -Oobj -o=taste.com taste.asm
 	$(CP) obj$/taste.com $(ROM)$/TASTE.COM
+	z80asm -DBASBIN -b -m -Oobj -o=taste.bin taste.asm
+	$(CP) obj$/taste.bin $(ROM)$/TASTE.BIN
 	@echo done
 
 img:	

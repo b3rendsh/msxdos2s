@@ -105,7 +105,7 @@ Note: the partition + sector is provided as a long word
 | Flags     | 1 byte      | Error detection flags                                  |
 | Drives    | 1 byte      | Number of partitions (drives) on disk                  |
 | Bootdrv   | 1 byte      | The partition number that is marked active (default 0) |
-| Info      | variable    | Disk and flag information string (ends with 0x00)      |
+| Info      | 509 bytes   | Disk and flag information string (ends with 0x00)      |
 
 **Error detection flags**  
 | Bit | Flag           |
