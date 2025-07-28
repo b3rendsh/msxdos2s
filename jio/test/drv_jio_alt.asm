@@ -9,6 +9,7 @@
 ; Alternative driver:
 ; + Optional LPTIO build: use LPT port with 2 stop bits (115200/8N2)
 ; + Joystick port receive timing alternatives (115200/8N1)
+; + UART 1655X at base port 0x80 base
 ; ------------------------------------------------------------------------------
 
 IF !(CXDOS1 || CXDOS2)
@@ -32,6 +33,26 @@ MYSIZE		equ	$7
 
 SECLEN		equ	512
 PART_BUF	equ	TMPSTK	; Copy of disk info / Master Boot Record
+
+; UART definitions
+
+ubase		equ	$80
+
+UART_RBR	equ	0		; dlab=0: receiver buffer register (read)
+UART_THR	equ	0		; dlab=0: transmitter holding register (write)
+UART_IER	equ	1		; dlab=0: interrupt enable register 
+UART_IIR	equ	2		; interrupt identifcation register (read)
+UART_FCR	equ	2		; fifo control register (write)
+UART_LCR	equ	3		; line control register 
+UART_MCR	equ	4		; modem control register 
+UART_LSR	equ	5		; line status register 
+UART_MSR	equ	6		; modem status register 
+UART_SCR	equ	7		; scratch register 
+UART_DLL	equ	0		; dlab=1: divisor latch (ls)
+UART_DLM	equ	1		; dlab=1: divisor latch (ms)
+UART_AFR	equ	2		; dlab=1: alternate function register
+
+; ------------------------------------------------------------------------------
 
         INCLUDE "drv_jio.inc"
 
@@ -68,6 +89,21 @@ INIHRD:		ld	a,$06
                 call	SNSMAT		; Check if CTRL key is pressed
                 and	2
                 jr	z,r101		; z=yes: exit disk init
+	IFDEF UART
+		xor	a
+		out	(ubase+UART_IER),a	; set uart interrupts off
+		ld	a,$80			; set DLAB=1
+		out	(ubase+UART_LCR),a
+		ld	a,$01			; set divisor low byte (6=19K2, 3=38K4, 2=57K6, 1=115K2 with 1.84Mhz uart clock)
+		out	(ubase+UART_DLL),a
+		ld	a,$00			; set divisor high byte
+		out	(ubase+UART_DLM),a
+		ld	a,$03			; set framing to 8N1 / DLAB=0 (3=8N1 7=8N2)
+		out	(ubase+UART_LCR),a
+		; ld	a,$07			; enable FIFO buffer and reset it's counters
+		ld	a,$00			; disable FIFO buffer (when using 16550 with FIFO bug)
+		out	(ubase+UART_FCR),a
+	ENDIF          
                 xor	a
                 ret
 r101:		inc	sp
@@ -103,6 +139,8 @@ DRIVES:
 	db	12,"JIO "
 IFDEF LPTIO
         db	"LPT "
+ELIFDEF UART
+	db	"UART "
 ENDIF
 IFDEF IDEDOS1
         db	"MSX-DOS 1",13,10
@@ -616,9 +654,9 @@ DoCommand:
         ld      b,a             ; _ulSector in BCDE
 
         call    ucDoCommand
-        pop hl
-        pop hl
-        pop hl
+        pop	hl
+        pop	hl
+        pop	hl
 
         or      a
         ret     z
@@ -627,10 +665,29 @@ DoCommand:
         ret
 
 ; ------------------------------------------------------------------------------
-; Transmit data on joystick 2 port or lpt port (LPTIO)
-; Input: HL = DATA
+; Transmit data on joystick 2 port or lpt port (LPTIO) or 1655X (UART)
+; Input: DE = DATA
 ;        BC = LENGTH
 ; ------------------------------------------------------------------------------
+IFDEF UART
+vJIOTransmit:
+	ex	de,hl
+uart_send:
+	;in	a,(ubase+UART_MSR)	; use FIFO buffer
+	;bit	4,a			; cts: clear to send?
+	in	a,(ubase+UART_LSR)	; don't use FIFO buffer
+	bit	5,a			; thr: transmitter ready?
+	jr	z,uart_send		; z=no
+	ld	a,(hl)
+	out	(ubase+UART_THR),a	; send data
+	inc	hl
+	dec	bc
+	ld	a,b
+	or	c
+	jr	nz,uart_send
+	ret
+
+ELSE
 vJIOTransmit:
         exx
         push    bc
@@ -760,12 +817,65 @@ Tx16:	out	(c),e		; -0
 Tx17:	out	(c),e		; -1
         jp	JIOTxLoop
 
+ENDIF ; UART
 
 ; ------------------------------------------------------------------------------
-; Receive data on joystick 2 port or lpt port (LPTIO)
+; Receive data on joystick 2 port or lpt port (LPTIO) or 1655X (UART)
 ; Input: DE = DATA
 ;        BC = LENGTH
 ; ------------------------------------------------------------------------------
+IFDEF UART
+bJIOReceive:
+	ex	de,hl
+	in	a,(ubase+UART_MCR)
+	or	%00000010		; RTS on
+	out	(ubase+UART_MCR),a
+
+uart_sync1:	
+	call	rcv_ready
+	in	a,(ubase+UART_RBR)	; get header byte
+	cp	$ff
+	jr	nz,uart_sync1
+
+uart_sync2:	
+	call	rcv_ready
+	in	a,(ubase+UART_RBR)	; get header byte
+	cp	$f0			; sync?
+	jr	z,rcv_loop		; nz=no
+	cp	$ff
+	jr	z,uart_sync2
+	jr	uart_sync1
+	
+rcv_loop:
+	call	rcv_ready
+	in	a,(ubase+UART_RBR)	; receive data
+	ld	(hl),a
+	inc	hl
+	dec	bc			; data counter
+	ld	a,b
+	or	c
+	jr	nz,rcv_loop
+	in	a,(ubase+UART_MCR)
+	and	%11111101		; RTS off
+	out	(ubase+UART_MCR),a
+	ld	a,1
+	ret
+
+rcv_ready:
+	ld	de,$0000		; time-out counter
+ready_loop:
+	in	a,(ubase+UART_LSR)
+	bit	0,a			; receiver data ready?
+	ret	nz
+	dec	de
+	ld	a,d
+	or	e
+	jr	nz,ready_loop
+	pop	af			; ditch return address
+	xor	a
+	ret
+
+ELSE
 bJIOReceive:
         ld      h,d
         ld      l,e
@@ -978,6 +1088,8 @@ ENDIF
         jp	nz,RX_PE	; 11
 
         jr	ReceiveOK 
+
+ENDIF ; UART
 
 ; ------------------------------------------------------------------------------
 

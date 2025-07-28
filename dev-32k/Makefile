@@ -101,7 +101,7 @@ pio2:	rdate
 uart2:	rdate
 	@echo Assembling UART DOS2 / 32k uart 1655x remote disk rom..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DUART -Oobj -o=uart_dos2.bin p1_main.asm p3_paging.asm driver.asm drv_uart.asm p0_kernel.asm
+	z80asm -b -d -l -m -DJIO -DUART -Oobj -o=uart_dos2.bin p1_main.asm p3_paging.asm drv_jio.asm p0_kernel.asm
 	z88dk-appmake +glue -b obj/uart_dos2 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/uart_dos2__.bin -o $(ROM)/uart_dos2.rom -s 32768 --org 0
 	@echo done
