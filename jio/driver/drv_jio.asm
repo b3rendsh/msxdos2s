@@ -483,6 +483,7 @@ sec_write:
         pop	hl
         jr	c,sec_err
         inc	h
+        inc	h
 sec_next:
         xor	a
 sec_err:

@@ -9,7 +9,7 @@
 ; Alternative driver:
 ; + Optional LPTIO build: use LPT port with 2 stop bits (115200/8N2)
 ; + Joystick port receive timing alternatives (115200/8N1)
-; + UART 1655X at base port 0x80 base
+; + UART 1655X at base i/o port 0x80
 ; ------------------------------------------------------------------------------
 
 IF !(CXDOS1 || CXDOS2)
@@ -529,6 +529,7 @@ sec_write:
         pop	hl
         jr	c,sec_err
         inc	h
+        inc	h
 sec_next:
         xor	a
 sec_err:
@@ -872,6 +873,9 @@ ready_loop:
 	or	e
 	jr	nz,ready_loop
 	pop	af			; ditch return address
+	in	a,(ubase+UART_MCR)
+	and	%11111101		; RTS off
+	out	(ubase+UART_MCR),a
 	xor	a
 	ret
 
