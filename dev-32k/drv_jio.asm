@@ -9,7 +9,8 @@
 ; Alternative driver:
 ; + Optional LPTIO build: use LPT port with 2 stop bits (115200/8N2)
 ; + Joystick port receive timing alternatives (115200/8N1)
-; + UART 1655X at base port 0x80 base
+; + UART 1655X at base i/o port 0x80
+; + MAXENT: use 16-bit maximum directory entries in DOS 1 FAT16
 ; ------------------------------------------------------------------------------
 
 IF !(CXDOS1 || CXDOS2)
@@ -322,6 +323,9 @@ DEFDPB:		db	$00		; +00 DRIVE	Drive number
                 db	$03		; +10 FATSIZ	Sectors per FAT
                 dw	$0007		; +11 FIRDIR	First directory sector
                 dw	$0000		; +12 FATPTR	FAT pointer
+	IFDEF MAXENT
+		dw	$0070		; +14 MAXENT16	16-bit value of max. directory entries
+	ENDIF
 
 ; ------------------------------------------
 ; Check for boot code in the MBR, to be used in a modified MSX-DOS boot process.
@@ -1603,6 +1607,9 @@ ENDIF
 ;   HL = Base address of DPB
 ; Output:
 ;   [HL+1] .. [HL+18] = DPB fo the specified drive
+;   [HL+19] .. [HL+20] = unchanged (FAT pointer)
+;   If MAXENT:
+;   [HL+21]..[HL+22]  = 16-bit value of max. directory entries
 ; ------------------------------------------
         IFNDEF IDEDOS1
 GETDPB:		ret
@@ -1648,6 +1655,18 @@ r602:		add	hl,de
                 ex	de,hl
                 ld	h,a
                 ld	l,(ix+$11)		; Number of directory entries (low byte)
+	IFDEF MAXENT
+		ld	(iy+$15),l		; MAXENT16 (low byte)
+		and	$0F			; cutoff MAXENT at 0x0FFF (4095) because there are max 256 directory sectors
+		ld	(iy+$16),a		; MAXENT16 (high byte)
+		ld	(iy+$0b),$00		; if MAXENT=0 then use MAXENT16
+	ELSE
+                or	a			; number of directory entries < 256?
+		ld	a,l			; set max directory entries to directory entries low byte
+                jr	z,r604			; z=yes
+                ld	a,$ff			; set max 255 directory entries
+r604:		ld	(iy+$0b),a		; MAXENT - Max directory entries
+	ENDIF
                 ld	bc,$000f
                 add	hl,bc
                 add	hl,hl
@@ -1657,12 +1676,6 @@ r602:		add	hl,de
                 ld	l,h
                 ld	h,$00
                 ex	de,hl
-                or	a			; number of directory entries < 256?
-                jr	z,r603			; z=yes
-                ld	a,$ff			; set max 255 directory entries
-                jr	r604
-r603:		ld	a,(ix+$11)		; set max directory entries to directory entries low byte
-r604:		ld	(iy+$0b),a		; MAXENT - Max directory entries
                 add	hl,de
                 ld	(iy+$0c),l		; FIRREC - first data sector
                 ld	(iy+$0d),h
