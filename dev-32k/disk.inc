@@ -12,6 +12,8 @@
 ; DOS1 compile options
 ; --------------------
 ; FAT16DOS1	Include FAT16 for the DOS 1 kernel (mandatory for JIO driver)
+; MAXENT	Use 16-bit maximum directory entries value (FAT16)
+; FASTALLOC	Cutoff free disk space count at 2048 free clusters
 
 
 ; DOS2 compile options
@@ -19,7 +21,7 @@
 ; OPTM		0 = original code, 1 = optimized code
 ; FAT16		Include FAT16 for the DOS 2 kernel
 ; NODOS1	Remove DOS 1 msxdos.sys entry points to free rom space
-; FASTALLOC	Calculate max 4K free clusters for large drives in ALLOC function to avoid slow DIR command
+; FASTALLOC	Calculate max 2K free clusters for large drives in ALLOC function to avoid slow DIR command
 ; ROM16K	Split 32K DOS ROM in 16K ROM and load 16K kernel code from designated area on disk
 ; DOSV231	Include DOS v2.31 changes
 ; TURBOR	Include turbo R specific DOS v2.31 changes
@@ -37,8 +39,9 @@
 	OPTM	EQU	1
 	BTWAIT	EQU	$5000
 
-IF PPIDE || JIO || UART
+IF PPIDE || JIO || UART || IDEDOS1
 	DEFINE	FASTALLOC
+	DEFINE	MAXENT
 ENDIF
 
 IF CFIDE || PPIDE
@@ -56,14 +59,6 @@ IFDEF JIO
 	DEFINE	FAT16DOS1
 	MOD1	EQU	'x'	; eXended
 	MOD2	EQU	'r'	; JIO Remote disk
-ENDIF
-
-IFDEF UART
-	DEFINE	FAT16
-	DEFINE	FAT16DOS1
-	DEFINE	BOOTCODE
-	MOD1	EQU	'x'	; eXended
-	MOD2	EQU	'u'	; UART
 ENDIF
 
 IFDEF CORE

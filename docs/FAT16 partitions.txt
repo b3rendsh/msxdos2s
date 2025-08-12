@@ -12,7 +12,7 @@ Differences with the FAT16 patch
 1. Integrated and optimized FAT16 code.
 2. FORMAT and RAMDISK functions are still available.
 3. Fast free disk space calculation, without using extra RAM segment.
-   Optional cut off for slow disk interfaces.
+   Optional cutoff at 2048 clusters for slow disk interfaces.
 4. Identification of FAT12 / FAT16 partitions compliant with MS standard.
 5. Enabled booting from FAT16 partition.
 6. Drive table init (DPB+1E patch) is applied in the kernel module to make
@@ -31,15 +31,14 @@ DOS 1
 -----
 The original DOS 1 doesn't support FAT16 partitions.
 In IDEDOS1 a FAT16 option is provided, partly based on SOLiD's BEER DOS1 v1.9.
-The call to DSKIO is made compliant with the DOS 2 FAT16 patch and Nextor to
++ The call to DSKIO is made compliant with the DOS 2 FAT16 patch and Nextor to
 provide sector bits 16..23 as a parameter in register C.
++ Free disk space calculation is cutoff at 2048 clusters for fast dir command.
++ A 16-bit directory entry value is also used internally so on a typical FAT16 
+partition with max 512 directory entries all files in the root can be accessed.
 
 Known limitations
 -----------------
-Free disk space calculation on large FAT16 partitions is very slow, mostly
-noticable when doing a directory listing with the DIR command.
-The number of root directory entries should not exceed 255, on standard
-formatted FAT16 partitions this is typically set to 512. The directoy entries
-higher than 255 are not visible.
+Some low level disk (BASIC) commands may not work on FAT16 partitions e.g. 
+absolute sector read/write commands.
 Subdirectories are not supported.
-
