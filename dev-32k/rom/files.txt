@@ -10,7 +10,8 @@ beer_dos2.rom	32K BEER / PPI IDE DOS 2 rom
 soda_dos1.rom	16K SODA / CF IDE DOS 1 rom 
 soda_dos2.rom	32K SODA / CF IDE DOS 2 rom
 core_dos2.rom	32K DOS 2 rom including: FAT16,format,ramdisk,optimizations,dummy driver
-TASTE.COM	BEER/SODA IDE info and test program
+TASTE.COM	BEER/SODA IDE info and test program (MSX-DOS)
+TASTE.BIN	BEER/SODA IDE info and test program (BASIC BINARY)
 
 BEER DOS2 in openMSX v20:
 Copy dummy_16k.rom to openMSX/share/extensions/hddrom.rom
@@ -26,7 +27,3 @@ A compatible disk image can be created with openMSX disk manipulator:
 - type is Nextor
 - define at least 2 partitions
 
-FAT16 DOS 1 limitations:
-The maximum number of files in the root directory is 255, in FAT16 
-partitions this is typically set to 512. Directory entries (files)
-higher than 255 won't be visible/accessible in DOS 1.
