@@ -191,7 +191,8 @@ DRIVES_Retry:
         ld	a,'.'
         rst	$18
 
-        ld	(ix+W_FLAGS),FLAG_RX_CRC|FLAG_TX_CRC|FLAG_TIMEOUT
+FLAGS	EQU	FLAG_RX_CRC|FLAG_TX_CRC|FLAG_TIMEOUT
+        ld	(ix+W_FLAGS),FLAGS
         ld      (ix+W_COMMAND),COMMAND_DRIVE_INFO
         ld      b,1
         ld	hl,PART_BUF
