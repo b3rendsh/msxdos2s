@@ -53,6 +53,11 @@ UART_DLL	equ	0		; dlab=1: divisor latch (ls)
 UART_DLM	equ	1		; dlab=1: divisor latch (ms)
 UART_AFR	equ	2		; dlab=1: alternate function register
 
+
+; JIOCART definitions
+
+JIOCART_PORT    equ     $30             ; JIOCART I/O port
+
 ; ------------------------------------------------------------------------------
 
 
@@ -169,6 +174,8 @@ IFDEF LPTIO
         db	"LPT "
 ELIFDEF UART
 	db	"UART "
+ELIFDEF JIOCART
+	db	"CART "
 ENDIF
 IFDEF IDEDOS1
         db	"MSX-DOS 1",13,10
@@ -1138,7 +1145,14 @@ IFDEF LPTIO
 	ld	e,1
 	ld	d,0
 	ld	c,$90
-ELSE
+ELIFDEF JIOCART
+        ld      c,JIOCART_PORT
+        in      a,(c)
+        and     %11111011
+        ld      d,a
+        or      %00000100
+        ld      e,a
+ELSE ; JIO
         ld	a,15
         out	($a0),a
         in	a,($a2)
@@ -1327,7 +1341,12 @@ IFDEF LPTIO
         cp	$fd
         jr	z,HeaderPE	; method 2
         jr	RxTimeOut	; other, not supported
-ELSE
+ELIFDEF JIOCART
+        ld      c,JIOCART_PORT
+        in      a,(c)
+        or      1
+        jp	pe,HeaderPE
+ELSE ; JIO
         ld	c,$a2
         ld	a,15		; PSG r15
         out	($a0),a
