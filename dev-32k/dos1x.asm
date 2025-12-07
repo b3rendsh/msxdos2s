@@ -2535,7 +2535,6 @@ A4EDB:		call	H_FIGR
 	ELSE
 		dec	b
 		jr	z,A4EED
-	ENDIF
 A4EE7:		sla	l
 		rl	h
 		djnz	A4EE7
@@ -2546,6 +2545,7 @@ A4EED:		or	l
 		add	hl,bc			; + first datasector
 		pop	bc
 		ret
+	ENDIF
 
 ; Subroutine get recordnumber from S2,EX and CR fields
 A4EF8:		push	de

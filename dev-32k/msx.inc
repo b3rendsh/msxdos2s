@@ -49,6 +49,10 @@ KILBUF  EQU     0156H
 CALBAS  EQU     0159H
 CHGCPU	EQU	0180H		; TURBO R
 GETCPU	EQU	0183H		; TURBO R
+
+; ------------------------------------------------------------------------------
+; P0/P1: BASIC rom (0x2680 - 0x7FFF)
+
 DECSUB  EQU     268CH
 DECADD  EQU     269AH
 DECDIV  EQU     289FH
@@ -61,14 +65,6 @@ INT     EQU     30D1H		; integer part of float
 SGNMUL  EQU     325CH
 NULSTR  EQU     3FD6H
 
-; ------------------------------------------------------------------------------
-; P1: disk rom or basic rom
-
-A4010	EQU	04010H		; DSKIO
-A401F	EQU	0401FH		; MTOFF
-BASENT  EQU     04022H		; Start DiskBASIC
-A4043	EQU	04043H		; EXTBIO handler DOS2 
-A4049	EQU	04049H		; H.TIMI handler
 ERROR   EQU     0406FH          ; BASIC error
 READYR  EQU     0409BH          ; restart BASIC
 NTSTOP  EQU     04173H          ; execute statement
@@ -115,6 +111,14 @@ M7D31   EQU     07D31H          ; BASIC initscreen (without INITXT & CNSDFG)
 M7DE9   EQU     07DE9H          ; start MSX-BASIC program in ROM
 M7E14   EQU     07E14H          ; start MSX-BASIC program in ROM (DOS1)
 
+; ------------------------------------------------------------------------------
+; P1: disk rom
+
+A4010	EQU	04010H		; DSKIO
+A401F	EQU	0401FH		; MTOFF
+BASENT  EQU     04022H		; Start DiskBASIC
+A4043	EQU	04043H		; EXTBIO handler DOS2 
+A4049	EQU	04049H		; H.TIMI handler
 
 ; ------------------------------------------------------------------------------
 ; P2: workarea DOS 2

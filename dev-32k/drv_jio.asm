@@ -1,16 +1,17 @@
 ; ------------------------------------------------------------------------------
-; drv_jio_alt.asm
+; drv_jio.asm
 ;
 ; Copyright (C) 2025 All rights reserved
 ; JIO MSX-DOS 2 driver by Louthrax
 ; JIO MSX-DOS 1 driver and CRC routines by H.J. Berends
 ; 115K2 transmit/receive routines based on code by Nyyrikki
 ;
-; Alternative driver:
-; + Optional LPTIO build: use LPT port with 2 stop bits (115200/8N2)
-; + Joystick port receive timing alternatives (115200/8N1)
-; + UART 1655X at base i/o port 0x80
+; Includes alternative interface options:
+; + JIOCART: serial interface cart
+; + LPTIO: use LPT port with 2 stop bits (115200/8N2)
+; + UART: 1655X at base i/o port 0x80
 ; + MAXENT: use 16-bit maximum directory entries in DOS 1 FAT16
+; + Joystick port receive timing alternatives (115200/8N1)
 ; ------------------------------------------------------------------------------
 
 IF !(CXDOS1 || CXDOS2)
@@ -52,6 +53,11 @@ UART_SCR	equ	7		; scratch register
 UART_DLL	equ	0		; dlab=1: divisor latch (ls)
 UART_DLM	equ	1		; dlab=1: divisor latch (ms)
 UART_AFR	equ	2		; dlab=1: alternate function register
+
+; JIOCART definitions
+
+JIOCART_PORT    equ     $30             ; JIOCART I/O port
+
 
 ; ------------------------------------------------------------------------------
 
@@ -169,6 +175,8 @@ IFDEF LPTIO
         db	"LPT "
 ELIFDEF UART
 	db	"UART "
+ELIFDEF JIOCART
+	db	"CART "	
 ENDIF
 IFDEF IDEDOS1
         db	"MSX-DOS 1",13,10
@@ -1138,7 +1146,14 @@ IFDEF LPTIO
 	ld	e,1
 	ld	d,0
 	ld	c,$90
-ELSE
+ELIFDEF JIOCART
+        ld      c,JIOCART_PORT
+        in      a,(c)
+        and     %11111011
+        ld      d,a
+        or      %00000100
+        ld      e,a
+ELSE ; JIO
         ld	a,15
         out	($a0),a
         in	a,($a2)
@@ -1327,7 +1342,12 @@ IFDEF LPTIO
         cp	$fd
         jr	z,HeaderPE	; method 2
         jr	RxTimeOut	; other, not supported
-ELSE
+ELIFDEF JIOCART
+        ld      c,JIOCART_PORT
+        in      a,(c)
+        or      1
+        jp	pe,HeaderPE
+ELSE ; JIO	
         ld	c,$a2
         ld	a,15		; PSG r15
         out	($a0),a
