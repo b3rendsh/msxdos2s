@@ -5,7 +5,4 @@ https://github.com/louthrax/MSXJIO
 Files:
 jio_dos1.rom	16K JIO DOS 1 rom 
 jio_dos2.rom	32K JIO DOS 2 rom 
-jio_64k.img	64K EEPROM image with JIO DOS 1 and 2 rom
-pio_dos2.rom	32K JIO DOS 2 rom with LPT port driver
-uart_dos2.rom	32K JIO DOS 2 rom with UART 16550 driver
 

@@ -123,21 +123,6 @@ INIHRD:		ld	a,$06
                 call	SNSMAT		; Check if CTRL key is pressed
                 and	2
                 jr	z,r101		; z=yes: exit disk init
-	IFDEF UART
-		xor	a
-		out	(ubase+UART_IER),a	; set uart interrupts off
-		ld	a,$80			; set DLAB=1
-		out	(ubase+UART_LCR),a
-		ld	a,$01			; set divisor low byte (6=19K2, 3=38K4, 2=57K6, 1=115K2 with 1.84Mhz uart clock)
-		out	(ubase+UART_DLL),a
-		ld	a,$00			; set divisor high byte
-		out	(ubase+UART_DLM),a
-		ld	a,$03			; set framing to 8N1 / DLAB=0 (3=8N1 7=8N2)
-		out	(ubase+UART_LCR),a
-		; ld	a,$07			; enable FIFO buffer and reset it's counters
-		ld	a,$00			; disable FIFO buffer (when using 16550 with FIFO bug)
-		out	(ubase+UART_FCR),a
-	ENDIF          
                 xor	a
                 ret
 r101:		inc	sp
@@ -159,6 +144,22 @@ DRIVES:
         push	af
         push	bc
         push	de
+
+IFDEF UART
+	xor	a
+	out	(ubase+UART_IER),a	; set uart interrupts off
+	ld	a,$80			; set DLAB=1
+	out	(ubase+UART_LCR),a
+	ld	a,$01			; set divisor low byte (6=19K2, 3=38K4, 2=57K6, 1=115K2 with 1.84Mhz uart clock)
+	out	(ubase+UART_DLL),a
+	ld	a,$00			; set divisor high byte
+	out	(ubase+UART_DLM),a
+	ld	a,$03			; set framing to 8N1 / DLAB=0 (3=8N1 7=8N2)
+	out	(ubase+UART_LCR),a
+	; ld	a,$07			; enable FIFO buffer and reset it's counters
+	ld	a,$00			; disable FIFO buffer (when using 16550 with FIFO bug)
+	out	(ubase+UART_FCR),a
+ENDIF          
 
         ; initialize work buffer
         call	GETWRK			; HL and IX point to work buffer
@@ -1110,11 +1111,8 @@ uart_send:
 	jr	z,uart_send		; z=no
 	ld	a,(hl)
 	out	(ubase+UART_THR),a	; send data
-	inc	hl
-	dec	bc
-	ld	a,b
-	or	c
-	jr	nz,uart_send
+	cpi				; hl++, bc--, bc=0?
+	jp	pe,uart_send		; pe=no
 	ret
 
 ELSE
@@ -1287,11 +1285,8 @@ rcv_loop:
 	call	rcv_ready
 	in	a,(ubase+UART_RBR)	; receive data
 	ld	(hl),a
-	inc	hl
-	dec	bc			; data counter
-	ld	a,b
-	or	c
-	jr	nz,rcv_loop
+	cpi				; hl++, bc--, bc=0?
+	jp	pe,rcv_loop		; pe=no
 	in	a,(ubase+UART_MCR)
 	and	%11111101		; RTS off
 	out	(ubase+UART_MCR),a
