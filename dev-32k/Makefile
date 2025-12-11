@@ -28,7 +28,7 @@ endif
 # Note: the rom folder must be an existing folder
 ROM 	:= .$/rom
 
-all:	ppide1 cfide1 ppide2 cfide2 core2 jio1 jio2 jiocart1 jiocart2 taste
+all:	ppide1 cfide1 ppide2 cfide2 core2 jio1 jio2 taste
 
 rdate:
 	@echo db $(QUOTE)$(shell $(GETDATE))$(QUOTE) > rdate.inc
