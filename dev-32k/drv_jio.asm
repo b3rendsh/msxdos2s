@@ -31,7 +31,8 @@ W_FLAGS		equ	$3
 W_COMMAND	equ	$4
 W_DRIVE		equ	$5	; DSKIO save drive number (DOS1)
 W_DSKCHG	equ	$6	; Partition changed flags
-MYSIZE		equ	$7
+W_JIOPORT	equ	$7	; JIO cart port or $ff for joystick port
+MYSIZE		equ	$8
 
 SECLEN		equ	512
 PART_BUF	equ	TMPSTK	; Copy of disk info / Master Boot Record
@@ -53,11 +54,6 @@ UART_SCR	equ	7		; scratch register
 UART_DLL	equ	0		; dlab=1: divisor latch (ls)
 UART_DLM	equ	1		; dlab=1: divisor latch (ms)
 UART_AFR	equ	2		; dlab=1: alternate function register
-
-; JIOCART definitions
-
-JIOCART_PORT    equ     $30             ; JIOCART I/O port
-
 
 ; ------------------------------------------------------------------------------
 
@@ -94,23 +90,23 @@ JIOCART_PORT    equ     $30             ; JIOCART I/O port
 IFDEF DRV_IPL
 ; ------------------------------------------------------------------------------
 
-        ; Mandatory symbols defined by the disk hardware interface driver
-        PUBLIC	INIHRD
-        PUBLIC	DRIVES		; Initialize hardware interface driver
-        PUBLIC	INIENV		; Initialize driver environment
-        PUBLIC	CHOICE
-        PUBLIC	DSKFMT
-        PUBLIC	MTOFF
-        PUBLIC	OEMSTA
-        PUBLIC	DEFDPB
-	PUBLIC	MYSIZE
-        PUBLIC	SECLEN
-        PUBLIC	BOOTMBR
-        PUBLIC	BOOTMENU
+		; Mandatory symbols defined by the disk hardware interface driver
+		PUBLIC	INIHRD
+		PUBLIC	DRIVES		; Initialize hardware interface driver
+		PUBLIC	INIENV		; Initialize driver environment
+		PUBLIC	CHOICE
+		PUBLIC	DSKFMT
+		PUBLIC	MTOFF
+		PUBLIC	OEMSTA
+		PUBLIC	DEFDPB
+		PUBLIC	MYSIZE
+		PUBLIC	SECLEN
+		PUBLIC	BOOTMBR
+		PUBLIC	BOOTMENU
 
-        EXTERN	GETWRK		; Get address of disk driver's work area
-        EXTERN	GETSLT		; Get slot of this interface
-	EXTERN	DoCommand
+		EXTERN	GETWRK		; Get address of disk driver's work area
+		EXTERN	GETSLT		; Get slot of this interface
+		EXTERN	DoCommand
 
 ; ------------------------------------------
 ; INIHRD - Initialize the disk
@@ -140,102 +136,116 @@ r101:		inc	sp
 ;
 ; The DRIVES routine will also initialize the work environment
 ; ------------------------------------------
-DRIVES:
-        push	af
-        push	bc
-        push	de
+DRIVES:		push	af
+		push	bc
+		push	de
 
-IFDEF UART
-	xor	a
-	out	(ubase+UART_IER),a	; set uart interrupts off
-	ld	a,$80			; set DLAB=1
-	out	(ubase+UART_LCR),a
-	ld	a,$01			; set divisor low byte (6=19K2, 3=38K4, 2=57K6, 1=115K2 with 1.84Mhz uart clock)
-	out	(ubase+UART_DLL),a
-	ld	a,$00			; set divisor high byte
-	out	(ubase+UART_DLM),a
-	ld	a,$03			; set framing to 8N1 / DLAB=0 (3=8N1 7=8N2)
-	out	(ubase+UART_LCR),a
-	; ld	a,$07			; enable FIFO buffer and reset it's counters
-	ld	a,$00			; disable FIFO buffer (when using 16550 with FIFO bug)
-	out	(ubase+UART_FCR),a
-ENDIF          
+	IFDEF UART
+		xor	a
+		out	(ubase+UART_IER),a	; set uart interrupts off
+		ld	a,$80			; set DLAB=1
+		out	(ubase+UART_LCR),a
+		ld	a,$01			; set divisor low byte (6=19K2, 3=38K4, 2=57K6, 1=115K2 with 1.84Mhz uart clock)
+		out	(ubase+UART_DLL),a
+		ld	a,$00			; set divisor high byte
+		out	(ubase+UART_DLM),a
+		ld	a,$03			; set framing to 8N1 / DLAB=0 (3=8N1 7=8N2)
+		out	(ubase+UART_LCR),a
+		; ld	a,$07			; enable FIFO buffer and reset it's counters
+		ld	a,$00			; disable FIFO buffer (when using 16550 with FIFO bug)
+		out	(ubase+UART_FCR),a
+	ENDIF
+        
+		; initialize work buffer
+		call	GETWRK			; HL and IX point to work buffer
+		ld	d,h
+		ld	e,l
+		inc	de
+		ld	(hl),$00
+		ld	bc,MYSIZE-1
+		ldir
 
-        ; initialize work buffer
-        call	GETWRK			; HL and IX point to work buffer
-        ld	d,h
-        ld	e,l
-        inc	de
-        ld	(hl),$00
-        ld	bc,MYSIZE-1
-        ldir
+	IFDEF LPTIO
+		call	PrintMsg
+		db	12,"JIO LPT "
+	ELIFDEF UART
+		call	PrintMsg
+		db	12,"JIO UART "
+	ELSE
+	  IFDEF JIOCART
+	    IF JIOPORT = $FF
+		call	JioDetect
+	    ELSE
+		ld	(ix+W_JIOPORT),JIOPORT
+	    ENDIF
+	  ELSE
+		ld	(ix+W_JIOPORT),$ff
+	  ENDIF
+		ld	a,(ix+W_JIOPORT)
+		cp	$ff
+		jr	nz,print_cart
+		call	PrintMsg
+		db	12,"JIO ",0
+		jr	print_jio
+print_cart:	call	PrintMsg
+		db	12,"JIO CART ",0
+print_jio:	call	PrintMsg
+	ENDIF
 
-        call	PrintMsg
-	db	12,"JIO "
-IFDEF LPTIO
-        db	"LPT "
-ELIFDEF UART
-	db	"UART "
-ELIFDEF JIOCART
-	db	"CART "	
-ENDIF
-IFDEF IDEDOS1
-        db	"MSX-DOS 1",13,10
-ELSE
-        db	"MSX-DOS 2",13,10
-ENDIF
-        db	"Rev.: "
-        INCLUDE	"rdate.inc"		; Revision date
-        db	13,10
-        db	"Waiting for server,",13,10
-        db	"press [ESC] to cancel",0
+	IFDEF IDEDOS1
+		db	"MSX-DOS 1",13,10
+	ELSE
+		db	"MSX-DOS 2",13,10
+	ENDIF
+		db	"Rev.: "
+		INCLUDE	"rdate.inc"		; Revision date
+		db	13,10
+		db	"Waiting for server,",13,10
+		db	"press [ESC] to cancel",0
 
+DRIVES_Retry:	ld	a,7
+		call	SNSMAT
+		and	4
+		jr      z,DRIVES_Exit
 
-DRIVES_Retry:
-        ld	a,7
-        call	SNSMAT
-        and	4
-        jr      z,DRIVES_Exit
-
-        ld	a,'.'
-        rst	$18
+		ld	a,'.'
+		rst	$18
 
 FLAGS	EQU	FLAG_RX_CRC|FLAG_TX_CRC|FLAG_TIMEOUT
-        ld	(ix+W_FLAGS),FLAGS
-        ld      (ix+W_COMMAND),COMMAND_DRIVE_INFO
-        ld      b,1
-        ld	hl,PART_BUF
-        di
-        call	DoCommand
-        jr	c,DRIVES_Retry
+		ld	(ix+W_FLAGS),FLAGS
+		ld      (ix+W_COMMAND),COMMAND_DRIVE_INFO
+		ld      b,1
+		ld	hl,PART_BUF
+		di
+		call	DoCommand
+		jr	c,DRIVES_Retry
 
-        ld	hl,PART_BUF
+		ld	hl,PART_BUF
 
-        ld	a,(hl)
-        ld	(ix+W_FLAGS),a
-        inc     hl
-        ld      a,(hl)
-        ld	(ix+W_DRIVES),a
-        inc     hl
-        ld      a,(hl)
-        ld	(ix+W_BOOTDRV),a
-        inc     hl
+		ld	a,(hl)
+		ld	(ix+W_FLAGS),a
+		inc     hl
+		ld      a,(hl)
+		ld	(ix+W_DRIVES),a
+		inc     hl
+		ld      a,(hl)
+		ld	(ix+W_BOOTDRV),a
+		inc     hl
 
-        call	PrintString
+		call	PrintString
 
-DRIVES_Exit:
-        ld	a,(ix+W_DRIVES)
-IFDEF IDEDOS1
-        or	a
-        jr	nz,r206
-        inc	a			; Return value of 0 drives is not allowed in DOS 1
+DRIVES_Exit:	ld	a,(ix+W_DRIVES)
+	IFDEF IDEDOS1
+		or	a
+		jr	nz,r206
+		inc	a			; Return value of 0 drives is not allowed in DOS 1
 r206:
-ENDIF
-        ld	l,a
-        pop     de
-        pop     bc
-        pop     af
-        ret
+	ENDIF
+		ld	l,a
+		pop     de
+		pop     bc
+		pop     af
+		ret
 
 ; ------------------------------------------------------------------------------
 ; INIENV - Initialize the work area (environment)
@@ -243,38 +253,37 @@ ENDIF
 ; Output: None
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ; ------------------------------------------------------------------------------
+INIENV:		call	GETWRK			; HL and IX point to work buffer
+		xor	a
+		or	(ix+W_DRIVES)		; number of drives 0?
+		ret	z
+		ld	(ix+W_CURDRV),$ff	; Init current drive
+		ld	(ix+W_DSKCHG),$00	; Init partition changed flags
 
-INIENV:	call	GETWRK			; HL and IX point to work buffer
-        xor	a
-        or	(ix+W_DRIVES)		; number of drives 0?
-        ret	z
-        ld	(ix+W_CURDRV),$ff	; Init current drive
-        ld	(ix+W_DSKCHG),$00	; Init partition changed flags
-
-IFNDEF CXDOS1
-        call	GETSLT
-        ld 	hl,DRVTBL
-        ld	b,a			; B = this disk interface slot number
-        ld	c,$00
+	IFNDEF CXDOS1
+		call	GETSLT
+		ld 	hl,DRVTBL
+		ld	b,a			; B = this disk interface slot number
+		ld	c,$00
 
 TestInterface:	ld	a,(hl)
-        add	a,c
-        ld	c,a
-        inc	hl
-        ld	a,(hl)
-        inc	hl
-        cp	b			; this interface?
-        jr	nz,TestInterface	; nz=no
+		add	a,c
+		ld	c,a
+		inc	hl
+		ld	a,(hl)
+		inc	hl
+		cp	b			; this interface?
+		jr	nz,TestInterface	; nz=no
 
-        dec	hl
-        dec	hl
-        ld	a,c
-        sub	(hl)
-        ld	b,(ix+W_BOOTDRV)	; Get boot drive
-        add	a,b
-        ld	(ix+W_BOOTDRV),a	; Set boot drive
-ENDIF
-        ret
+		dec	hl
+		dec	hl
+		ld	a,c
+		sub	(hl)
+		ld	b,(ix+W_BOOTDRV)	; Get boot drive
+		add	a,b
+		ld	(ix+W_BOOTDRV),a	; Set boot drive
+	ENDIF
+		ret
 
 ; ------------------------------------------
 ; CHOICE - Choice for FORMAT
@@ -450,6 +459,44 @@ nokey:		or	$ff
         ENDIF ; BOOTCHOICE
 
 ; ------------------------------------------------------------------------------
+; Probe jiocart ports, if no cart found then use joystick port 2
+; ------------------------------------------------------------------------------
+JioDetect:	ld	hl,JioPorts
+
+JioProbe:	ld	a,(hl)
+		ld	(ix+W_JIOPORT),a
+		cp	$ff
+		ret	z
+		call	ProbePort
+		ret	z
+		inc	hl
+		jr	JioProbe
+
+; based on detection routine by github user herraa1
+ProbePort:	ld      c,a
+		ld      a,$2f
+		out     (c),a
+		in      a,(c)
+		and     $fc
+		cp      $cc
+		ret	nz
+		ld      a,$db
+		out     (c),a
+		in      a,(c)
+		and     $fc
+		cp      $88
+		ret	nz
+		ld      a,$f7
+		out     (c),a
+		in      a,(c)
+		and     $fc
+		cp      $44
+		ret
+
+; List of ports that are probed, end with $ff
+JioPorts:	db	$00,$20,$30,$ff
+
+; ------------------------------------------------------------------------------
 ; *** Print subroutines ***
 ; ------------------------------------------------------------------------------
 PrintMsg:	ex      (sp),hl
@@ -477,12 +524,12 @@ ENDIF ; DRV_IPL
 IFDEF DRV_SYS
 ; ------------------------------------------------------------------------------
 
-        PUBLIC	DoCommand
-	PUBLIC	DSKIO		; Disk I/O routine
-        PUBLIC	DSKCHG		; Disk change routine
-        PUBLIC	GETDPB
+		PUBLIC	DoCommand
+		PUBLIC	DSKIO		; Disk I/O routine
+		PUBLIC	DSKCHG		; Disk change routine
+		PUBLIC	GETDPB
 
-        EXTERN	GETWRK		; Get address of disk driver's work area
+		EXTERN	GETWRK		; Get address of disk driver's work area
 
 
 ; ----------------------------------------
@@ -905,85 +952,78 @@ _ENT_PARM_DIRECT_L09:
 ;	 B = remaining sectors
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ; ------------------------------------------------------------------------------
+DSKIO:		di
 
-DSKIO:
-        di
+		push	hl
+		push	bc
+		push	af
+		call	GETWRK
+		pop	af
+		pop	bc
+		pop	hl
 
-        push	hl
-        push	bc
-        push	af
-        call	GETWRK
-        pop	af
-        pop	bc
-        pop	hl
-
-        ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
-        jr	c,WriteFlag
-        ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
+		ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
+		jr	c,WriteFlag
+		ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
 WriteFlag:
 
-IF (IDEDOS1 && !CXDOS1) || CXDOS2
-        ld	(ix+W_DRIVE),a		; save drive number
-rw_loop:
-        bit	7,h
-        jr	nz,rw_multi
-        push	bc
-        push	de
-        ld	b,1
-        ld      a,(ix+W_COMMAND)
-        cp	COMMAND_DRIVE_READ
-        jr	nz,sec_write
-        push	hl
-        ld	hl,(SSECBUF)
-        ld	a,(ix+W_DRIVE)		; load drive number
-        call	DoCommand
-        pop	de
-        jr	c,sec_err
-        ld	hl,(SSECBUF)
-        ld	bc,$0200
-        call	XFER
-        ex	de,hl
-        jr	sec_next
-sec_write:
-        push	hl
-        push	de
-        push	bc
-        ld	de,(SSECBUF)
-        ld	bc,$0200
-        call	XFER
-        pop	bc
-        pop	de
-        ld	hl,(SSECBUF)
-        ld	a,(ix+W_DRIVE)		; load drive number
-        call	DoCommand
-        pop	hl
-        jr	c,sec_err
-        inc	h
-        inc	h
-sec_next:
-        xor	a
-sec_err:
-        pop	de
-        pop	bc
-        ret     c
-        inc	e
-        jr	nz,sec_loop
-        inc	d
-        jr	nz,sec_loop
-        inc	c
-sec_loop:
-        djnz	rw_loop
-        xor	a
-        ret
+	IF (IDEDOS1 && !CXDOS1) || CXDOS2
+		ld	(ix+W_DRIVE),a		; save drive number
+rw_loop:        bit	7,h
+		jr	nz,rw_multi
+		push	bc
+		push	de
+		ld	b,1
+		ld      a,(ix+W_COMMAND)
+		cp	COMMAND_DRIVE_READ
+		jr	nz,sec_write
+		push	hl
+		ld	hl,(SSECBUF)
+		ld	a,(ix+W_DRIVE)		; load drive number
+		call	DoCommand
+		pop	de
+		jr	c,sec_err
+		ld	hl,(SSECBUF)
+		ld	bc,$0200
+		call	XFER
+		ex	de,hl
+		jr	sec_next
+sec_write:        push	hl
+		push	de
+		push	bc
+		ld	de,(SSECBUF)
+		ld	bc,$0200
+		call	XFER
+		pop	bc
+		pop	de
+		ld	hl,(SSECBUF)
+		ld	a,(ix+W_DRIVE)		; load drive number
+		call	DoCommand
+		pop	hl
+		jr	c,sec_err
+		inc	h
+		inc	h
+sec_next:        xor	a
+sec_err:        pop	de
+		pop	bc
+		ret     c
+		inc	e
+		jr	nz,sec_loop
+		inc	d
+		jr	nz,sec_loop
+		inc	c
+sec_loop:        djnz	rw_loop
+		xor	a
+		ret
 
 rw_multi:
-ENDIF
-        push    bc
-        call	DoCommand
-        pop     bc
-        ret     c
-        ld      b,0
-        ret
+	ENDIF
+		push    bc
+		call	DoCommand
+		pop     bc
+		ret     c
+		ld      b,0
+		ret
 
 ; ------------------------------------------------------------------------------
 ; DSKCHG - Disk change
@@ -1002,98 +1042,101 @@ ENDIF
 ;	 Error code in A
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ; ------------------------------------------------------------------------------
-DSKCHG:
-        di
-        ld	b,a			; save drive
-	push	bc
-	push	hl
-        call	GETWRK
-        ld      (ix+W_COMMAND),COMMAND_DRIVE_DISK_CHANGED
-        call	DoCommand
-	pop	hl
-	pop	bc
-        cp      RESULT_DRIVE_DISK_UNCHANGED-1
-        jr	z,DiskNotChanged
-        cp      RESULT_DRIVE_DISK_CHANGED-1
-	jr	z,DiskChanged
+DSKCHG:		di
+		ld	b,a			; save drive
+		push	bc
+		push	hl
+		call	GETWRK
+		ld      (ix+W_COMMAND),COMMAND_DRIVE_DISK_CHANGED
+		call	DoCommand
+		pop	hl
+		pop	bc
+		cp      RESULT_DRIVE_DISK_UNCHANGED-1
+		jr	z,DiskNotChanged
+		cp      RESULT_DRIVE_DISK_CHANGED-1
+		jr	z,DiskChanged
 
 DiskChangeError:
-        ld      b,0
-        scf
-        ret
+		ld      b,0
+		scf
+		ret
 
-DiskNotChanged:
-	call	GetDriveMask
-	and	(ix+W_DSKCHG)		; partition changed?
-	jr	nz,PartitionChanged	; nz=yes
-IFDEF IDEDOS1
-	; In IDEDOS1 whenever the current drive is changed this routine returns that the disk has changed in order
-	; to flush the FAT cache, this is a deviation from the original MSX-DOS 1.03 without FAT swapper.
-	ld	a,b			; restore drive
-        cp	(ix+W_CURDRV)		; current drive changed?
-        ld	(ix+W_CURDRV),a		; update current drive
-        jr	nz,RetChanged
-ENDIF
-        ld      b,1
-	xor	a
-	ret
+DiskNotChanged:	call	GetDriveMask
+		and	(ix+W_DSKCHG)		; partition changed?
+		jr	nz,PartitionChanged	; nz=yes
+	IFDEF IDEDOS1
+		; In IDEDOS1 whenever the current drive is changed this routine returns that the disk has changed in order
+		; to flush the FAT cache, this is a deviation from the original MSX-DOS 1.03 without FAT swapper.
+		ld	a,b			; restore drive
+		cp	(ix+W_CURDRV)		; current drive changed?
+		ld	(ix+W_CURDRV),a		; update current drive
+		jr	nz,RetChanged
+	ENDIF
+		ld      b,1
+		xor	a
+		ret
 
-DiskChanged:
-	ld	(ix+W_DSKCHG),0xFF	; set changed flag for all partitions
-	call	GetDriveMask
+DiskChanged:	ld	(ix+W_DSKCHG),0xFF	; set changed flag for all partitions
+		call	GetDriveMask
 
 PartitionChanged:
-	cpl
-	and	(ix+W_DSKCHG)
-	ld	(ix+W_DSKCHG),a		; clear changed flag for this partition
-IFDEF IDEDOS1
-	; In DOS1 the DPB of the drive must be updated if the partition has changed
-	ld	a,b
-        ld	(ix+W_CURDRV),a		; update current drive
-	call	GETDPB			; returns updated DPB pointed to by HL
-	jr	c,DiskChangeError	; if cx then error reading boot sector
-ENDIF
+		cpl
+		and	(ix+W_DSKCHG)
+		ld	(ix+W_DSKCHG),a		; clear changed flag for this partition
+	IFDEF IDEDOS1
+		; In DOS1 the DPB of the drive must be updated if the partition has changed
+		ld	a,b
+		ld	(ix+W_CURDRV),a		; update current drive
+		call	GETDPB			; returns updated DPB pointed to by HL
+		jr	c,DiskChangeError	; if cx then error reading boot sector
+	ENDIF
 
-RetChanged:
-        ld	b,0xFF
-        xor	a
-        ret
+RetChanged:	ld	b,0xFF
+		xor	a
+		ret
 
-GetDriveMask:
-	push	hl
-	ld	hl,masks
-	ld	e,b
-	ld	d,0
-	add	hl,de
-	ld	a,(hl)
-	pop	hl
-	ret
+GetDriveMask:	push	hl
+		ld	hl,masks
+		ld	e,b
+		ld	d,0
+		add	hl,de
+		ld	a,(hl)
+		pop	hl
+		ret
 
-masks:	db	0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80
+masks:		db	0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80
 
 ; ------------------------------------------------------------------------------
 ; Input: CDE = Sector
 ;          B = Length
 ;         HL = Address
 ; ------------------------------------------------------------------------------
+DoCommand:	
+		; workaround: the c program uses ix and iy for parameters and af' isn't used
+		ex	af,af'
+		push	af
+		ld	a,(ix+W_JIOPORT)
+		ex	af,af'
 
-DoCommand:
-        push    ix              ; _pucFlagsAndCommand
-        push    hl              ; _pvAddress
-        push    bc              ; _uiLength
+		push	ix              ; _pucFlagsAndCommand
+		push	hl              ; _pvAddress
+		push	bc              ; _uiLength
+		ld	b,a             ; _ulSector in BCDE
+		call	ucDoCommand
+		pop	hl
+		pop	hl
+		pop	hl
 
-        ld      b,a             ; _ulSector in BCDE
+		; workaround: restore af'
+		ex	af,af'
+		pop	af
+		ex	af,af'
 
-        call    ucDoCommand
-        pop	hl
-        pop	hl
-        pop	hl
-
-        or      a
-        ret     z
-        dec     a
-        scf
-        ret
+		or	a
+		ret	z
+		dec	a
+		scf
+		ret
 
 ; ------------------------------------------------------------------------------
 ; Transmit data on joystick 2 port or lpt port (LPTIO) or 1655X (UART)
@@ -1101,156 +1144,163 @@ DoCommand:
 ;        BC = LENGTH
 ; ------------------------------------------------------------------------------
 IFDEF UART
-vJIOTransmit:
-	ex	de,hl
-uart_send:
-	;in	a,(ubase+UART_MSR)	; use FIFO buffer
-	;bit	4,a			; cts: clear to send?
-	in	a,(ubase+UART_LSR)	; don't use FIFO buffer
-	bit	5,a			; thr: transmitter ready?
-	jr	z,uart_send		; z=no
-	ld	a,(hl)
-	out	(ubase+UART_THR),a	; send data
-	cpi				; hl++, bc--, bc=0?
-	jp	pe,uart_send		; pe=no
-	ret
+vJIOTransmit:	ex	de,hl
+uart_send:	;in	a,(ubase+UART_MSR)	; use FIFO buffer
+		;bit	4,a			; cts: clear to send?
+		in	a,(ubase+UART_LSR)	; don't use FIFO buffer
+		bit	5,a			; thr: transmitter ready?
+		jr	z,uart_send		; z=no
+		ld	a,(hl)
+		out	(ubase+UART_THR),a	; send data
+		cpi				; hl++, bc--, bc=0?
+		jp	pe,uart_send		; pe=no
+		ret
 
 ELSE
-vJIOTransmit:
-        exx
-        push    bc
-        push    de
-        exx
+vJIOTransmit:	exx
+		push    bc
+		push    de
+		exx
 
-IFDEF LPTIO
-	push	ix
-	call	vJIOTransmit2
-	pop	ix
-ELSE
-        call vJIOTransmit2
-ENDIF
+	IFDEF LPTIO
+		push	ix
+		call	vJIOTransmit2
+		pop	ix
+	ELSE
+		call vJIOTransmit2
+	ENDIF
 
-        exx
-        pop     de
-        pop     bc
-        exx
-        ret
+		exx
+		pop     de
+		pop     bc
+		exx
+		ret
 
 vJIOTransmit2:
-        ex      de,hl
-        inc	bc
-        exx
-IFDEF LPTIO
-	ld	e,1
-	ld	d,0
-	ld	c,$90
-ELIFDEF JIOCART
-        ld      c,JIOCART_PORT
-        in      a,(c)
-        and     %11111011
-        ld      d,a
-        or      %00000100
-        ld      e,a
-ELSE ; JIO
-        ld	a,15
-        out	($a0),a
-        in	a,($a2)
-        or	4
-        ld	e,a
-        xor	4
-        ld	d,a
-        ld	c,$a1
-ENDIF
+		ex      de,hl
+		inc	bc
+		exx
+	IFDEF LPTIO
+		ld	e,1
+		ld	d,0
+		ld	c,$90
+	ELSE ; JIOCART
+		;workaround
+		;ld	a,(ix+W_JIOPORT)
+		ex	af,af'
+		cp	$ff
+		jr	nz,tx_jiocart
+		; use joystick 2 port
+		ex	af,af'
+		ld	a,15
+		out	($a0),a
+		in	a,($a2)
+		or	4
+		ld	e,a
+		xor	4
+		ld	d,a
+		ld	c,$a1
+		jr	tx_jio
+tx_jiocart:	; use jiocart port
+		ld      c,a
+		ex	af,af'
+		in      a,(c)
+		and     %11111011
+		ld      d,a
+		or      %00000100
+		ld      e,a
+tx_jio:
+	ENDIF
 
-        db	$3e
+		db	$3e
 JIOTxLoop:
-	ret	nz
-        out	(c),e		; 14
-IFDEF LPTIO
-	; one more stop bit
-	add	ix,ix		; 17
-	out	(c),e
-ENDIF
-        exx
-        ld	a,(hl)
-        cpi
-        ret	po
-        exx
-        rrca
-        out	(c),d		; =0
-        ret	nz
-        jp	c,Tx10
-        out	(c),d		; -0
-        rrca
-        jp	c,Tx11
+		ret	nz
+		out	(c),e		; 14
+	IFDEF LPTIO
+		; one more stop bit
+		add	ix,ix		; 17
+		out	(c),e
+	ENDIF
+		exx
+		ld	a,(hl)
+		cpi
+		ret	po
+		exx
+		rrca
+		out	(c),d		; =0
+		ret	nz
+		jp	c,Tx10
+		out	(c),d		; -0
+		rrca
+		jp	c,Tx11
 
 ; ------------------------------------------------------------------------------
 
-Tx01:	out	(c),d		; -1
-        rrca
-        jr	c,Tx12
-        nop
+Tx01:		out	(c),d		; -1
+		rrca
+		jr	c,Tx12
+		nop
 
-Tx02:	out	(c),d		; -0
-        rrca
-        jp	c,Tx13
+Tx02:		out	(c),d		; -0
+		rrca
+		jp	c,Tx13
 
-Tx03:	out	(c),d		; -1
-        rrca
-        jr	c,Tx14
-        nop
+Tx03:		out	(c),d		; -1
+		rrca
+		jr	c,Tx14
+		nop
 
-Tx04:	out	(c),d		; -0
-        rrca
-        jp	c,Tx15
+Tx04:		out	(c),d		; -0
+		rrca
+		jp	c,Tx15
 
-Tx05:	out	(c),d		; -1
-        rrca
-        jr	c,Tx16
-        nop
+Tx05:		out	(c),d		; -1
+		rrca
+		jr	c,Tx16
+		nop
 
-Tx06:	out	(c),d		; -0
-        rrca
-        jp	c,Tx17
+Tx06:		out	(c),d		; -0
+		rrca
+		jp	c,Tx17
 
-Tx07:	out	(c),d		; -1
-        jp	JIOTxLoop
+Tx07:		out	(c),d		; -1
+		jp	JIOTxLoop
 
 ; ------------------------------------------------------------------------------
 
-Tx10:	out	(c),e		; -0
-        rrca
-        jp	nc,Tx01
+Tx10:		out	(c),e		; -0
+		rrca
+		jp	nc,Tx01
 
-Tx11:	out	(c),e		; -1
-        rrca
-        jr	nc,Tx02
-        nop
+Tx11:		out	(c),e		; -1
+		rrca
+		jr	nc,Tx02
+		nop
 
-Tx12:	out	(c),e		; -0
-        rrca
-        jp	nc,Tx03
+Tx12:		out	(c),e		; -0
+		rrca
+		jp	nc,Tx03
 
-Tx13:	out	(c),e		; -1
-        rrca
-        jr	nc,Tx04
-        nop
+Tx13:		out	(c),e		; -1
+		rrca
+		jr	nc,Tx04
+		nop
 
-Tx14:	out	(c),e		; -0
-        rrca
-        jp	nc,Tx05
+Tx14:		out	(c),e		; -0
+		rrca
+		jp	nc,Tx05
 
-Tx15:	out	(c),e		; -1
-        rrca
-        jr	nc,Tx06
-        nop
+Tx15:		out	(c),e		; -1
+		rrca
+		jr	nc,Tx06
+		nop
 
-Tx16:	out	(c),e		; -0
-        rrca
-        jp	nc,Tx07
+Tx16:		out	(c),e		; -0
+		rrca
+		jp	nc,Tx07
 
-Tx17:	out	(c),e		; -1
-        jp	JIOTxLoop
+Tx17:		out	(c),e		; -1
+		jp	JIOTxLoop
 
 ENDIF ; UART
 
@@ -1260,274 +1310,272 @@ ENDIF ; UART
 ;        BC = LENGTH
 ; ------------------------------------------------------------------------------
 IFDEF UART
-bJIOReceive:
-	ex	de,hl
-	in	a,(ubase+UART_MCR)
-	or	%00000010		; RTS on
-	out	(ubase+UART_MCR),a
+bJIOReceive:	ex	de,hl
+		in	a,(ubase+UART_MCR)
+		or	%00000010		; RTS on
+		out	(ubase+UART_MCR),a
 
-uart_sync1:	
-	call	rcv_ready
-	in	a,(ubase+UART_RBR)	; get header byte
-	cp	$ff
-	jr	nz,uart_sync1
+uart_sync1:	call	rcv_ready
+		in	a,(ubase+UART_RBR)	; get header byte
+		cp	$ff
+		jr	nz,uart_sync1
 
-uart_sync2:	
-	call	rcv_ready
-	in	a,(ubase+UART_RBR)	; get header byte
-	cp	$f0			; sync?
-	jr	z,rcv_loop		; nz=no
-	cp	$ff
-	jr	z,uart_sync2
-	jr	uart_sync1
+uart_sync2:	call	rcv_ready
+		in	a,(ubase+UART_RBR)	; get header byte
+		cp	$f0			; sync?
+		jr	z,rcv_loop		; nz=no
+		cp	$ff
+		jr	z,uart_sync2
+		jr	uart_sync1
 	
-rcv_loop:
-	call	rcv_ready
-	in	a,(ubase+UART_RBR)	; receive data
-	ld	(hl),a
-	cpi				; hl++, bc--, bc=0?
-	jp	pe,rcv_loop		; pe=no
-	in	a,(ubase+UART_MCR)
-	and	%11111101		; RTS off
-	out	(ubase+UART_MCR),a
-	ld	a,1
-	ret
+rcv_loop:	call	rcv_ready
+		in	a,(ubase+UART_RBR)	; receive data
+		ld	(hl),a
+		cpi				; hl++, bc--, bc=0?
+		jp	pe,rcv_loop		; pe=no
+		in	a,(ubase+UART_MCR)
+		and	%11111101		; RTS off
+		out	(ubase+UART_MCR),a
+		ld	a,1
+		ret
 
-rcv_ready:
-	ld	de,$0000		; time-out counter
-ready_loop:
-	in	a,(ubase+UART_LSR)
-	bit	0,a			; receiver data ready?
-	ret	nz
-	dec	de
-	ld	a,d
-	or	e
-	jr	nz,ready_loop
-	pop	af			; ditch return address
-	in	a,(ubase+UART_MCR)
-	and	%11111101		; RTS off
-	out	(ubase+UART_MCR),a
-	xor	a
-	ret
+rcv_ready:	ld	de,$0000		; time-out counter
+ready_loop:	in	a,(ubase+UART_LSR)
+		bit	0,a			; receiver data ready?
+		ret	nz
+		dec	de
+		ld	a,d
+		or	e
+		jr	nz,ready_loop
+		pop	af			; ditch return address
+		in	a,(ubase+UART_MCR)
+		and	%11111101		; RTS off
+		out	(ubase+UART_MCR),a
+		xor	a
+		ret
 
 ELSE
-bJIOReceive:
-        ld      h,d
-        ld      l,e
-        ld      d,b
-        ld      e,c
+bJIOReceive:	ld      h,d
+		ld      l,e
+		ld      d,b
+		ld      e,c
 
-        push	ix
-        push	de
+		push	ix
+		push	de
 
-        ld      de,0
-	dec	hl
-        ld	ix,0
-        add	ix,sp
+		ld      de,0
+		dec	hl
+		ld	ix,0
+		add	ix,sp
 
-IFDEF LPTIO
-	; probe the lpt port to determine receive method:
-	; 1. unused bits 0,2..7 are last written value on databus or always 0
-	; 2. unused bits 0,2..7 are always 1
-	ld	c,$90		; lpt i/o port
-        out	(c),d		; clear z80 data bus (d=0)
-        in	a,(c)
-        and	$fd
-        jr	z,HeaderPO	; method 1
-        cp	$fd
-        jr	z,HeaderPE	; method 2
-        jr	RxTimeOut	; other, not supported
-ELIFDEF JIOCART
-        ld      c,JIOCART_PORT
-        in      a,(c)
-        or      1
-        jp	pe,HeaderPE
-ELSE ; JIO	
-        ld	c,$a2
-        ld	a,15		; PSG r15
-        out	($a0),a
-        in	a,($a2)
-        or	64		; bit 6: select joystick 2
-        out	($a1),a
-        ld	a,14		; PSG r14
-        out	($a0),a
-        in	a,($a2)
-        or	1		; bit 0: rx pin 1
-        jp	pe,HeaderPE
-ENDIF
+	IFDEF LPTIO
+		; probe the lpt port to determine receive method:
+		; 1. unused bits 0,2..7 are last written value on databus or always 0
+		; 2. unused bits 0,2..7 are always 1
+		ld	c,$90		; lpt i/o port
+		out	(c),d		; clear z80 data bus (d=0)
+		in	a,(c)
+		and	$fd
+		jr	z,HeaderPO	; method 1
+		cp	$fd
+		jr	z,HeaderPE	; method 2
+		jr	RxTimeOut	; other, not supported
+	ELSE ; JIOCART
+		;workaround
+		;ld	a,(ix+W_JIOPORT)
+		ex	af,af'
+		cp	$ff
+		jr	nz,rx_jiocart
+		; use joystick 2 port
+		ex	af,af'
+		ld	c,$a2
+		ld	a,15		; PSG r15
+		out	($a0),a
+		in	a,($a2)
+		or	64		; bit 6: select joystick 2
+		out	($a1),a
+		ld	a,14		; PSG r14
+		out	($a0),a
+		in	a,($a2)
+		or	1		; bit 0: rx pin 1
+		jp	pe,HeaderPE
+		jr	HeaderPO
+rx_jiocart:	; use jiocart port
+		ld      c,a
+		ex	af,af'
+		in      a,(c)
+		or      1
+		jp	pe,HeaderPE
+	ENDIF
         
 ; ------------------------------------------------------------------------------
 
-HeaderPO:	
-	dec	de		;  7
-        ld	a,d		;  5
-        or	e		;  5
-        jr	z,RxTimeOut 	;  8
+HeaderPO:	dec	de		;  7
+		ld	a,d		;  5
+		or	e		;  5
+		jr	z,RxTimeOut 	;  8
 
-        in	f,(c)		; 14
-        jp	po,HeaderPO	; 11   LOOP=50 (2-CLOCKS)
-        rlc	a		; 10
-        in	f,(c)		; 14
-        jp	po,HeaderPO	; 11   At least 2 clocks needed to be down
+		in	f,(c)		; 14
+		jp	po,HeaderPO	; 11   LOOP=50 (2-CLOCKS)
+		rlc	a		; 10
+		in	f,(c)		; 14
+		jp	po,HeaderPO	; 11   At least 2 clocks needed to be down
 
-WU_PO:	in	f,(c)		; 14
-        jp	pe,WU_PO	; 11   LOOP=25
-        pop	de		; 11
-        push	de		; 11
+WU_PO:		in	f,(c)		; 14
+		jp	pe,WU_PO	; 11   LOOP=25
+		pop	de		; 11
+		push	de		; 11
 
-RX_PO:	in	f,(c)		; 14
-        jp	po,RX_PO	; 11   LOOP=25
+RX_PO:		in	f,(c)		; 14
+		jp	po,RX_PO	; 11   LOOP=25
 
-	;timing alternatives:
-	;ret	po		;  6 = 31 CYCLES
-        ;ld	sp,hl		;  7  = 32 CYCLES
-        ld	b,(hl)		;  8  = 33 CYCLES
-	;neg			; 10 =  35 CYCLES
-        
-        in	a,(c)		; 14   Bit 0
-        nop			;  5
-        rrca			;  5
-        dec	de		;  7 = 31 CYCLES
+		;timing alternatives:
+		;ret	po		;  6 = 31 CYCLES
+		;ld	sp,hl		;  7  = 32 CYCLES
+		ld	b,(hl)		;  8  = 33 CYCLES
+		;neg			; 10 =  35 CYCLES
+		
+		in	a,(c)		; 14   Bit 0
+		nop			;  5
+		rrca			;  5
+		dec	de		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 1
-        xor	b		;  5
-        rrca			;  5
-        inc	hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 1
+		xor	b		;  5
+		rrca			;  5
+		inc	hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 2
-        xor	b		;  5
-        rrca			;  5
-        ld	sp,hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 2
+		xor	b		;  5
+		rrca			;  5
+		ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 3
-        xor	b		;  5
-        rrca			;  5
-        ld	sp,hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 3
+		xor	b		;  5
+		rrca			;  5
+		ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 4
-        xor	b		;  5
-        rrca			;  5
-        ld	sp,hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 4
+		xor	b		;  5
+		rrca			;  5
+		ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 5
-        xor	b		;  5
-        rrca			;  5
-        ld	sp,hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 5
+		xor	b		;  5
+		rrca			;  5
+		ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 6
-        xor	b		;  5
-        rrca			;  5
-        ld	sp,hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 6
+		xor	b		;  5
+		rrca			;  5
+		ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 7
-        xor	b		;  5
-        rrca			;  5
+		in	b,(c)		; 14   Bit 7
+		xor	b		;  5
+		rrca			;  5
 
-IFDEF LPTIO
-	rrca			;  5 extra rotate because rx is bit 1
-        ld	(hl),a		;  8 instruction uses data bus write
-        xor	a		;  5 
-        out	($90),a		; 12 clear z80 data bus
-ELSE
-        ld	(hl),a		;  8
-ENDIF
+	IFDEF LPTIO
+		rrca			;  5 extra rotate because rx is bit 1
+		ld	(hl),a		;  8 instruction uses data bus write
+		xor	a		;  5 
+		out	($90),a		; 12 clear z80 data bus
+	ELSE
+		ld	(hl),a		;  8
+	ENDIF
 
-	ld	a,d		;  5
-	or	e		;  5
-	jp	nz,RX_PO	; 11
+		ld	a,d		;  5
+		or	e		;  5
+		jp	nz,RX_PO	; 11
      
 ; ------------------------------------------------------------------------------
 
-ReceiveOK:
-        ld	sp,ix
-        pop	de
-        pop	ix
-        ld      a,1
-        ret
+ReceiveOK:	ld	sp,ix
+		pop	de
+		pop	ix
+		ld      a,1
+		ret
 
-RxTimeOut:
-        pop	de
-        pop	ix
-        xor     a
-        ret
+RxTimeOut:	pop	de
+		pop	ix
+		xor     a
+		ret
 
 ; ------------------------------------------------------------------------------
 
-HeaderPE:	
-	dec	de		;  7
-        ld	a,d		;  5
-        or	e		;  5
-        jr	z,RxTimeOut	;  8
+HeaderPE:	dec	de		;  7
+		ld	a,d		;  5
+		or	e		;  5
+		jr	z,RxTimeOut	;  8
 
-        in	f,(c)		; 14
-        jp	pe,HeaderPE	; 11   LOOP= 50 (2-CLOCKS)
-        rlc	a		; 10
-        in	f,(c)		; 14
-        jp	pe,HeaderPE	; 11   At least 2 clocks needed to be down
+		in	f,(c)		; 14
+		jp	pe,HeaderPE	; 11   LOOP= 50 (2-CLOCKS)
+		rlc	a		; 10
+		in	f,(c)		; 14
+		jp	pe,HeaderPE	; 11   At least 2 clocks needed to be down
 
-WU_PE:	in	f,(c)		; 14
-        jp	po,WU_PE	; 11   LOOP=25
-        pop	de		; 11
-        push	de		; 11
+WU_PE:		in	f,(c)		; 14
+		jp	po,WU_PE	; 11   LOOP=25
+		pop	de		; 11
+		push	de		; 11
 
-RX_PE:	in	f,(c)		; 14
-        jp	pe,RX_PE	; 11   LOOP=25
-	
-	;timing alternatives:
-	;ret	pe		;  6 = 31 CYCLES
-        ;ld	sp,hl		;  7  = 32 CYCLES
-	ld	b,(hl)		;  8  = 33 CYCLES
-	;neg			; 10 =  35 CYCLES
+RX_PE:		in	f,(c)		; 14
+		jp	pe,RX_PE	; 11   LOOP=25
+		
+		;timing alternatives:
+		;ret	pe		;  6 = 31 CYCLES
+		;ld	sp,hl		;  7  = 32 CYCLES
+		ld	b,(hl)		;  8  = 33 CYCLES
+		;neg			; 10 =  35 CYCLES
 
-        in	a,(c)		; 14   Bit 0
-        cpl			;  5
-        rrca			;  5
-        dec	de		;  7 = 31 CYCLES
+		in	a,(c)		; 14   Bit 0
+		cpl			;  5
+		rrca			;  5
+		dec	de		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 1
-        xor	b		;  5
-        rrca			;  5
-        inc	hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 1
+		xor	b		;  5
+		rrca			;  5
+		inc	hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 2
-        xor	b		;  5
-        rrca			;  5
-        ld	sp,hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 2
+		xor	b		;  5
+		rrca			;  5
+		ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 3
-        xor	b		;  5
-        rrca			;  5
-        ld	sp,hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 3
+		xor	b		;  5
+		rrca			;  5
+		ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 4
-        xor	b		;  5
-        rrca			;  5
-        ld	sp,hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 4
+		xor	b		;  5
+		rrca			;  5
+		ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 5
-        xor	b		;  5
-        rrca			;  5
-        ld	sp,hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 5
+		xor	b		;  5
+		rrca			;  5
+		ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 6
-        xor	b		;  5
-        rrca			;  5
-        ld	sp,hl		;  7 = 31 CYCLES
+		in	b,(c)		; 14   Bit 6
+		xor	b		;  5
+		rrca			;  5
+		ld	sp,hl		;  7 = 31 CYCLES
 
-        in	b,(c)		; 14   Bit 7
-        xor	b		;  5
-        rrca			;  5
+		in	b,(c)		; 14   Bit 7
+		xor	b		;  5
+		rrca			;  5
 
-IFDEF LPTIO
-	rrca			;  5 extra rotate because rx is bit 1
-ENDIF
-	ld	(hl),a		;  8 instruction uses data bus write
+	IFDEF LPTIO
+		rrca			;  5 extra rotate because rx is bit 1
+	ENDIF
+		ld	(hl),a		;  8 instruction uses data bus write
 
-	ld	a,d		;  5
-        or	e		;  5
-        jp	nz,RX_PE	; 11
+		ld	a,d		;  5
+		or	e		;  5
+		jp	nz,RX_PE	; 11
 
-        jr	ReceiveOK 
+		jr	ReceiveOK 
 
 ENDIF ; UART
 
@@ -1539,79 +1587,78 @@ ENDIF ; UART
 ;         Stack = CRC-16
 ; Output: HL    = updated CRC-16
 
-uiXModemCRC16:
-        ld	l,c
-        ld	h,b
-        ld	b,l
-        dec	hl
-        inc	h
-        ld	c,h
+uiXModemCRC16:	ld	l,c
+		ld	h,b
+		ld	b,l
+		dec	hl
+		inc	h
+		ld	c,h
 
-        push    ix
-        ld      ix,0
-        add     ix,sp
-        ld      l,(ix+4)
-        ld      h,(ix+5)
-        pop     ix
+		push    ix
+		ld      ix,0
+		add     ix,sp
+		ld      l,(ix+4)
+		ld      h,(ix+5)
+		pop     ix
 
-        ex      af,af'
-        push    af
-        ex      af,af'
+		ex      af,af'
+		push    af
+		ex      af,af'
 
-IF !(CXDOS1 || CXDOS2)
-; compute CRC with lookup table
-crc16:	ld	a,l
-        ex	af,af'
-        ld	a,(de)
-        inc	de
-        xor	h
-        ld	h,CrcTab/256
-        ld	l,a
-        ex	af,af'
-        xor	(hl)
-        inc	h
-        ld	l,(hl)
-        ld	h,a
-        djnz	crc16
-        dec	c
-        jp	nz,crc16
+	IF !(CXDOS1 || CXDOS2)
+		; compute CRC with lookup table
+crc16:		ld	a,l
+		ex	af,af'
+		ld	a,(de)
+		inc	de
+		xor	h
+		ld	h,CrcTab/256
+		ld	l,a
+		ex	af,af'
+		xor	(hl)
+		inc	h
+		ld	l,(hl)
+		ld	h,a
+		djnz	crc16
+		dec	c
+		jp	nz,crc16
 
-ELSE
-; compute CRC without lookup table
-crc16:	push bc
-	ld	a,(de)
-	inc	de
-	xor     h
-	ld      b,a
-	ld      c,l
-	rrca
-	rrca
-	rrca
-	rrca
-	ld      l,a
-	and     0fh
-	ld      h,a
-	xor     b
-	ld      b,a
-	xor     l
-	and     0f0h
-	ld      l,a
-	xor     c
-	add     hl,hl
-	xor     h
-	ld      h,a
-	ld      a,l
-	xor     b
-	ld      l,a
-	pop     bc
-        djnz	crc16
-        dec	c
-        jp	nz,crc16
-ENDIF
-        ex      af,af'
-        pop     af
-        ex      af,af'
-        ret
+	ELSE
+		; compute CRC without lookup table
+crc16:		push bc
+		ld	a,(de)
+		inc	de
+		xor     h
+		ld      b,a
+		ld      c,l
+		rrca
+		rrca
+		rrca
+		rrca
+		ld      l,a
+		and     0fh
+		ld      h,a
+		xor     b
+		ld      b,a
+		xor     l
+		and     0f0h
+		ld      l,a
+		xor     c
+		add     hl,hl
+		xor     h
+		ld      h,a
+		ld      a,l
+		xor     b
+		ld      l,a
+		pop     bc
+		djnz	crc16
+		dec	c
+		jp	nz,crc16
+	ENDIF
+		ex      af,af'
+		pop     af
+		ex      af,af'
+		ret
 
 ; ------------------------------------------
 ; GETDPB - Set DPB using sector 0 / bootsector of partition
@@ -1725,79 +1772,79 @@ r608:		inc	hl
                 ret
         ENDIF
 
-IF !(CXDOS1 || CXDOS2)
-        SECTION	DRV_CRCTAB
+	IF !(CXDOS1 || CXDOS2)
+		SECTION	DRV_CRCTAB
 
-        ORG	$7E00	; align to 256-byte page boundary
+		ORG	$7E00	; align to 256-byte page boundary
 
 CrcTab:	; high bytes
-        db	000h,010h,020h,030h,040h,050h,060h,070h
-        db	081h,091h,0A1h,0B1h,0C1h,0D1h,0E1h,0F1h
-        db	012h,002h,032h,022h,052h,042h,072h,062h
-        db	093h,083h,0B3h,0A3h,0D3h,0C3h,0F3h,0E3h
-        db	024h,034h,004h,014h,064h,074h,044h,054h
-        db	0A5h,0B5h,085h,095h,0E5h,0F5h,0C5h,0D5h
-        db	036h,026h,016h,006h,076h,066h,056h,046h
-        db	0B7h,0A7h,097h,087h,0F7h,0E7h,0D7h,0C7h
-        db	048h,058h,068h,078h,008h,018h,028h,038h
-        db	0C9h,0D9h,0E9h,0F9h,089h,099h,0A9h,0B9h
-        db	05Ah,04Ah,07Ah,06Ah,01Ah,00Ah,03Ah,02Ah
-        db	0DBh,0CBh,0FBh,0EBh,09Bh,08Bh,0BBh,0ABh
-        db	06Ch,07Ch,04Ch,05Ch,02Ch,03Ch,00Ch,01Ch
-        db	0EDh,0FDh,0CDh,0DDh,0ADh,0BDh,08Dh,09Dh
-        db	07Eh,06Eh,05Eh,04Eh,03Eh,02Eh,01Eh,00Eh
-        db	0FFh,0EFh,0DFh,0CFh,0BFh,0AFh,09Fh,08Fh
-        db	091h,081h,0B1h,0A1h,0D1h,0C1h,0F1h,0E1h
-        db	010h,000h,030h,020h,050h,040h,070h,060h
-        db	083h,093h,0A3h,0B3h,0C3h,0D3h,0E3h,0F3h
-        db	002h,012h,022h,032h,042h,052h,062h,072h
-        db	0B5h,0A5h,095h,085h,0F5h,0E5h,0D5h,0C5h
-        db	034h,024h,014h,004h,074h,064h,054h,044h
-        db	0A7h,0B7h,087h,097h,0E7h,0F7h,0C7h,0D7h
-        db	026h,036h,006h,016h,066h,076h,046h,056h
-        db	0D9h,0C9h,0F9h,0E9h,099h,089h,0B9h,0A9h
-        db	058h,048h,078h,068h,018h,008h,038h,028h
-        db	0CBh,0DBh,0EBh,0FBh,08Bh,09Bh,0ABh,0BBh
-        db	04Ah,05Ah,06Ah,07Ah,00Ah,01Ah,02Ah,03Ah
-        db	0FDh,0EDh,0DDh,0CDh,0BDh,0ADh,09Dh,08Dh
-        db	07Ch,06Ch,05Ch,04Ch,03Ch,02Ch,01Ch,00Ch
-        db	0EFh,0FFh,0CFh,0DFh,0AFh,0BFh,08Fh,09Fh
-        db	06Eh,07Eh,04Eh,05Eh,02Eh,03Eh,00Eh,01Eh
+		db	000h,010h,020h,030h,040h,050h,060h,070h
+		db	081h,091h,0A1h,0B1h,0C1h,0D1h,0E1h,0F1h
+		db	012h,002h,032h,022h,052h,042h,072h,062h
+		db	093h,083h,0B3h,0A3h,0D3h,0C3h,0F3h,0E3h
+		db	024h,034h,004h,014h,064h,074h,044h,054h
+		db	0A5h,0B5h,085h,095h,0E5h,0F5h,0C5h,0D5h
+		db	036h,026h,016h,006h,076h,066h,056h,046h
+		db	0B7h,0A7h,097h,087h,0F7h,0E7h,0D7h,0C7h
+		db	048h,058h,068h,078h,008h,018h,028h,038h
+		db	0C9h,0D9h,0E9h,0F9h,089h,099h,0A9h,0B9h
+		db	05Ah,04Ah,07Ah,06Ah,01Ah,00Ah,03Ah,02Ah
+		db	0DBh,0CBh,0FBh,0EBh,09Bh,08Bh,0BBh,0ABh
+		db	06Ch,07Ch,04Ch,05Ch,02Ch,03Ch,00Ch,01Ch
+		db	0EDh,0FDh,0CDh,0DDh,0ADh,0BDh,08Dh,09Dh
+		db	07Eh,06Eh,05Eh,04Eh,03Eh,02Eh,01Eh,00Eh
+		db	0FFh,0EFh,0DFh,0CFh,0BFh,0AFh,09Fh,08Fh
+		db	091h,081h,0B1h,0A1h,0D1h,0C1h,0F1h,0E1h
+		db	010h,000h,030h,020h,050h,040h,070h,060h
+		db	083h,093h,0A3h,0B3h,0C3h,0D3h,0E3h,0F3h
+		db	002h,012h,022h,032h,042h,052h,062h,072h
+		db	0B5h,0A5h,095h,085h,0F5h,0E5h,0D5h,0C5h
+		db	034h,024h,014h,004h,074h,064h,054h,044h
+		db	0A7h,0B7h,087h,097h,0E7h,0F7h,0C7h,0D7h
+		db	026h,036h,006h,016h,066h,076h,046h,056h
+		db	0D9h,0C9h,0F9h,0E9h,099h,089h,0B9h,0A9h
+		db	058h,048h,078h,068h,018h,008h,038h,028h
+		db	0CBh,0DBh,0EBh,0FBh,08Bh,09Bh,0ABh,0BBh
+		db	04Ah,05Ah,06Ah,07Ah,00Ah,01Ah,02Ah,03Ah
+		db	0FDh,0EDh,0DDh,0CDh,0BDh,0ADh,09Dh,08Dh
+		db	07Ch,06Ch,05Ch,04Ch,03Ch,02Ch,01Ch,00Ch
+		db	0EFh,0FFh,0CFh,0DFh,0AFh,0BFh,08Fh,09Fh
+		db	06Eh,07Eh,04Eh,05Eh,02Eh,03Eh,00Eh,01Eh
 
-        ;low bytes
-        db	000h,021h,042h,063h,084h,0A5h,0C6h,0E7h
-        db	008h,029h,04Ah,06Bh,08Ch,0ADh,0CEh,0EFh
-        db	031h,010h,073h,052h,0B5h,094h,0F7h,0D6h
-        db	039h,018h,07Bh,05Ah,0BDh,09Ch,0FFh,0DEh
-        db	062h,043h,020h,001h,0E6h,0C7h,0A4h,085h
-        db	06Ah,04Bh,028h,009h,0EEh,0CFh,0ACh,08Dh
-        db	053h,072h,011h,030h,0D7h,0F6h,095h,0B4h
-        db	05Bh,07Ah,019h,038h,0DFh,0FEh,09Dh,0BCh
-        db	0C4h,0E5h,086h,0A7h,040h,061h,002h,023h
-        db	0CCh,0EDh,08Eh,0AFh,048h,069h,00Ah,02Bh
-        db	0F5h,0D4h,0B7h,096h,071h,050h,033h,012h
-        db	0FDh,0DCh,0BFh,09Eh,079h,058h,03Bh,01Ah
-        db	0A6h,087h,0E4h,0C5h,022h,003h,060h,041h
-        db	0AEh,08Fh,0ECh,0CDh,02Ah,00Bh,068h,049h
-        db	097h,0B6h,0D5h,0F4h,013h,032h,051h,070h
-        db	09Fh,0BEh,0DDh,0FCh,01Bh,03Ah,059h,078h
-        db	088h,0A9h,0CAh,0EBh,00Ch,02Dh,04Eh,06Fh
-        db	080h,0A1h,0C2h,0E3h,004h,025h,046h,067h
-        db	0B9h,098h,0FBh,0DAh,03Dh,01Ch,07Fh,05Eh
-        db	0B1h,090h,0F3h,0D2h,035h,014h,077h,056h
-        db	0EAh,0CBh,0A8h,089h,06Eh,04Fh,02Ch,00Dh
-        db	0E2h,0C3h,0A0h,081h,066h,047h,024h,005h
-        db	0DBh,0FAh,099h,0B8h,05Fh,07Eh,01Dh,03Ch
-        db	0D3h,0F2h,091h,0B0h,057h,076h,015h,034h
-        db	04Ch,06Dh,00Eh,02Fh,0C8h,0E9h,08Ah,0ABh
-        db	044h,065h,006h,027h,0C0h,0E1h,082h,0A3h
-        db	07Dh,05Ch,03Fh,01Eh,0F9h,0D8h,0BBh,09Ah
-        db	075h,054h,037h,016h,0F1h,0D0h,0B3h,092h
-        db	02Eh,00Fh,06Ch,04Dh,0AAh,08Bh,0E8h,0C9h
-        db	026h,007h,064h,045h,0A2h,083h,0E0h,0C1h
-        db	01Fh,03Eh,05Dh,07Ch,09Bh,0BAh,0D9h,0F8h
-        db	017h,036h,055h,074h,093h,0B2h,0D1h,0F0h
-ENDIF
+		;low bytes
+		db	000h,021h,042h,063h,084h,0A5h,0C6h,0E7h
+		db	008h,029h,04Ah,06Bh,08Ch,0ADh,0CEh,0EFh
+		db	031h,010h,073h,052h,0B5h,094h,0F7h,0D6h
+		db	039h,018h,07Bh,05Ah,0BDh,09Ch,0FFh,0DEh
+		db	062h,043h,020h,001h,0E6h,0C7h,0A4h,085h
+		db	06Ah,04Bh,028h,009h,0EEh,0CFh,0ACh,08Dh
+		db	053h,072h,011h,030h,0D7h,0F6h,095h,0B4h
+		db	05Bh,07Ah,019h,038h,0DFh,0FEh,09Dh,0BCh
+		db	0C4h,0E5h,086h,0A7h,040h,061h,002h,023h
+		db	0CCh,0EDh,08Eh,0AFh,048h,069h,00Ah,02Bh
+		db	0F5h,0D4h,0B7h,096h,071h,050h,033h,012h
+		db	0FDh,0DCh,0BFh,09Eh,079h,058h,03Bh,01Ah
+		db	0A6h,087h,0E4h,0C5h,022h,003h,060h,041h
+		db	0AEh,08Fh,0ECh,0CDh,02Ah,00Bh,068h,049h
+		db	097h,0B6h,0D5h,0F4h,013h,032h,051h,070h
+		db	09Fh,0BEh,0DDh,0FCh,01Bh,03Ah,059h,078h
+		db	088h,0A9h,0CAh,0EBh,00Ch,02Dh,04Eh,06Fh
+		db	080h,0A1h,0C2h,0E3h,004h,025h,046h,067h
+		db	0B9h,098h,0FBh,0DAh,03Dh,01Ch,07Fh,05Eh
+		db	0B1h,090h,0F3h,0D2h,035h,014h,077h,056h
+		db	0EAh,0CBh,0A8h,089h,06Eh,04Fh,02Ch,00Dh
+		db	0E2h,0C3h,0A0h,081h,066h,047h,024h,005h
+		db	0DBh,0FAh,099h,0B8h,05Fh,07Eh,01Dh,03Ch
+		db	0D3h,0F2h,091h,0B0h,057h,076h,015h,034h
+		db	04Ch,06Dh,00Eh,02Fh,0C8h,0E9h,08Ah,0ABh
+		db	044h,065h,006h,027h,0C0h,0E1h,082h,0A3h
+		db	07Dh,05Ch,03Fh,01Eh,0F9h,0D8h,0BBh,09Ah
+		db	075h,054h,037h,016h,0F1h,0D0h,0B3h,092h
+		db	02Eh,00Fh,06Ch,04Dh,0AAh,08Bh,0E8h,0C9h
+		db	026h,007h,064h,045h,0A2h,083h,0E0h,0C1h
+		db	01Fh,03Eh,05Dh,07Ch,09Bh,0BAh,0D9h,0F8h
+		db	017h,036h,055h,074h,093h,0B2h,0D1h,0F0h
+	ENDIF
 
 ; ------------------------------------------------------------------------------
 ENDIF ; DRV_SYS

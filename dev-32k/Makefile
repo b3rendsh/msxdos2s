@@ -89,22 +89,6 @@ jio2:	rdate
 	z88dk-appmake +rom -b obj/jio_dos2__.bin -o $(ROM)/jio_dos2.rom -s 32768 --org 0
 	@echo done
 
-jiocart1:	rdate
-	@echo Assembling JIOCART DOS1 / 16k jio remote disk rom..
-	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DIDEDOS1 -DJIO -DJIOCART -Oobj -o=jiocart_dos1.bin dos1x.asm drv_jio.asm
-	z88dk-appmake +glue -b obj/jiocart_dos1 --filler 0xFF --clean
-	z88dk-appmake +rom -b obj/jiocart_dos1__.bin -o $(ROM)/jiocart_dos1.rom -s 16384 --org 0
-	@echo done
-
-jiocart2:	rdate
-	@echo Assembling JIOCART DOS2 / 32k jio remote disk rom..
-	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DJIO -DJIOCART -Oobj -o=jiocart_dos2.bin p1_main.asm p3_paging.asm drv_jio.asm p0_kernel.asm
-	z88dk-appmake +glue -b obj/jiocart_dos2 --filler 0xFF --clean
-	z88dk-appmake +rom -b obj/jiocart_dos2__.bin -o $(ROM)/jiocart_dos2.rom -s 32768 --org 0
-	@echo done
-
 pio2:	rdate
 	@echo Assembling PIO DOS2 / 32k jio printer remote disk rom..
 	$(RMF) obj$(RMD)
@@ -112,7 +96,6 @@ pio2:	rdate
 	z88dk-appmake +glue -b obj/pio_dos2 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/pio_dos2__.bin -o $(ROM)/pio_dos2.rom -s 32768 --org 0
 	@echo done
-
 
 uart2:	rdate
 	@echo Assembling UART DOS2 / 32k uart 1655x remote disk rom..
