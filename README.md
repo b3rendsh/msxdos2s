@@ -44,7 +44,7 @@ The IDE driver is split into a common DOS layer and a low level disk interface l
 1. The code is optimized to increase the data transfer rate.
 2. Detection of hardware and I/O ports for the SODA interface.
 3. Includes support for extended partitions and up to 8 drives.
-4. Currently one IDE disk is supported. No master/slave or ATAPI (CDROM) drives. The SODA interface works with CF cards only.
+4. Only one master IDE disk is supported. No master/slave or ATAPI (CDROM) drives. The SODA interface works with CF cards only.
 5. Optional execution of boot code in the MBR, in addition or as a replacement for the boot menu.
 
 #### TASTE.COM
@@ -76,8 +76,17 @@ The main changes compared to ASCII's MSXDOS 2.2 are that this ROM works without 
 [Source files](mod-beer20/)  
 The main improvement compared to the 1.9 driver is that it will work with other disk systems in the machine that have higher DOS versions e.g. a SUNRISE IDE with MSX DOS 2.2 or Nextor. Some other nasty bugs have been fixed. In the source code all the differences between v1.9 and v2.0 are marked and commented in detail.
 
-## Limitations
-The source files are provided and modified for study only and the ROM files are provided for testing only. This repository contains a re-composition of the creative work of ASCII and others. It is provided freely and "as it is" in the hope that it will be useful, but without any warranty of any kind, either expressed or implied. Use at own risk!  
+## Contributions
+Although contributions of all kinds are welcome, I have no intention to add any more features or modify the DOS kernel in this repository.
+
+Please create an issue if you want to report a bug or have any requests or suggestions. Pull requests from forks are currently not supported.
+
+## License
+Most of the sources are a re-composition of the creative work of ASCII and others. They are shared here for educational and non commercial purposes only. It is believed that these works are being used in accordance with the intentions and/or licensing of their creators.
+
+The Creative Commons license terms apply to all custom source code, drivers and binaries.
+
+The material is provided freely and "as it is" in the hope that it will be useful, but without any warranty of any kind, either expressed or implied. Use at own risk!
 
 ## References
 MSX system sources:  
