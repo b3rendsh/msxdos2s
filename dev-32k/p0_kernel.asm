@@ -29,13 +29,9 @@
 
 		ORG	08000H
 
-		PUBLIC	K1_BEGIN		; begin of kernel code
-		PUBLIC	K1_END			; end of kernel code
-
 ; ------------------------------------------------------------------------------
 ; Following kernel code is copied to ram in page 0
 ; ------------------------------------------------------------------------------
-K1_BEGIN:
 		PHASE  0
 
 ; ---------------------------------------------------------
@@ -11188,4 +11184,3 @@ ENDIF ; FAT16
 
 	DEPHASE
 
-K1_END:

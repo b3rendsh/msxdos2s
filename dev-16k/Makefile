@@ -31,6 +31,7 @@ rdate:
 
 ppide3:	rdate
 	@echo Assembling BEER DOS2 / 16k ppide rom..
+	$(RMF) dev-32k$(RMD)
 	$(RMF) obj$(RMD)
 	z80asm -b -d -l -m -DROM16K -DPPIDE -Oobj -o=beer_161.bin $(DEV32K)/p1_main.asm $(DEV32K)/p3_paging.asm $(DEV32K)/driver.asm $(DEV32K)/drv_ide.asm 
 	z80asm -b -d -l -m -DROM16K -DPPIDE -Oobj -o=beer_162.bin $(DEV32K)/p0_kernel.asm

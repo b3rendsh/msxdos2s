@@ -3,8 +3,10 @@
 # Universal disk driver
 # Todo: create build rules
 
-SOURCES1 := dos1x.asm driver.asm drv_ide.asm 
-SOURCES2 := p1_main.asm p3_paging.asm driver.asm drv_ide.asm p0_kernel.asm
+SOURCES1  := dos1x.asm driver.asm drv_ide.asm 
+SOURCES2A := p1_main.asm p3_paging.asm driver.asm drv_ide.asm 
+SOURCES2B := p0_kernel.asm
+
 
 # system agnostic commands
 ifdef ComSpec
@@ -28,7 +30,7 @@ endif
 # Note: the rom folder must be an existing folder
 ROM 	:= .$/rom
 
-all:	ppide1 cfide1 ppide2 cfide2 core2 jio1 jio2 taste
+all:	ppide1 cfide1 ppide2 cfide2 beer2s core2 jio1 jio2 taste
 
 rdate:
 	@echo db $(QUOTE)$(shell $(GETDATE))$(QUOTE) > rdate.inc
@@ -52,15 +54,28 @@ cfide1: rdate
 ppide2:	rdate
 	@echo Assembling BEER DOS2 / 32k ppide rom..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DPPIDE -Oobj -o=beer_dos2.bin $(SOURCES2)
+	z80asm -b -d -l -m -DPPIDE -Oobj -o=beer_dos2.bin $(SOURCES2A) $(SOURCES2B)
 	z88dk-appmake +glue -b obj/beer_dos2 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/beer_dos2__.bin -o $(ROM)/beer_dos2.rom -s 32768 --org 0
+	@echo done
+	
+beer2s:	rdate
+	@echo Assembling BEER DOS2 / 32k ppide swapped pages image..
+	$(RMF) obj$(RMD)
+	z80asm -b -d -l -m -DPPIDE -Oobj -o=beer_161.bin $(SOURCES2A)
+	z80asm -b -d -l -m -DPPIDE -Oobj -o=beer_162.bin $(SOURCES2B)
+	z88dk-appmake +glue -b obj/beer_161 --filler 0xFF --clean
+	z88dk-appmake +glue -b obj/beer_162 --filler 0xFF --clean
+	z80asm -b -d -l -m -Oobj -o=dummy.bin dummy.asm
+	z88dk-appmake +rom -b obj/dummy.bin -o $(ROM)/beer_32k.img -s 32768 --org 0
+	z88dk-appmake +inject -b $(ROM)/beer_32k.img -i obj/beer_162__.bin -s 00000 -o $(ROM)/beer_32k.img 
+	z88dk-appmake +inject -b $(ROM)/beer_32k.img -i obj/beer_161__.bin -s 16384 -o $(ROM)/beer_32k.img
 	@echo done
 
 cfide2:	rdate
 	@echo Assembling SODA DOS2 / 32k cfide rom..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DCFIDE -Oobj -o=soda_dos2.bin $(SOURCES2)
+	z80asm -b -d -l -m -DCFIDE -Oobj -o=soda_dos2.bin $(SOURCES2A) $(SOURCES2B)
 	z88dk-appmake +glue -b obj/soda_dos2 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/soda_dos2__.bin -o $(ROM)/soda_dos2.rom -s 32768 --org 0
 	@echo done
@@ -68,7 +83,7 @@ cfide2:	rdate
 core2:	rdate
 	@echo Assembling CORE DOS2 / 32k rom..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DCORE -Oobj -o=core_dos2.bin $(SOURCES2)
+	z80asm -b -d -l -m -DCORE -Oobj -o=core_dos2.bin $(SOURCES2A) $(SOURCES2B)
 	z88dk-appmake +glue -b obj/core_dos2 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/core_dos2__.bin -o $(ROM)/core_dos2.rom -s 32768 --org 0
 	@echo done
@@ -139,7 +154,7 @@ test1:	rdate
 
 test2:	rdate
 	@echo Assembling test2 rom..
-	z80asm -b -d -l -m -DTEST -Oobjtest -o=test2.bin $(SOURCES2)
+	z80asm -b -d -l -m -DTEST -Oobjtest -o=test2.bin $(SOURCES2A) $(SOURCES2B)
 	z88dk-appmake +glue -b objtest/test2 --filler 0xFF --clean
 	z88dk-appmake +rom -b objtest/test2__.bin -o $(ROM)/test2.rom -s 32768 --org 0
 	$(SEARCH) "DOS_" objtest/test2.map > test2_entry_points.txt

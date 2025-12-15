@@ -71,10 +71,6 @@
 		; Routine defined in the paging helper module
 		EXTERN	PH_INIT
 
-		; Symbols defined by the kernel in P0
-		EXTERN	K1_BEGIN
-		EXTERN	K1_END
-
 ; ------------------------------------------------------------------------------
 ; MACRO
 
@@ -5400,9 +5396,9 @@ J410F:		DI
 	IFNDEF ROM16K
 		CALL    PUT_P0
 		CALL    P0_RAM                  ; enable DOS memory on page 0
-		LD	HL,K1_BEGIN		; Source
+		LD	HL,$8000		; Source
 		LD	DE,0			; Target
-		LD	BC,K1_END-K1_BEGIN	; Number of bytes
+		LD	BC,$4000		; Number of bytes (16K)
 		LDIR
 		POP	AF
 		LD	H,080H			; restore page 2 slot (ie. RAM)

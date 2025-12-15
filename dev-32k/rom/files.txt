@@ -4,6 +4,7 @@ https://github.com/b3rendsh/msxdos2s
 Files:
 beer_64k.img	64K EEPROM image for BEER-232 PPI IDE cartridge
 soda_64k.img	64K EEPROM image for SODA CF IDE cartridge
+beer_32k.img	32K EEPROM image with DOS 2 for MSXPRO BEER cartridge (swapped both 16K pages)
 dummy_16k.rom	16K Dummy rom
 beer_dos1.rom	16K BEER / PPI IDE DOS 1 rom (for BEER-202 cartridge)
 beer_dos2.rom	32K BEER / PPI IDE DOS 2 rom

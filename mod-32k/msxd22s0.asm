@@ -823,7 +823,7 @@ C492A:  CALL    C4E12			; get slot id of page 2
         ADD     HL,SP			; offset 5
         IN      A,(0A8H)
         RRD
-        LD      (HL),A			; update saved primairy slot on stack (otherwise memorymapper change will be rolled back after CALLF is finished)
+        LD      (HL),A			; update saved primary slot on stack (otherwise memorymapper change will be rolled back after CALLF is finished)
         CALL    C4E05			; get slot id of page 1
         BIT     7,A			; slot expanded ?
         RET     Z			; nope, quit
@@ -832,16 +832,16 @@ C492A:  CALL    C4E12			; get slot id of page 2
         LD      C,A
         CALL    C4E21			; get slot id of page 3
         XOR     C
-        AND     03H			; same primairy slot ?
-        JR      NZ,J4954		; nope, skip secundairy slot register
+        AND     03H			; same primary slot ?
+        JR      NZ,J4954		; nope, skip secondary slot register
         LD      A,(LFFFF)
-        CPL     			; current secundairy slot register
+        CPL     			; current secondary slot register
         RRD
-        LD      (HL),A			; update saved secundairy slot on stack (otherwise memorymapper change will be rolled back after CALLF is finished)
+        LD      (HL),A			; update saved secondary slot on stack (otherwise memorymapper change will be rolled back after CALLF is finished)
 J4954:  DEC     HL			; offset 11
         IN      A,(0A8H)
         RRD
-        LD      (HL),A			; update saved primairy slot on stack (otherwise memorymapper change will be rolled back after CALLF is finished)
+        LD      (HL),A			; update saved primary slot on stack (otherwise memorymapper change will be rolled back after CALLF is finished)
         RET
 
 ; regain control from MSX BASIC initialization
@@ -1613,10 +1613,10 @@ PRVINT:
 Q4DF8:  PUSH    HL
         PUSH    BC
         IN      A,(0A8H)		; current slot (in page 0)
-        CALL    C4E38			; get secundairy slot register (if slot is expanded)
+        CALL    C4E38			; get secondary slot register (if slot is expanded)
         JR      Z,J4E35			; slot is not expanded, return slot id
         RLCA
-        RLCA				; secundairy slot page 0 in b3-b2
+        RLCA				; secondary slot page 0 in b3-b2
         JR      J4E30			; make slot id and return
 
 ;         Subroutine get slot id of page 1
@@ -1628,9 +1628,9 @@ C4E05:  PUSH    HL
         IN      A,(0A8H)
         RRCA
         RRCA    			; current slot in page 1
-        CALL    C4E38			; get secundairy slot register (if slot is expanded)
+        CALL    C4E38			; get secondary slot register (if slot is expanded)
         JR      Z,J4E35			; slot is not expanded, return slot id
-        JR      J4E30			; (secundairy slot page 1 already in b3-b2), make slot id and return
+        JR      J4E30			; (secondary slot page 1 already in b3-b2), make slot id and return
 
 ;         Subroutine get slot id of page 2
 ;            Inputs  ________________________
@@ -1643,9 +1643,9 @@ C4E12:  PUSH    HL
         RRCA
         RRCA
         RRCA    			; current slot in page 2
-        CALL    C4E38			; get secundairy slot register (if slot is expanded)
+        CALL    C4E38			; get secondary slot register (if slot is expanded)
         JR      Z,J4E35			; slot is not expanded, return slot id
-        JR      J4E2E			; secundairy slot page 2 in b3-b2, make slot id and return
+        JR      J4E2E			; secondary slot page 2 in b3-b2, make slot id and return
 
 ;         Subroutine get slot id of page 3
 ;            Inputs  ________________________
@@ -1656,24 +1656,24 @@ C4E21:  PUSH    HL
         IN      A,(0A8H)
         RLCA
         RLCA    			; current slot in page 3
-        CALL    C4E38			; get secundairy slot register (if slot is expanded)
+        CALL    C4E38			; get secondary slot register (if slot is expanded)
         JR      Z,J4E35			; slot is not expanded, return slot id
         RRCA
         RRCA
 J4E2E:  RRCA
-        RRCA				; secundairy slot in b3-b2
-J4E30:  AND     0CH			; secundairy slot
+        RRCA				; secondary slot in b3-b2
+J4E30:  AND     0CH			; secondary slot
         OR      80H			; slot expanded
-        OR      C			; primairy slot
+        OR      C			; primary slot
 J4E35:  POP     BC
         POP     HL
         RET
 
-;         Subroutine get secundairy slot register (if slot is expanded)
+;         Subroutine get secondary slot register (if slot is expanded)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4E38:  AND     03H			; primairy slot
+C4E38:  AND     03H			; primary slot
         LD      C,A
         LD      B,0
         LD      HL,EXPTBL
@@ -1684,7 +1684,7 @@ C4E38:  AND     03H			; primairy slot
         INC     HL
         INC     HL
         INC     HL
-        LD      A,(HL)			; current secundairy slot
+        LD      A,(HL)			; current secondary slot
         RET
 
 ;         Subroutine divide
@@ -5262,7 +5262,7 @@ J68FA:  CALL    GET_P2                  ; GET_P2
         LD      HL,IS003B+8000H
         LD      DE,IS003B
         LD      BC,26
-        LDIR    			; initialize secundairy slot helper subroutines from BDOS code segment
+        LDIR    			; initialize secondary slot helper subroutines from BDOS code segment
         EX      AF,AF'			; restore current segment page 2
         CALL    PUT_P2                  ; PUT_P2
         EI 
