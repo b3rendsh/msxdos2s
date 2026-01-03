@@ -76,6 +76,8 @@ The main changes compared to ASCII's MSXDOS 2.2 are that this ROM works without 
 [Source files](mod-beer20/)  
 The main improvement compared to the 1.9 driver is that it will work with other disk systems in the machine that have higher DOS versions e.g. a SUNRISE IDE with MSX DOS 2.2 or Nextor. Some other nasty bugs have been fixed. In the source code all the differences between v1.9 and v2.0 are marked and commented in detail.
 
+To use MiSiX DOS use the 2.0 ROM or compile with 1.9 compatibility options, newer ROM versions don't work with MiSiX.
+
 ## Contributions
 Although contributions of all kinds are welcome, I have no intention to add any more features or modify the DOS kernel in this repository.
 
