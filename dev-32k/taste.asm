@@ -1,7 +1,7 @@
 ; ------------------------------------------------------------------------------
 ; taste.asm
 ;
-; Copyright (C) 2024 H.J. Berends
+; Copyright (C) 2026 H.J. Berends
 ; 
 ; You can freely use, distribute or modify this program.
 ; It is provided freely and "as it is" in the hope that it will be useful, 
@@ -9,8 +9,10 @@
 ; ------------------------------------------------------------------------------
 ; MSX disk info and test for use with BEER or SODA IDE interface.
 
-; DEFINE DEBUG
-; DEFINE BASBIN		
+;DEFINE BASBIN		; build binary option (specified in the make file)
+;DEFINE DEBUG		; print debug information
+DEFINE IDE_CS		; IDE CS signal always asserted
+;DEFINE IDE_PIOZ	; set PIO mode 0
 
 		INCLUDE	"msx.inc"
 
@@ -84,7 +86,11 @@ main_2:		ld	(itype),a
 		jr	c,ide_error
 		call	diag
 		jr	c,ide_error
+	IFDEF DEBUG
+		call	read_mbr
+	ELSE
 		call	z,speedtest
+	ENDIF
 main_exit:
 	IFDEF BASBIN
 		ret
@@ -167,6 +173,13 @@ iprint:		call	PrintText
 		ld	de,t_hex
 		call	PrintText
 		call	PrintCRLF
+
+		ld	de,t_piomode
+		call	PrintText
+		ld	de,(secbuf+102)
+		call	PrintHexWord
+		call	PrintCRLF
+
 		ret
 
 t_interface:	db	"Interface: $"
@@ -176,6 +189,7 @@ t_model:	db  	"Model    : $"
 t_serial:	db	"Serial   : $"
 t_firmware:	db	"Firmware : $"
 t_sectors: 	db  	"Sectors  : $"
+t_piomode:	db	"PIO mode : $"
 t_hex:		db	" (HEX) $"
 
 ; ------------------------------------------------------------------------------
@@ -190,6 +204,9 @@ diag:		ld	de,t_diag
 		ld	de,t_passed
 		call	PrintText
 		call	PrintCRLF
+	IFDEF DEBUG
+		call	diag_info
+	ENDIF
 		xor	a
 		ret
 
@@ -200,7 +217,7 @@ diag_failed:	push	af
 		call	PrintHexByte
 		call	PrintCRLF
 
-		ld	de,t_dump
+diag_info:	ld	de,t_dump
 		call	PrintText
 		ld	hl,secbuf
 		call	cf_info
@@ -231,6 +248,49 @@ t_diag:		db	13,10,"Diagnostic test $"
 t_passed:	db	"passed$"
 t_failed:	db	"failed, error $"
 t_dump:		db	13,10,"Dump:",13,10,"$"
+
+; ------------------------------------------------------------------------------
+; Compact Flash master boot record
+; ------------------------------------------------------------------------------
+read_mbr:	ld	de,$0000	; start sector bit 0..15
+		ld	c,$00		; start sector bit 16..23
+		call	read_sector
+		
+		ld	a,'1'
+		ld	(t_boot+9),a
+		ld	de,$0001	; start sector bit 0..15
+		ld	c,$00		; start sector bit 16..23
+		
+		
+read_sector:	ld	hl,secbuf
+		call	cf_setsector
+		ret	c
+		call	cf_cmdread
+		jp	nz,cf_error
+		ld	hl,secbuf
+		call	cf_readsector
+		;call	cf_readoptm
+
+		; print bootsector data
+		ld	de,t_boot
+		call	PrintText
+		ld	hl,secbuf
+		ld	bc,$0200	; 512 bytes
+
+sec_dump:	push	bc
+		ld	a,(hl)
+		call	PrintHexByte
+		inc	hl
+		pop	bc
+		dec	bc
+		ld	a,b
+		or	c
+		jr	nz,sec_dump
+		
+		xor	a
+		ret
+
+t_boot:		db	13,10,"SECTOR 0:",13,10,"$"
 
 ; ------------------------------------------------------------------------------
 ; Compact Flash speed test
@@ -299,10 +359,10 @@ diskreadsec:	ld	hl,$0800	; read 2048 sectors = 1024 KB
 
 read_loop:	call	cf_setsector
 		ret	c
-IFDEF DEBUG
+	IFDEF DEBUG_1
 		ld	a,'.'
 		call	PrintC
-ENDIF
+	ENDIF
 		call	cf_cmdread
 		jp	nz,cf_error
 		push	hl
@@ -490,8 +550,12 @@ IDE_CMD_FEATURE	equ	$ef		; set feature
 IDE_READ	equ	$40		; /rd=0 /wr=1 /cs=0
 IDE_WRITE	equ	$80		; /rd=1 /wr=0 /cs=0
 IDE_SET		equ	$c0		; /rd=1 /wr=1 /cs=0
+	IFDEF IDE_CS
+IDE_IDLE	equ	$c7		; /rd=1 /wr=1 /cs=0 reg=7
+	ELSE
 IDE_IDLE	equ	$e7		; /rd=1 /wr=1 /cs=1 reg=7
-
+	ENDIF
+	
 ; PPI 8255 I/O registers:
 PPI_IOA		equ	$30		; A: IDE data low byte
 PPI_IOB		equ	$31		; B: IDE data high byte
@@ -543,6 +607,25 @@ ppideInit:	ld	a,PPI_IOA
 		in	a,(PPI_IOA)
 		cp	$a5
 		ld	hl,ppide_tab
+		ret	nz
+
+	IFDEF IDE_PIOZ ; set PIO mode 0
+		call	ppideWaitReady
+		ret	c
+		call	ppideOutput
+		ld	hl,$0103		; set PIO mode subcommand
+		call	ppideSetReg
+		ld	hl,$0208		; set PIO mode 0
+		call	ppideSetReg
+		ld	hl,$06e0		; LBA mode / drive 0
+		call	ppideSetReg
+		ld	h,REG_COMMAND
+		ld	l,IDE_CMD_FEATURE
+		call	ppideSetReg
+	ENDIF
+		
+		ld	hl,ppide_tab
+		xor	a
 		ret
 
 ppide_tab:	jp	ppideInfo
@@ -602,7 +685,11 @@ ppideNsector:	ld	l,$01			; number of sectors is N
 		call	ppideSetReg
 		inc	h			; IDE register 6
 		ld	l,$e0			; LBA mode
-		call	ppideSetReg 
+		call	ppideSetReg
+	IFDEF IDE_CS
+		ld	a,IDE_IDLE		; IDE register 7
+		out	(PPI_IOC),a		; set address
+	ENDIF
 		pop	hl
 		xor	a
 		ret
@@ -624,16 +711,23 @@ ppideCmdRead:	push	bc
 
 ; Copy of BEER 1.9 code
 ppideReadSector:
+		ld	a,IDE_SET+REG_DATA
+		out	(PPI_IOC),a
 		ld	c,PPI_IOA
 		ld	d,0
-ppi_rd_loop:	ld	a,IDE_READ
+ppi_rd_loop:	
+		ld	a,IDE_READ
 		ld	b,005h
 		out	(PPI_IOC),a
 		ini
 		inc	c
 		ini
 		dec	c
+	IFDEF IDE_CS
+		ld	a,IDE_SET+REG_DATA
+	ELSE
 		ld	a,IDE_IDLE
+	ENDIF
 		out	(PPI_IOC),a
 		dec	d
 		jr	nz,ppi_rd_loop
@@ -648,9 +742,10 @@ ppideReadOptm:
 		ld	b,$80
 		ld	c,PPI_IOC
 		ld	d,IDE_READ
-		ld	e,IDE_SET
+		ld	e,IDE_SET+REG_DATA
 		out	(c),e
-ppi_opt_loop:	out	(c),d			; 14T
+ppi_opt_loop:	
+		out	(c),d			; 14T
 		ld	c,a			; 05T
 		ini				; 18T
 		inc	c			; 05T
@@ -678,7 +773,7 @@ ppi_outer:	call	ppideWaitData
 		ld	b,$80
 		ld	c,PPI_IOC
 		ld	d,IDE_READ
-		ld	e,IDE_SET
+		ld	e,IDE_SET+REG_DATA
 		out	(c),e
 ppi_inner:	out	(c),d
 		ld	c,a
@@ -696,13 +791,12 @@ ppi_inner:	out	(c),d
 		inc	c
 		out	(c),e
 		djnz	ppi_inner
-IFDEF DEBUG
+	IFDEF DEBUG_1
 		ld	a,'-'
 		call	PrintC
-ENDIF
+	ENDIF
 		pop	bc
 		djnz	ppi_outer
-		xor	a
 		ret
 
 ; ------------------------------------------
@@ -732,9 +826,9 @@ ppi_wait_end:	pop	bc
 ; ------------------------------------------
 ppideWaitData:	call 	ppideInput
 ppi_waitdata_1:	
-IFDEF DEBUG
+	IFDEF DEBUG
 		call	ppi_dumpreg		; debug
-ENDIF
+	ENDIF
 		call	ppideStatus
 		bit	7,a			; IDE busy?
 		jr	nz,ppi_waitdata_1	; nz=yes
@@ -744,7 +838,7 @@ ENDIF
 		jr	z,ppi_waitdata_1	; z=no
 		xor	a			; no error
 		ret
-
+		
 ; debug: dump registers
 ppi_dumpreg:	ld	a,IDE_SET+1
 		call	ppideReadReg
@@ -779,11 +873,17 @@ ppideStatus:	ld	a,IDE_SET+REG_STATUS
 ppideReadReg:	out	(PPI_IOC),a
 		res	7,a			; /rd=0
 		out	(PPI_IOC),a
+	IFDEF IDE_CS
+		set	7,a			; /rd=1
+		out	(PPI_IOC),a
+		in	a,(PPI_IOA)
+	ELSE
 		in	a,(PPI_IOA)		; read register
 		ex	af,af'
 		ld	a,IDE_IDLE
 		out	(PPI_IOC),a
 		ex	af,af'
+	ENDIF
 		ret
 
 ; ------------------------------------------
@@ -811,7 +911,12 @@ ppideSetReg:	ld	a,IDE_SET
 		ld 	a,IDE_WRITE
 		add	a,h
 		out 	(PPI_IOC),a
+	IFDEF IDE_CS
+		ld	a,IDE_SET
+		add	a,h
+	ELSE
 		ld	a,IDE_IDLE
+	ENDIF
 		out 	(PPI_IOC),a
 		ret 
 
