@@ -825,7 +825,12 @@ r622:	ld	a,40h
 	inc	c
 	ini
 	dec	c
+IFDEF BEER19_OLD
 	ld	a,0F0h
+ELSE
+	; keeping CS asserted is required for some CF cards and/or 8255 ic's
+	ld	a,0C0h
+ENDIF
 	out	(32h),a
 	dec	d
 	jr	nz,r622
@@ -947,7 +952,7 @@ sputc:	ld	a,(hl)
 	inc	hl
 	jr	sputc
 ;
-S_logo:	db	12,"BEER 202: IDE HDD driver",13,10
+S_logo:	db	12,"BEER 202: IDE HDD V2.05A",13,10
 	db	13,10,"IDE: ",0
 
 ; ------------------------------------------
