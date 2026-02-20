@@ -64,6 +64,9 @@ The SODA IDE cartridge design is based on a RCBus Compact Flash module. Danjovic
 [**MSX JIO**](https://github.com/louthrax/MSXJIO)  
 Remote serial disk solution from Louthrax. It consists of a disk image server on a PC or android phone, a MSX client and a serial connection over the MSX joystick (gpio) port 2 using a ftdi cable or bluetooth adapter. 
 
+[**MSX JIO CART**](https://github.com/herraa1/msx-jio-cart-v1)  
+MSX JIO cartridge from Herraa1. Software based serial communnications like MSXJIO but without using joystick port 2.
+
 ## Older versions
 
 #### 32K MSX DOS 2.2
