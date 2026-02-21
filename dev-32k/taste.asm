@@ -870,14 +870,22 @@ ppideError:	ld	a,IDE_SET+REG_ERROR
 ; PPI IDE read status register
 ; ------------------------------------------
 ppideStatus:	ld	a,IDE_SET+REG_STATUS
-ppideReadReg:	out	(PPI_IOC),a
+ppideReadReg:	
+	IFDEF IDE_CS
+		push	bc
+		ld	b,a
+		ld	c,PPI_IOC
+		out	(c),b
+		res	7,b			; /rd=0 (assert read)
+		out	(c),b
+		in	a,(PPI_IOA)		; read register
+		set	7,b			; /rd=1 (deassert read)
+		out	(c),b
+		pop	bc
+	ELSE
+		out	(PPI_IOC),a
 		res	7,a			; /rd=0
 		out	(PPI_IOC),a
-	IFDEF IDE_CS
-		set	7,a			; /rd=1
-		out	(PPI_IOC),a
-		in	a,(PPI_IOA)
-	ELSE
 		in	a,(PPI_IOA)		; read register
 		ex	af,af'
 		ld	a,IDE_IDLE
