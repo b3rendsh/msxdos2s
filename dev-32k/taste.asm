@@ -11,8 +11,12 @@
 
 ;DEFINE BASBIN		; build binary option (specified in the make file)
 ;DEFINE DEBUG		; print debug information
-DEFINE IDE_CS		; IDE CS signal always asserted
-;DEFINE IDE_PIOZ	; set PIO mode 0
+DEFINE BEER_CS		; IDE CS signal always asserted
+;DEFINE BEER_TEST	; test alternative driver settings
+;DEFINE BEER_TEST_1	; set PIO mode 0 (note that the info record reports max pio mode)
+;DEFINE	BEER_TEST_2	; quickly recover from 8255 mode change glitch
+;DEFINE BEER_TEST_3	; add read sector delays
+;DEFINE BEER_TEST_4	; set 8255 to input mode only once on multi-sector read test
 
 		INCLUDE	"msx.inc"
 
@@ -44,6 +48,7 @@ main:		ld	ix,iobase		; workbuffer for dynamic IO addresses
 		ld	de,t_header
 		call	PrintText
 
+	IFNDEF BEER_TEST
 	IFNDEF BASBIN
 		; check for interface parameter 
                 ld      a,($005d)		; first character of commandline parameters:
@@ -66,11 +71,12 @@ check1:		cp	'B'			; B = beer interface
 help:		ld	de,t_help
 		call	PrintText
 		jr	main_exit
-	ENDIF		
+	ENDIF ; BASBIN
 
 autodetect:	call	cfideInit		; probe cf interface first
 		ld	a,$01
 		jr	z,main_2
+	ENDIF ; BEER_TEST
 		call	ppideInit
 		ld	a,$02
 		jr	z,main_2
@@ -107,8 +113,13 @@ ide_error:	push	af
 		jr	main_exit
 
 t_header:	db	12
+	IFDEF BEER_TEST
+		db	"TASTE: BEER IDE alternative timings",13,10
+		db	"-----------------------------------",13,10,13,10,"$"
+	ELSE
 		db	"TASTE: BEER/SODA IDE info and test",13,10
 		db	"----------------------------------",13,10,13,10,"$"
+	ENDIF
 t_notdetected:	db	"IDE hardware not detected",13,10,"$"
 t_error:	db	13,10,"IDE error $"
 t_help:		db	"Usage: TASTE [option][X]",13,10
@@ -269,7 +280,6 @@ read_sector:	ld	hl,secbuf
 		jp	nz,cf_error
 		ld	hl,secbuf
 		call	cf_readsector
-		;call	cf_readoptm
 
 		; print bootsector data
 		ld	de,t_boot
@@ -316,10 +326,12 @@ speedtest1:	ld	de,t_speed
 		call	diskread
 		ret	c
 
+	IFNDEF BEER_TEST
 	IFNDEF BASBIN
                 ld      a,($005e)		; 2nd character of commandline parameters
 		cp	'X'
 		ret	nz
+	ENDIF
 	ENDIF
 
 		ld	de,t_block16k
@@ -550,7 +562,7 @@ IDE_CMD_FEATURE	equ	$ef		; set feature
 IDE_READ	equ	$40		; /rd=0 /wr=1 /cs=0
 IDE_WRITE	equ	$80		; /rd=1 /wr=0 /cs=0
 IDE_SET		equ	$c0		; /rd=1 /wr=1 /cs=0
-	IFDEF IDE_CS
+	IFDEF BEER_CS
 IDE_IDLE	equ	$c7		; /rd=1 /wr=1 /cs=0 reg=7
 	ELSE
 IDE_IDLE	equ	$e7		; /rd=1 /wr=1 /cs=1 reg=7
@@ -609,7 +621,8 @@ ppideInit:	ld	a,PPI_IOA
 		ld	hl,ppide_tab
 		ret	nz
 
-	IFDEF IDE_PIOZ ; set PIO mode 0
+	IFDEF BEER_TEST_1
+		; set PIO mode 0
 		call	ppideWaitReady
 		ret	c
 		call	ppideOutput
@@ -648,7 +661,11 @@ ppideInfo:	call	ppideWaitReady
 		call	ppideCommand
 		call	ppideWaitData
 		jp 	nz,ppideError
+	IFDEF BEER_TEST
+		call	ppideReadOptm
+	ELSE
 		call	ppideReadSector
+	ENDIF
 		xor	a
 		ret
 
@@ -686,7 +703,7 @@ ppideNsector:	ld	l,$01			; number of sectors is N
 		inc	h			; IDE register 6
 		ld	l,$e0			; LBA mode
 		call	ppideSetReg
-	IFDEF IDE_CS
+	IFDEF BEER_CS
 		ld	a,IDE_IDLE		; IDE register 7
 		out	(PPI_IOC),a		; set address
 	ENDIF
@@ -723,7 +740,7 @@ ppi_rd_loop:
 		inc	c
 		ini
 		dec	c
-	IFDEF IDE_CS
+	IFDEF BEER_CS
 		ld	a,IDE_SET+REG_DATA
 	ELSE
 		ld	a,IDE_IDLE
@@ -744,8 +761,18 @@ ppideReadOptm:
 		ld	d,IDE_READ
 		ld	e,IDE_SET+REG_DATA
 		out	(c),e
+	IFDEF BEER_TEST_3
+		ex	(sp),hl
+		ex	(sp),hl
+		ex	(sp),hl
+		ex	(sp),hl
+	ENDIF
 ppi_opt_loop:	
 		out	(c),d			; 14T
+	IFDEF BEER_TEST_3
+		nop
+		nop
+	ENDIF
 		ld	c,a			; 05T
 		ini				; 18T
 		inc	c			; 05T
@@ -754,7 +781,15 @@ ppi_opt_loop:
 		out	(c),e			; 14T
 		; repeat 2-byte read before looping to increase throughput:
 		; saves 128x14 T-states with 11 extra bytes of code
+	IFDEF BEER_TEST_3
+		nop
+		nop
 		out	(c),d
+		nop
+		nop
+	ELSE
+		out	(c),d
+	ENDIF
 		ld	c,a
 		ini
 		inc	c
@@ -766,7 +801,12 @@ ppi_opt_loop:
 
 ; ------------------------------------------
 ppideReadX:	ld	b,$20
+	IFDEF BEER_TEST_4
+		call	ppideInput
+ppi_outer:	call	ppi_waitdata_1
+	ELSE
 ppi_outer:	call	ppideWaitData
+	ENDIF
 		ret	nz
 		push	bc
 		ld	a,PPI_IOA
@@ -871,7 +911,7 @@ ppideError:	ld	a,IDE_SET+REG_ERROR
 ; ------------------------------------------
 ppideStatus:	ld	a,IDE_SET+REG_STATUS
 ppideReadReg:	
-	IFDEF IDE_CS
+	IFDEF BEER_CS
 		push	bc
 		ld	b,a
 		ld	c,PPI_IOC
@@ -919,7 +959,7 @@ ppideSetReg:	ld	a,IDE_SET
 		ld 	a,IDE_WRITE
 		add	a,h
 		out 	(PPI_IOC),a
-	IFDEF IDE_CS
+	IFDEF BEER_CS
 		ld	a,IDE_SET
 		add	a,h
 	ELSE
@@ -931,17 +971,46 @@ ppideSetReg:	ld	a,IDE_SET
 ; ------------------------------------------
 ; PPI IDE set data direction
 ; ------------------------------------------
-ppideInput:	ex	af,af'
+ppideInput:
+	IFDEF BEER_TEST_2
+		; quickly recover from 8255 mode change glitch
+		ex	af,af'
+		ld	a,PPI_INPUT		; PPI A+B is input
+		push	bc
+		ld	b,IDE_IDLE
+		ld	c,PPI_IOC
+		out	(PPI_CTL),a		; PPI output ports are reset: both read and write asserted
+		out	(c),b			; restore control: read/write deasserted
+		pop	bc
+		ex	af,af'
+		ret
+	ELSE
+		ex	af,af'
 		ld	a,PPI_INPUT		; PPI A+B is input
 		out	(PPI_CTL),a
 		ex	af,af'
 		ret
+	ENDIF
 
-ppideOutput:	ex	af,af'
+ppideOutput:
+	IFDEF BEER_TEST_2
+		ex	af,af'
+		ld	a,PPI_OUTPUT		; PPI A+B is output
+		push	bc
+		ld	b,IDE_IDLE
+		ld	c,PPI_IOC
+		out	(PPI_CTL),a		; PPI output ports are reset: both read and write asserted
+		out	(c),b			; restore control: read/write deasserted
+		pop	bc
+		ex	af,af'
+		ret
+	ELSE
+		ex	af,af'
 		ld	a,PPI_OUTPUT		; PPI A+B is output
 		out	(PPI_CTL),a
 		ex	af,af'
 		ret
+	ENDIF
 
 ; ------------------------------------------------------------------------------
 ; *** Compact Flash 8-BIT IDE routines ***
