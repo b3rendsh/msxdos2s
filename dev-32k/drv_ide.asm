@@ -306,7 +306,7 @@ IDE_CMD_FEATURE	equ	$ef		; set feature
 IDE_READ	equ	$40		; /rd=0 /wr=1 /cs=0
 IDE_WRITE	equ	$80		; /rd=1 /wr=0 /cs=0
 IDE_SET		equ	$c0		; /rd=1 /wr=1 /cs=0 
-IDE_IDLE	equ	$e7		; /rd=1 /wr=1 /cs=1 reg=7
+IDE_IDLE	equ	$c7		; /rd=1 /wr=1 /cs=0 reg=7
 
 ; PPI 8255 I/O registers:
 PPI_IOA		equ	$30		; A: IDE data low byte
@@ -396,7 +396,9 @@ ideSetSector:	call	ideWaitReady
 		call	ppideSetReg
 		inc	h			; IDE register 6
 		ld	l,$e0			; LBA mode
-		call	ppideSetReg 
+		call	ppideSetReg
+		ld	a,IDE_IDLE		; IDE register 7
+		out	(PPI_IOC),a		; set address
 		pop	hl
 		xor	a
 		ret
@@ -533,14 +535,16 @@ ideError:	ld	a,IDE_SET+REG_ERROR
 ; PPI IDE read status register
 ; ------------------------------------------
 ppideStatus:	ld	a,IDE_SET+REG_STATUS
-ppideReadReg:	out	(PPI_IOC),a
-		res	7,a			; /rd=0
-		out	(PPI_IOC),a
+ppideReadReg:	push	bc
+		ld	b,a
+		ld	c,PPI_IOC
+		out	(c),b
+		res	7,b			; /rd=0 (assert read)
+		out	(c),b
 		in	a,(PPI_IOA)		; read register
-		ex	af,af'
-		ld	a,IDE_IDLE
-		out	(PPI_IOC),a
-		ex	af,af'
+		set	7,b			; /rd=1 (deassert read)
+		out	(c),b
+		pop	bc
 		ret
 
 ; ------------------------------------------
@@ -562,14 +566,15 @@ ppideCommand:	call	ppideOutput
 ; ------------------------------------------
 ppideSetReg:	ld	a,IDE_SET
 		add	a,h
-		out	(PPI_IOC),a
+		out	(PPI_IOC),a		; set register
 		ld	a,l
-		out 	(PPI_IOA),a
+		out 	(PPI_IOA),a		; write value
 		ld 	a,IDE_WRITE
 		add	a,h
-		out 	(PPI_IOC),a
-		ld	a,IDE_IDLE
-		out 	(PPI_IOC),a
+		out 	(PPI_IOC),a		; /wr=0 (assert write)
+		ld	a,IDE_SET
+		add	a,h
+		out 	(PPI_IOC),a		; /wr=1 (deassert write)
 		ret 
 
 ; ------------------------------------------
