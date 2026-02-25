@@ -16,7 +16,6 @@ DEFINE BEER_CS		; IDE CS signal always asserted
 ;DEFINE BEER_TEST_1	; set PIO mode 0 (note that the info record reports max pio mode)
 ;DEFINE	BEER_TEST_2	; quickly recover from 8255 mode change glitch
 ;DEFINE BEER_TEST_3	; add read sector delays
-;DEFINE BEER_TEST_4	; set 8255 to input mode only once on multi-sector read test
 
 		INCLUDE	"msx.inc"
 
@@ -564,6 +563,7 @@ IDE_WRITE	equ	$80		; /rd=1 /wr=0 /cs=0
 IDE_SET		equ	$c0		; /rd=1 /wr=1 /cs=0
 	IFDEF BEER_CS
 IDE_IDLE	equ	$c7		; /rd=1 /wr=1 /cs=0 reg=7
+IDE_OFF		equ	$e7		; /rd=1 /wr=1 /cs=1 reg=7
 	ELSE
 IDE_IDLE	equ	$e7		; /rd=1 /wr=1 /cs=1 reg=7
 	ENDIF
@@ -716,7 +716,7 @@ ppideNsector:	ld	l,$01			; number of sectors is N
 ; ------------------------------------------
 ppideCmdRead:	push	bc
 		ld 	a,IDE_CMD_READ
-		call	ppideCommand
+		call	ppi_command_1		; direction already set to output
 		call	ppideWaitData
 		pop	bc
 		ret
@@ -801,12 +801,8 @@ ppi_opt_loop:
 
 ; ------------------------------------------
 ppideReadX:	ld	b,$20
-	IFDEF BEER_TEST_4
 		call	ppideInput
 ppi_outer:	call	ppi_waitdata_1
-	ELSE
-ppi_outer:	call	ppideWaitData
-	ENDIF
 		ret	nz
 		push	bc
 		ld	a,PPI_IOA
@@ -857,7 +853,12 @@ ppi_wait_2:	call	ppideStatus
 		jr	nz,ppi_wait_2
 		djnz	ppi_wait_1
 		scf				; time-out
-ppi_wait_end:	pop	bc
+ppi_wait_end:	
+	IFDEF BEER_CS
+		ld	a,IDE_OFF		; deassert CS / IDE register 7
+		out	(PPI_IOC),a		; set address
+	ENDIF
+		pop	bc
 		pop	hl
 		ret
 
@@ -939,7 +940,7 @@ ppideReadReg:
 ; Input:  A = command
 ; ------------------------------------------
 ppideCommand:	call	ppideOutput
-		push	hl
+ppi_command_1:	push	hl
 		ld	h,REG_COMMAND
 		ld	l,a
 		call	ppideSetReg

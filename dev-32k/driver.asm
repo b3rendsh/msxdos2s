@@ -602,6 +602,9 @@ DRVINIT:	call	ideInit
 	ENDIF
 		db	"Rev.  : "
 		INCLUDE	"rdate.inc"		; Revision date
+	IFDEF BEER_CS
+		db	" optm"
+	ENDIF
 		db	13,10
 		db	"Master: ",0
 		ld	c,$4d

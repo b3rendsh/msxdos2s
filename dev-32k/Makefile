@@ -124,7 +124,7 @@ taste:
 	@echo Assembling taste program..
 	z80asm -b -m -Oobj -o=taste.com taste.asm
 	$(CP) obj$/taste.com $(ROM)$/TASTE.COM
-	z80asm -DBASBIN -b -m -Oobj -o=taste.bin taste.asm
+	z80asm -DBASBIN -b -m -l -Oobj -o=taste.bin taste.asm
 	$(CP) obj$/taste.bin $(ROM)$/TASTE.BIN
 	@echo done
 

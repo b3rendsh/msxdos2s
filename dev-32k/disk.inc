@@ -29,6 +29,7 @@
 ; BOOTCODE	Check for bootloader signature in the MBR and if present execute the boot code
 ; BOOTCHOICE	Show boot menu / drive choice
 ; BTWAIT	Boot menu wait time-out (default $5000 is appr. 3 sec for MSX/3.58Mhz)
+; BEER_CS	BEER IDE low level driver optimized control signals
 
 ; JIO driver compile options
 ; --------------------------
@@ -52,6 +53,7 @@ IF CFIDE || PPIDE
 	DEFINE	FAT16DOS1
 	DEFINE	BOOTCODE
 	DEFINE	BOOTCHOICE
+	DEFINE	BEER_CS
 	MOD1	EQU	'x'	; eXtended
 	MOD2	EQU	'i'	; Ide
 ENDIF

@@ -9,6 +9,7 @@
 ; It is provided freely and "as it is" in the hope that it will be useful, 
 ; but without any warranty of any kind, either expressed or implied.
 ; ------------------------------------------------------------------------------
+; Note: use build option BEER_CS for optimized IDE control signals
 
 	IF !(CXDOS1 || CXDOS2)
 	        INCLUDE "disk.inc"	; Assembler directives
@@ -306,7 +307,12 @@ IDE_CMD_FEATURE	equ	$ef		; set feature
 IDE_READ	equ	$40		; /rd=0 /wr=1 /cs=0
 IDE_WRITE	equ	$80		; /rd=1 /wr=0 /cs=0
 IDE_SET		equ	$c0		; /rd=1 /wr=1 /cs=0 
+	IFDEF BEER_CS
 IDE_IDLE	equ	$c7		; /rd=1 /wr=1 /cs=0 reg=7
+IDE_OFF		equ	$e7		; /rd=1 /wr=1 /cs=1 reg=7
+	ELSE
+IDE_IDLE	equ	$e7		; /rd=1 /wr=1 /cs=1 reg=7
+	ENDIF
 
 ; PPI 8255 I/O registers:
 PPI_IOA		equ	$30		; A: IDE data low byte
@@ -397,8 +403,10 @@ ideSetSector:	call	ideWaitReady
 		inc	h			; IDE register 6
 		ld	l,$e0			; LBA mode
 		call	ppideSetReg
+	IFDEF BEER_CS
 		ld	a,IDE_IDLE		; IDE register 7
 		out	(PPI_IOC),a		; set address
+	ENDIF
 		pop	hl
 		xor	a
 		ret
@@ -408,7 +416,11 @@ ideSetSector:	call	ideWaitReady
 ; ------------------------------------------
 ideCmdRead:	push	bc
 		ld 	a,IDE_CMD_READ
+	IFDEF BEER_CS
+		call	ppi_command_1		; direction already set to output
+	ELSE
 		call	ppideCommand
+	ENDIF
 		call	ideWaitData
 		pop	bc
 		ret
@@ -446,7 +458,11 @@ rdsec_loop:	out	(c),d			; IDE read
 ; ------------------------------------------
 ideCmdWrite:	push	bc
 		ld	a,IDE_CMD_WRITE
+	IFDEF BEER_CS
+		call	ppi_command_1		; direction already set to output
+	ELSE
 		call	ppideCommand
+	ENDIF		
 
 		; hardware design flaw: the control signals between ppi and ide should be inverted
 		; because changing the ppi mode resets the output ports
@@ -506,7 +522,12 @@ wait_2:		call	ppideStatus
 		jr	nz,wait_2
 		djnz	wait_1
 		scf				; time-out
-wait_end:	pop	bc
+wait_end:	
+	IFDEF BEER_CS
+		ld	a,IDE_OFF		; deassert CS / IDE register 7
+		out	(PPI_IOC),a		; required for some ide controllers
+	ENDIF
+		pop	bc
 		pop	hl
 		ret
 
@@ -535,7 +556,9 @@ ideError:	ld	a,IDE_SET+REG_ERROR
 ; PPI IDE read status register
 ; ------------------------------------------
 ppideStatus:	ld	a,IDE_SET+REG_STATUS
-ppideReadReg:	push	bc
+ppideReadReg:
+	IFDEF BEER_CS
+		push	bc
 		ld	b,a
 		ld	c,PPI_IOC
 		out	(c),b
@@ -546,13 +569,24 @@ ppideReadReg:	push	bc
 		out	(c),b
 		pop	bc
 		ret
+	ELSE
+		out	(PPI_IOC),a
+		res	7,a			; /rd=0
+		out	(PPI_IOC),a
+		in	a,(PPI_IOA)		; read register
+		ex	af,af'
+		ld	a,IDE_IDLE
+		out	(PPI_IOC),a
+		ex	af,af'
+		ret
+	ENDIF
 
 ; ------------------------------------------
 ; PPI IDE set command
 ; Input:  A = command
 ; ------------------------------------------
 ppideCommand:	call	ppideOutput
-		push	hl
+ppi_command_1:	push	hl
 		ld	h,REG_COMMAND
 		ld	l,a
 		call	ppideSetReg
@@ -572,8 +606,12 @@ ppideSetReg:	ld	a,IDE_SET
 		ld 	a,IDE_WRITE
 		add	a,h
 		out 	(PPI_IOC),a		; /wr=0 (assert write)
+	IFDEF BEER_CS
 		ld	a,IDE_SET
 		add	a,h
+	ELSE
+		ld	a,IDE_IDLE
+	ENDIF	
 		out 	(PPI_IOC),a		; /wr=1 (deassert write)
 		ret 
 
