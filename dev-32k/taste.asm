@@ -41,6 +41,8 @@ cf_waitready:	jp	0
 cf_waitdata:	jp	0
 cf_error:	jp	0
 cf_readx:	jp	0
+cf_cmdwrite:	jp	0
+cf_writesec:	jp	0
 
 main:		ld	ix,iobase		; workbuffer for dynamic IO addresses
 
@@ -48,7 +50,7 @@ main:		ld	ix,iobase		; workbuffer for dynamic IO addresses
 		call	PrintText
 
 	IFNDEF BEER_TEST
-	IFNDEF BASBIN
+	  IFNDEF BASBIN
 		; check for interface parameter 
                 ld      a,($005d)		; first character of commandline parameters:
 		cp	' '
@@ -70,7 +72,7 @@ check1:		cp	'B'			; B = beer interface
 help:		ld	de,t_help
 		call	PrintText
 		jr	main_exit
-	ENDIF ; BASBIN
+	  ENDIF ; BASBIN
 
 autodetect:	call	cfideInit		; probe cf interface first
 		ld	a,$01
@@ -85,16 +87,23 @@ notdetected:	ld	de,t_notdetected
 
 main_2:		ld	(itype),a
 		ld      de,cf_info	 	; point to jump table
-                ld      bc,10*3			; number of entries
+                ld      bc,12*3			; number of entries
                 ldir				; copy hardware interface routines table
 		call	info
 		jr	c,ide_error
 		call	diag
 		jr	c,ide_error
+		jr	nz,main_exit
 	IFDEF DEBUG
 		call	read_mbr
 	ELSE
-		call	z,speedtest
+		call	speedtest
+		jr	c,main_exit
+	  IFNDEF BASBIN
+                ld      a,($005e)		; 2nd character of commandline parameters
+		cp	'W'
+		call	z,writetest
+	  ENDIF
 	ENDIF
 main_exit:
 	IFDEF BASBIN
@@ -114,24 +123,25 @@ ide_error:	push	af
 t_header:	db	12
 	IFDEF BEER_TEST
 		db	"TASTE: BEER IDE alternative timings",13,10
-		db	"-----------------------------------",13,10,13,10,"$"
+		db	"-----------------------------------",13,10,10,"$"
 	ELSE
 		db	"TASTE: BEER/SODA IDE info and test",13,10
-		db	"----------------------------------",13,10,13,10,"$"
+		db	"----------------------------------",13,10,10,"$"
 	ENDIF
 t_notdetected:	db	"IDE hardware not detected",13,10,"$"
 t_error:	db	13,10,"IDE error $"
-t_help:		db	"Usage: TASTE [option][X]",13,10
+t_help:		db	"Usage: TASTE [option][X|W]",13,10
 		db	"Autodetect the interface type",13,10
 		db	"if no option is specified.",13,10
 		db	"Option:",13,10
 		db	"  S = SODA interface",13,10
 		db	"  B = BEER interface",13,10
-		db	"  X = include block read test",13,10,"$"
+		db	"  X = include block read test",13,10
+		db	"  W = include write test",13,10,"$"
 
 
 ; ------------------------------------------------------------------------------
-; Compact Flash information
+; IDE disk information
 ; ------------------------------------------------------------------------------
 info:		ld	hl,secbuf
 		call	cf_info
@@ -177,8 +187,10 @@ iprint:		call	PrintText
 		ld	de,t_sectors
 		call	PrintText
 		ld	de,(secbuf+122)
+		ld	(lastsec+2),de
 		call	PrintHexWord
 		ld	de,(secbuf+120)
+		ld	(lastsec),de
 		call	PrintHexWord
 		ld	de,t_hex
 		call	PrintText
@@ -203,7 +215,7 @@ t_piomode:	db	"PIO mode : $"
 t_hex:		db	" (HEX) $"
 
 ; ------------------------------------------------------------------------------
-; Compact Flash diagnostics
+; IDE disk diagnostics
 ; ------------------------------------------------------------------------------
 diag:		ld	de,t_diag
 		call	PrintText
@@ -216,6 +228,9 @@ diag:		ld	de,t_diag
 		call	PrintCRLF
 	IFDEF DEBUG
 		call	diag_info
+		ld	de,t_inkey
+		call	PrintText
+		call	GetC
 	ENDIF
 		xor	a
 		ret
@@ -258,19 +273,23 @@ t_diag:		db	13,10,"Diagnostic test $"
 t_passed:	db	"passed$"
 t_failed:	db	"failed, error $"
 t_dump:		db	13,10,"Dump:",13,10,"$"
+t_inkey:	db	13,10,"press enter to continue",13,10,"$"
 
 ; ------------------------------------------------------------------------------
-; Compact Flash master boot record
+; IDE disk (master) boot records
 ; ------------------------------------------------------------------------------
 read_mbr:	ld	de,$0000	; start sector bit 0..15
 		ld	c,$00		; start sector bit 16..23
 		call	read_sector
-		
+
+		ld	de,t_inkey
+		call	PrintText
+		call	GetC
+
 		ld	a,'1'
 		ld	(t_boot+9),a
 		ld	de,$0001	; start sector bit 0..15
 		ld	c,$00		; start sector bit 16..23
-		
 		
 read_sector:	ld	hl,secbuf
 		call	cf_setsector
@@ -283,10 +302,13 @@ read_sector:	ld	hl,secbuf
 		; print bootsector data
 		ld	de,t_boot
 		call	PrintText
-		ld	hl,secbuf
-		ld	bc,$0200	; 512 bytes
+		call	sec_dump
+		xor	a
+		ret
 
-sec_dump:	push	bc
+sec_dump:	ld	hl,secbuf
+		ld	bc,$0200	; 512 bytes
+@loop:		push	bc
 		ld	a,(hl)
 		call	PrintHexByte
 		inc	hl
@@ -294,15 +316,13 @@ sec_dump:	push	bc
 		dec	bc
 		ld	a,b
 		or	c
-		jr	nz,sec_dump
-		
-		xor	a
+		jr	nz,@loop
 		ret
 
 t_boot:		db	13,10,"SECTOR 0:",13,10,"$"
 
 ; ------------------------------------------------------------------------------
-; Compact Flash speed test
+; IDE disk read speed test
 ; ------------------------------------------------------------------------------
 speedtest:	ld	a,(EXPTBL)	; Slot number main ROM
 		ld	hl,IDBYT0	; ID Byte 0
@@ -325,15 +345,15 @@ speedtest1:	ld	de,t_speed
 		call	diskread
 		ret	c
 
-	IFNDEF BEER_TEST
-	IFNDEF BASBIN
+	IF !(BEER_TEST || BASBIN)
                 ld      a,($005e)		; 2nd character of commandline parameters
 		cp	'X'
-		ret	nz
-	ENDIF
+		jr	z,blocktest
+		xor	a
+		ret
 	ENDIF
 
-		ld	de,t_block16k
+blocktest:	ld	de,t_block16k
 		call	PrintText
 		ld	hl,diskreadsec+1
 		ld	(hl),$40		; read 64 blocks of 16K = 1024k
@@ -418,7 +438,7 @@ speedset:	ld	c,$00
 		ret	
 
 t_speed:	db	13,10,"Disk read speed (KB/s "
-t_speedHz:	db	"50Hz)",13,10,13,10
+t_speedHz:	db	"50Hz)",13,10,10
 		db	"Baseline : $"
 t_optimized:	db	"Optimized: $"
 t_block16k:	db	"block 16k: $"
@@ -435,6 +455,194 @@ r11:		sll	c
 		dec	c
    		djnz	r11
 		ret
+
+; ------------------------------------------------------------------------------
+; IDE disk write test
+; Destroys last 64KB of a disk (up to 4GB)!
+; ------------------------------------------------------------------------------
+writetest:	ld	de,t_write
+		call	PrintText
+		ld	bc,(lastsec+2)		; #sec bit 16..31
+		ld	a,b
+		or	c			; disk size > 32MB?
+		jr	z,sec_err
+		ld	a,b
+		or	a			; disk size > 4GB?
+		jr	z,writetest1
+		ld	a,$ff
+		ld	(lastsec+0),a		; set #sec bit 0..7
+		ld	(lastsec+1),a		; set #sec bit 8..15
+		ld	(lastsec+2),a		; set #sec bit 16..23
+		ld	a,$00
+		ld	(lastsec+3),a		; set #sec bit 24..31 (not used)
+
+writetest1:	; create test pattern 1: 0xFF 0xFF 0x00
+		ld	de,$aa55
+		ld	a,$f0
+		call	fill_patbuf
+		ld	de,t_pass1
+		call	testpat
+		ret	c
+
+		; create test pattern 2: 0xFF 0xFF 0x00
+		ld	de,$fff0
+		ld	a,$00
+		call	fill_patbuf
+		ld	de,t_pass2
+		call	testpat
+		ret	c
+
+		xor	a
+		ret
+
+sec_err:	ld	de,t_secerr
+		call	PrintText
+		scf
+		ret
+
+; fill sector buffer with test pattern
+fill_patbuf:	ld	b,171
+		ld	hl,patbuf
+@loop:		ld	(hl),d
+		inc	hl
+		ld	(hl),e
+		inc	hl
+		ld	(hl),a
+		inc	hl
+		djnz	@loop
+		ret
+
+; test sector write with byte pattern
+testpat:	call	PrintText		; print pass
+
+		; write, read and verify sectors
+		ld	de,(lastsec)
+		ld	a,(lastsec+2)
+		ld	c,a
+		call	dec_sector		; start at last sector
+		ld	b,$80			; test 128 sectors
+
+@wrloop:	call	write_sec
+		jr	c,write_fail
+		call	read_sec
+		jr	c,read_fail
+
+		; verify sector
+		push	bc
+		push	de
+		ld	hl,secbuf		; read back data
+		ld	de,patbuf		; written data
+		ld	bc,$0200		; verify 512 bytes
+@vloop:		ld	a,(de)
+		cp	(hl)
+		jr	nz,verify_fail
+		inc	hl
+		inc	de
+		dec	bc
+		ld	a,b
+		or	c
+		jr	nz,@vloop
+		pop	de
+		pop	bc
+
+		; next sector
+		call	dec_sector
+		djnz	@wrloop
+
+		ld	de,t_ok			; test ok
+		call	PrintText
+		xor	a
+		ret
+
+verify_fail:	pop	de
+		pop	bc
+		ld	de,t_nok
+		call	PrintText
+		ld	a,$80+1
+		sub	b
+		call	PrintHexByte
+		call	PrintCRLF
+	IFDEF DEBUG_1
+		ld	de,t_sector
+		call	PrintText
+		call	sec_dump
+	ENDIF	
+		scf
+		ret
+
+write_fail:	ld	de,t_write_err
+		call	PrintText
+		scf
+		ret
+
+read_fail:	ld	de,t_read_err
+		call	PrintText
+		scf
+		ret
+
+; -------------------------------------
+; test pattern subroutines
+; -------------------------------------
+
+; read sector (return on error)
+read_sec:	push	bc
+		push	de
+		ld	hl,secbuf
+		ld	b,$0
+@loop:		ld	(hl),$0
+		inc	hl
+		ld	(hl),$0
+		djnz	@loop
+		call	cf_setsector
+		jr	c,disk_err
+		call	cf_cmdread
+		jr	nz,disk_err
+		ld	hl,secbuf
+		call	cf_readsector
+		pop	de
+		pop	bc
+		xor	a
+		ret
+
+; write sector (return on error)
+write_sec:	push	bc
+		push	de
+		ld	hl,patbuf
+		call	cf_setsector
+		jr	c,disk_err
+		call	cf_cmdwrite
+		jr	nz,disk_err
+		ld	hl,patbuf
+		call	cf_writesec
+		pop	de
+		pop	bc
+		xor	a
+		ret
+
+; disk read/write error
+disk_err:	pop	de
+		pop	bc
+		scf
+		ret
+
+; decrease 24-bit sector number
+dec_sector:	dec	de
+		ld	a,d
+		and	e
+		inc	a
+		ret	nz
+		dec	c
+		ret
+
+t_write:	db	13,10,"Disk write test:",13,10,"$"
+t_secerr:	db	"LBA disk size error",13,10,"$"
+t_pass1:	db	"pass 1 $"
+t_pass2:	db	"pass 2 $"
+t_ok:		db	"ok",13,10,"$"
+t_nok:		db	"failed, sector 0x$"
+t_sector:	db	"sector data:",13,10,"$"
+t_write_err:	db	"disk write error",13,10,"$"
+t_read_err:	db	"disk read error",13,10,"$"
 
 ; ------------------------------------------------------------------------------
 ; *** Print and input subroutines ***
@@ -549,6 +757,22 @@ num2:		inc	a
 		sbc	hl,bc
 		jp	PrintC
 
+; Use BDOS to get keyboard input
+GetC:		push	bc
+		push	de
+		push	hl
+	IFDEF BASBIN
+		call	CHGET
+	ELSE
+		ld	c,1
+		ld	e,a
+		call	5
+	ENDIF
+		pop	hl
+		pop	de
+		pop	bc
+		ret
+
 ; ------------------------------------------------------------------------------
 ; *** IDE hardware interface ***
 ; ------------------------------------------------------------------------------
@@ -651,6 +875,8 @@ ppide_tab:	jp	ppideInfo
 		jp	ppideWaitData
 		jp	ppideError
 		jp	ppideReadX
+		jp	ppideCmdWrite
+		jp	ppideWriteSec
 
 ; ------------------------------------------
 ; Get IDE device information 
@@ -833,6 +1059,49 @@ ppi_inner:	out	(c),d
 	ENDIF
 		pop	bc
 		djnz	ppi_outer
+		ret
+
+; ------------------------------------------
+; IDE set command write sector
+; ------------------------------------------
+ppideCmdWrite:	push	bc
+		ld	a,IDE_CMD_WRITE
+		call	ppi_command_1		; direction already set to output
+
+		ld	b,$30
+wr_wait:	ex	(sp),hl
+		ex	(sp),hl
+		djnz	wr_wait
+		xor	a			; no error
+
+		pop	bc
+		ret
+; ------------------------------------------
+; IDE Write Sector
+; Input: HL = transfer address
+; ------------------------------------------
+ppideWriteSec:	ld	a,PPI_IOA
+		ld	b,$80			; counter: 128x4=512 bytes
+		ld	c,PPI_IOC
+		ld	d,IDE_WRITE
+		ld	e,IDE_SET
+		out	(c),e
+ppi_wr_loop:	ld	c,a
+		outi
+		inc	c
+		outi
+		inc 	c
+		out	(c),d
+		out	(c),e
+		; repeat 2-byte write
+		ld	c,a
+		outi
+		inc	c
+		outi
+		inc 	c
+		out	(c),d
+		out	(c),e
+		djnz	ppi_wr_loop
 		ret
 
 ; ------------------------------------------
@@ -1088,6 +1357,8 @@ cfide_tab:	jp	cfideInfo
 		jp	cfideWaitData
 		jp	cfideError
 		jp	cfideReadX
+		jp	cfideCmdWrite
+		jp	cfideWriteSec
 
 ; ------------------------------------------
 ; Get IDE device information 
@@ -1197,6 +1468,30 @@ cf_inner:
 		djnz	cf_outer
 		ret
 
+
+; ------------------------------------------
+; IDE set command write sector
+; ------------------------------------------
+cfideCmdWrite:	push	bc
+		ld 	a,IDE_CMD_WRITE
+		ld	c,(ix+1)
+		out	(c),a
+		call	cfideWaitData
+		pop	bc
+		ret
+
+; ------------------------------------------
+; IDE Write Sector
+; Input: HL = transfer address
+; ------------------------------------------
+cfideWriteSec:	ld	b,$20
+		ld	c,(ix+0)
+cf_wr_loop:
+		REPT 16
+		outi
+		ENDR
+		djnz	cf_wr_loop
+		ret
 ; ------------------------------------------
 ; Wait for IDE ready or time-out
 ; ------------------------------------------
@@ -1253,7 +1548,9 @@ america:	ds	1
 iobase:		ds	2
 itype:		ds	1
 ppireg:		ds	6
+lastsec:	ds	4
 secbuf:		ds	512
+patbuf:		ds	513
 
 ; ------------------------------------------------------------------------------
 TasteEnd:
