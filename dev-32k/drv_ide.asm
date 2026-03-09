@@ -1,7 +1,7 @@
 ; ------------------------------------------------------------------------------
 ; drv_ide.asm
 ;
-; Copyright (C) 2025 H.J. Berends*
+; Copyright (C) 2026 H.J. Berends*
 ; * Part of the code is based on the BEER-202 driver by SOLiD and other
 ; PPI 8255 and 8-BIT CF IDE solutions publicly shared on the internet.
 ; 
@@ -337,7 +337,7 @@ REG_STATUS	equ	$07	; r
 REG_COMMAND	equ	$07	; w
 REG_CONTROL	equ	$07	; r/w
 
-	IFDEF PPIDE
+	IFDEF BEER
 ; ------------------------------------------------------------------------------
 ; *** PPI 8255 IDE routines ***
 ; ------------------------------------------------------------------------------
@@ -633,9 +633,9 @@ ppideOutput:	ex	af,af'
 		ex	af,af'
 		ret
 
-	; END PPIDE
+	; END BEER
 
-	ELIFDEF CFIDE
+	ELIFDEF SODA
 ; ------------------------------------------------------------------------------
 ; *** Compact Flash 8-BIT IDE routines ***
 ; ------------------------------------------------------------------------------
@@ -837,7 +837,7 @@ ideError:	ld	a,(ix+W_IODATA)
 		jp	dosError
 
 
-	; END CFIDE
+	; END SODA
 
 	ELSE
 ; ------------------------------------------------------------------------------

@@ -30,40 +30,40 @@ endif
 # Note: the rom folder must be an existing folder
 ROM 	:= .$/rom
 
-all:	ppide1 cfide1 ppide2 cfide2 beer2s core2 jio1 jio2 taste
+all:	beer1 soda1 beer2 soda2 beer2s core2 jio1 jio2 taste
 
 rdate:
 	@echo db $(QUOTE)$(shell $(GETDATE))$(QUOTE) > rdate.inc
 
-ppide1:	rdate
-	@echo Assembling BEER DOS1 / 16k ppide rom..
+beer1:	rdate
+	@echo Assembling BEER DOS1 / 16K ROM..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DIDEDOS1 -DPPIDE -Oobj -o=beer_dos1 $(SOURCES1)
+	z80asm -b -d -l -m -DIDEDOS1 -DBEER -Oobj -o=beer_dos1 $(SOURCES1)
 	z88dk-appmake +glue -b obj/beer_dos1 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/beer_dos1__.bin -o $(ROM)/beer_dos1.rom -s 16384 --org 0
 	@echo done
 
-cfide1: rdate
-	@echo Assembling SODA DOS1 / 16k cfide rom..
+soda1: rdate
+	@echo Assembling SODA DOS1 / 16K ROM..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DIDEDOS1 -DCFIDE -Oobj -o=soda_dos1 $(SOURCES1)
+	z80asm -b -d -l -m -DIDEDOS1 -DSODA -Oobj -o=soda_dos1 $(SOURCES1)
 	z88dk-appmake +glue -b obj/soda_dos1 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/soda_dos1__.bin -o $(ROM)/soda_dos1.rom -s 16384 --org 0
 	@echo done
 
-ppide2:	rdate
-	@echo Assembling BEER DOS2 / 32k ppide rom..
+beer2:	rdate
+	@echo Assembling BEER DOS2 / 32K ROM..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DPPIDE -Oobj -o=beer_dos2.bin $(SOURCES2A) $(SOURCES2B)
+	z80asm -b -d -l -m -DBEER -Oobj -o=beer_dos2.bin $(SOURCES2A) $(SOURCES2B)
 	z88dk-appmake +glue -b obj/beer_dos2 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/beer_dos2__.bin -o $(ROM)/beer_dos2.rom -s 32768 --org 0
 	@echo done
 	
 beer2s:	rdate
-	@echo Assembling BEER DOS2 / 32k ppide swapped pages image..
+	@echo Assembling BEER DOS2 / 32K ROM swapped pages image..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DPPIDE -Oobj -o=beer_161.bin $(SOURCES2A)
-	z80asm -b -d -l -m -DPPIDE -Oobj -o=beer_162.bin $(SOURCES2B)
+	z80asm -b -d -l -m -DBEER -Oobj -o=beer_161.bin $(SOURCES2A)
+	z80asm -b -d -l -m -DBEER -Oobj -o=beer_162.bin $(SOURCES2B)
 	z88dk-appmake +glue -b obj/beer_161 --filler 0xFF --clean
 	z88dk-appmake +glue -b obj/beer_162 --filler 0xFF --clean
 	z80asm -b -d -l -m -Oobj -o=dummy.bin dummy.asm
@@ -72,16 +72,16 @@ beer2s:	rdate
 	z88dk-appmake +inject -b $(ROM)/beer_32k.img -i obj/beer_161__.bin -s 16384 -o $(ROM)/beer_32k.img
 	@echo done
 
-cfide2:	rdate
-	@echo Assembling SODA DOS2 / 32k cfide rom..
+soda2:	rdate
+	@echo Assembling SODA DOS2 / 32K ROM..
 	$(RMF) obj$(RMD)
-	z80asm -b -d -l -m -DCFIDE -Oobj -o=soda_dos2.bin $(SOURCES2A) $(SOURCES2B)
+	z80asm -b -d -l -m -DSODA -Oobj -o=soda_dos2.bin $(SOURCES2A) $(SOURCES2B)
 	z88dk-appmake +glue -b obj/soda_dos2 --filler 0xFF --clean
 	z88dk-appmake +rom -b obj/soda_dos2__.bin -o $(ROM)/soda_dos2.rom -s 32768 --org 0
 	@echo done
 
 core2:	rdate
-	@echo Assembling CORE DOS2 / 32k rom..
+	@echo Assembling CORE DOS2 / 32K ROM..
 	$(RMF) obj$(RMD)
 	z80asm -b -d -l -m -DCORE -Oobj -o=core_dos2.bin $(SOURCES2A) $(SOURCES2B)
 	z88dk-appmake +glue -b obj/core_dos2 --filler 0xFF --clean
@@ -89,7 +89,7 @@ core2:	rdate
 	@echo done
 
 jio1:	rdate
-	@echo Assembling JIO DOS1 / 16k jio remote disk rom..
+	@echo Assembling JIO DOS1 / 16K ROM..
 	$(RMF) obj$(RMD)
 	z80asm -b -d -l -m -DIDEDOS1 -DJIO -Oobj -o=jio_dos1.bin dos1x.asm drv_jio.asm
 	z88dk-appmake +glue -b obj/jio_dos1 --filler 0xFF --clean
@@ -97,7 +97,7 @@ jio1:	rdate
 	@echo done
 
 jio2:	rdate
-	@echo Assembling JIO DOS2 / 32k jio remote disk rom..
+	@echo Assembling JIO DOS2 / 32K ROM..
 	$(RMF) obj$(RMD)
 	z80asm -b -d -l -m -DJIO -Oobj -o=jio_dos2.bin p1_main.asm p3_paging.asm drv_jio.asm p0_kernel.asm
 	z88dk-appmake +glue -b obj/jio_dos2 --filler 0xFF --clean
@@ -113,7 +113,7 @@ pio2:	rdate
 	@echo done
 
 uart2:	rdate
-	@echo Assembling UART DOS2 / 32k uart 1655x remote disk rom..
+	@echo Assembling UART DOS2 / 32K ROM..
 	$(RMF) obj$(RMD)
 	z80asm -b -d -l -m -DJIO -DUART -Oobj -o=uart_dos2.bin p1_main.asm p3_paging.asm drv_jio.asm p0_kernel.asm
 	z88dk-appmake +glue -b obj/uart_dos2 --filler 0xFF --clean

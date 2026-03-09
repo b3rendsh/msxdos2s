@@ -1,7 +1,7 @@
 ; ------------------------------------------------------------------------------
 ; drv_jio.asm
 ;
-; Copyright (C) 2025 All rights reserved
+; Copyright (C) 2026 All rights reserved
 ; JIO MSX-DOS 2 driver by Louthrax
 ; JIO MSX-DOS 1 driver and CRC routines by H.J. Berends
 ; 115K2 transmit/receive routines based on code by Nyyrikki

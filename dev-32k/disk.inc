@@ -1,7 +1,7 @@
 ; Target build options
 ; --------------------
-; CFIDE		Include 8-bit CF IDE driver
-; PPIDE		Include PPI 8255 IDE driver
+; SODA		Include SODA 8-bit CF IDE driver
+; BEER		Include BEER PPI 8255 IDE driver
 ; JIO		Include JIO 115K2 driver
 ; CORE		Include dummy IDE driver
 ; IDEDOS1	MSX-DOS 1 IDE
@@ -42,12 +42,12 @@
 	OPTM	EQU	1
 	BTWAIT	EQU	$5000
 
-IF PPIDE || JIO || UART || IDEDOS1
+IF BEER || JIO || UART || IDEDOS1
 	DEFINE	FASTALLOC
 	DEFINE	MAXENT
 ENDIF
 
-IF CFIDE || PPIDE
+IF SODA || BEER
 	DEFINE	TURBOR
 	DEFINE	FAT16
 	DEFINE	FAT16DOS1

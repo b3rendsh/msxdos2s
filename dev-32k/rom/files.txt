@@ -14,12 +14,12 @@ core_dos2.rom	32K DOS 2 rom including: FAT16,format,ramdisk,optimizations,dummy 
 TASTE.COM	BEER/SODA IDE info and test program (MSX-DOS)
 TASTE.BIN	BEER/SODA IDE info and test program (BASIC BINARY)
 
-BEER DOS2 in openMSX v20:
+BEER DOS2 in openMSX:
 Copy dummy_16k.rom to openMSX/share/extensions/hddrom.rom
 Cartridge Slot A: beer_dos2.rom
 Cartridge Slot B: SOLiD Beer IDE extension
 
-BEER DOS1 in openMSX v20:
+BEER DOS1 in openMSX:
 Copy beer_dos1.rom to openMSX/share/extensions/hddrom.rom
 Cartridge Slot A: SOLiD Beer IDE extension
 
