@@ -8,6 +8,8 @@ beer_32k.img	32K EEPROM image with DOS 2 for MSXPRO BEER cartridge (swapped both
 dummy_16k.rom	16K Dummy rom
 beer_dos1.rom	16K BEER / PPI IDE DOS 1 rom (for BEER-202 cartridge)
 beer_dos2.rom	32K BEER / PPI IDE DOS 2 rom
+malt_dos1.rom	16K MALT / PPIDE DOS 1 rom 
+malt_dos2.rom	32K MALT / PPIDE DOS 2 rom
 soda_dos1.rom	16K SODA / CF IDE DOS 1 rom 
 soda_dos2.rom	32K SODA / CF IDE DOS 2 rom
 core_dos2.rom	32K DOS 2 rom including: FAT16,format,ramdisk,optimizations,dummy driver

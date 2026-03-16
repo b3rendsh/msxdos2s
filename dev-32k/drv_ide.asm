@@ -33,7 +33,7 @@
 ; Hardware driver variables
 W_RWFLAG	equ	DRVSIZE+$00	; Read/Write flag
 W_IODATA	equ	DRVSIZE+$01	; IDE IO data port/register
-W_IOCTL		equ	DRVSIZE+$02	; IODE IO control port/register
+W_IOCTL		equ	DRVSIZE+$02	; IDE IO control port/register
 ;
 DRVMEM		equ	$03		; Workarea memory for hardware interface variables
 
@@ -304,9 +304,36 @@ IDE_CMD_DIAG	equ	$90		; diagnostic test
 IDE_CMD_INFO	equ	$ec		; disk info
 IDE_CMD_FEATURE	equ	$ef		; set feature
 
+; IDE registers:
+REG_DATA	equ	$00	; r/w
+REG_ERROR	equ	$01	; r
+REG_FEATURE	equ	$01	; w
+REG_COUNT	equ	$02	; r/w
+REG_LBA0	equ	$03	; r/w
+REG_LBA1	equ	$04	; r/w
+REG_LBA2	equ	$05	; r/w
+REG_LBA3	equ	$06	; r/w
+REG_STATUS	equ	$07	; r
+REG_COMMAND	equ	$07	; w
+REG_CONTROL	equ	$07	; r/w
+
+	IFDEF BEER
+; ------------------------------------------------------------------------------
+; *** BEER PPI 8255 IDE routines ***
+; ------------------------------------------------------------------------------
+; PPI IDE control bit:
+; 0	IDE register bit 0
+; 1	IDE register bit 1
+; 2	IDE register bit 2
+; 3	Not used
+; 4	Not used
+; 5	/CS Select
+; 6	/WR Write data
+; 7	/RD Read data
+
 IDE_READ	equ	$40		; /rd=0 /wr=1 /cs=0
 IDE_WRITE	equ	$80		; /rd=1 /wr=0 /cs=0
-IDE_SET		equ	$c0		; /rd=1 /wr=1 /cs=0 
+IDE_SET		equ	$c0		; /rd=1 /wr=1 /cs=0
 	IFDEF BEER_CS
 IDE_IDLE	equ	$c7		; /rd=1 /wr=1 /cs=0 reg=7
 IDE_OFF		equ	$e7		; /rd=1 /wr=1 /cs=1 reg=7
@@ -324,33 +351,6 @@ PPI_CTL		equ	$33		; PPI control
 PPI_INPUT	equ	$92		; Set PPI A+B to input
 PPI_OUTPUT	equ	$80		; Set PPI A+B to output
 
-; IDE registers:
-REG_DATA	equ	$00	; r/w
-REG_ERROR	equ	$01	; r
-REG_FEATURE	equ	$01	; w
-REG_COUNT	equ	$02	; r/w
-REG_LBA0	equ	$03	; r/w
-REG_LBA1	equ	$04	; r/w
-REG_LBA2	equ	$05	; r/w
-REG_LBA3	equ	$06	; r/w
-REG_STATUS	equ	$07	; r
-REG_COMMAND	equ	$07	; w
-REG_CONTROL	equ	$07	; r/w
-
-	IFDEF BEER
-; ------------------------------------------------------------------------------
-; *** PPI 8255 IDE routines ***
-; ------------------------------------------------------------------------------
-; PPI IDE control bit:
-; 0	IDE register bit 0
-; 1	IDE register bit 1
-; 2	IDE register bit 2
-; 3	Not used
-; 4	Not used
-; 5	/CS Select
-; 6	/WR Write data
-; 7	/RD Read data
-
 ; ------------------------------------------
 ; Initialize disk
 ; Output: Z-flag set if hardware detected
@@ -360,9 +360,9 @@ ideInit:	ld	a,PPI_IOA
 		ld	(ix+W_IODATA),a
 		ld	a,PPI_CTL
 		ld	(ix+W_IOCTL),a
-		call	ppideOutput
+		call	beerOutput
 		ld	hl,$00a5		; register=0 value=a5
-		call	ppideSetReg
+		call	beerSetReg
 		in	a,(PPI_IOA)
 		cp	$a5
 		ret
@@ -373,7 +373,7 @@ ideInit:	ld	a,PPI_IOA
 ideInfo:	call	ideWaitReady
 		ret	c			; time-out
 		ld	a,IDE_CMD_INFO
-		call	ppideCommand
+		call	beerCommand
 		call	ideWaitData
 		jp 	nz,ideError
 		call	ideReadSector
@@ -386,23 +386,23 @@ ideInfo:	call	ideWaitReady
 ; ------------------------------------------
 ideSetSector:	call	ideWaitReady
 		ret	c
-		call	ppideOutput
+		call	beerOutput
 		push	hl
 		ld	h,$02			; IDE register 2
 		ld	l,$01			; number of sectors is 1
-		call	ppideSetReg
+		call	beerSetReg
 		inc	h			; IDE register 3
 		ld	l,e			; bit 0..7
-		call	ppideSetReg
+		call	beerSetReg
 		inc	h			; IDE register 4
 		ld	l,d			; bit 8..15
-		call	ppideSetReg
+		call	beerSetReg
 		inc	h			; IDE register 5
 		ld	l,c			; bit 16..23
-		call	ppideSetReg
+		call	beerSetReg
 		inc	h			; IDE register 6
-		ld	l,$e0			; LBA mode
-		call	ppideSetReg
+		ld	l,$e0			; LBA mode, drive 0
+		call	beerSetReg
 	IFDEF BEER_CS
 		ld	a,IDE_IDLE		; IDE register 7
 		out	(PPI_IOC),a		; set address
@@ -417,9 +417,9 @@ ideSetSector:	call	ideWaitReady
 ideCmdRead:	push	bc
 		ld 	a,IDE_CMD_READ
 	IFDEF BEER_CS
-		call	ppi_command_1		; direction already set to output
+		call	beer_command_1		; direction already set to output
 	ELSE
-		call	ppideCommand
+		call	beerCommand
 	ENDIF
 		call	ideWaitData
 		pop	bc
@@ -435,21 +435,16 @@ ideReadSector:	ld	a,PPI_IOA
 		ld	d,IDE_READ
 		ld	e,IDE_SET
 		out	(c),e
-rdsec_loop:	out	(c),d			; IDE read
+rdsec_loop:
+		REPT 2				;
+		out	(c),d			; IDE read
 		ld	c,a			; PPI port A
 		ini				; read low byte, increase bufferpointer, decrease counter
 		inc	c			; PPI port B
 		ini				; read high byte, increase bufferpointer, decrease counter
 		inc	c			; PPI port C
 		out	(c),e			; IDE idle
-		; repeat 2-byte read
-		out	(c),d
-		ld	c,a
-		ini
-		inc	c
-		ini
-		inc	c
-		out	(c),e
+		ENDR
 		djnz	rdsec_loop		; 640 MOD 5 = 0
 		ret
 
@@ -459,9 +454,9 @@ rdsec_loop:	out	(c),d			; IDE read
 ideCmdWrite:	push	bc
 		ld	a,IDE_CMD_WRITE
 	IFDEF BEER_CS
-		call	ppi_command_1		; direction already set to output
+		call	beer_command_1		; direction already set to output
 	ELSE
-		call	ppideCommand
+		call	beerCommand
 	ENDIF		
 
 		; hardware design flaw: the control signals between ppi and ide should be inverted
@@ -486,14 +481,8 @@ ideWriteSector:	ld	a,PPI_IOA
 		ld	d,IDE_WRITE
 		ld	e,IDE_SET
 		out	(c),e
-wrsec_loop:	ld	c,a
-		outi
-		inc	c
-		outi
-		inc 	c
-		out	(c),d
-		out	(c),e
-		; repeat 2-byte write
+wrsec_loop:
+		REPT 2
 		ld	c,a
 		outi
 		inc	c
@@ -501,6 +490,7 @@ wrsec_loop:	ld	c,a
 		inc 	c
 		out	(c),d
 		out	(c),e
+		ENDR
 		djnz	wrsec_loop
 		ret
 
@@ -509,10 +499,10 @@ wrsec_loop:	ld	c,a
 ; ------------------------------------------
 ideWaitReady:	push	hl
 		push	bc
-		call	ppideInput
+		call	beerInput
 		ld	b,$14			; time-out after 20 seconds
 wait_1:		ld	hl,$4000		; wait loop appr. 1 sec for MSX/3.58Mhz
-wait_2:		call	ppideStatus
+wait_2:		call	beerStatus
 		and	%11000000
 		cp	%01000000		; BUSY=0 RDY=1 ?
 		jr	z,wait_end		; z=yes
@@ -534,8 +524,8 @@ wait_end:
 ; ------------------------------------------
 ; Wait for IDE data read/write request
 ; ------------------------------------------
-ideWaitData:	call 	ppideInput
-waitdata_1:	call	ppideStatus
+ideWaitData:	call 	beerInput
+waitdata_1:	call	beerStatus
 		bit	7,a			; IDE busy?
 		jr	nz,waitdata_1		; nz=yes
 		bit	0,a			; IDE error?
@@ -549,14 +539,14 @@ waitdata_1:	call	ppideStatus
 ; IDE error handling
 ; ------------------------------------------
 ideError:	ld	a,IDE_SET+REG_ERROR
-		call	ppideReadReg
+		call	beerReadReg
 		jp	dosError
 
 ; ------------------------------------------
 ; PPI IDE read status register
 ; ------------------------------------------
-ppideStatus:	ld	a,IDE_SET+REG_STATUS
-ppideReadReg:
+beerStatus:	ld	a,IDE_SET+REG_STATUS
+beerReadReg:
 	IFDEF BEER_CS
 		push	bc
 		ld	b,a
@@ -585,11 +575,11 @@ ppideReadReg:
 ; PPI IDE set command
 ; Input:  A = command
 ; ------------------------------------------
-ppideCommand:	call	ppideOutput
-ppi_command_1:	push	hl
+beerCommand:	call	beerOutput
+beer_command_1:	push	hl
 		ld	h,REG_COMMAND
 		ld	l,a
-		call	ppideSetReg
+		call	beerSetReg
 		pop	hl
 		ret
 
@@ -598,7 +588,7 @@ ppi_command_1:	push	hl
 ; Input:  H = register
 ;         L = value
 ; ------------------------------------------
-ppideSetReg:	ld	a,IDE_SET
+beerSetReg:	ld	a,IDE_SET
 		add	a,h
 		out	(PPI_IOC),a		; set register
 		ld	a,l
@@ -621,19 +611,329 @@ ppideSetReg:	ld	a,IDE_SET
 ; After channging direction the control lines on PPI Port C 
 ; must be set before any read/write to IDE registers.
 ; ------------------------------------------
-ppideInput:	ex	af,af'
+beerInput:	ex	af,af'
 		ld	a,PPI_INPUT		; PPI A+B is input
 		out	(PPI_CTL),a
 		ex	af,af'
 		ret
 
-ppideOutput:	ex	af,af'
+beerOutput:	ex	af,af'
 		ld	a,PPI_OUTPUT		; PPI A+B is output
 		out	(PPI_CTL),a
 		ex	af,af'
 		ret
 
 	; END BEER
+
+	ELIFDEF MALT
+; ------------------------------------------------------------------------------
+; *** MALT PPI 8255 IDE routines ***
+; ------------------------------------------------------------------------------
+; PPI IDE control bit:
+; 0	IDE register bit 0
+; 1	IDE register bit 1
+; 2	IDE register bit 2
+; 3	/CS0   Chip select 0 (inverted)
+; 4	/CS1   Chip select 1 (inverted)
+; 5	/WR    Write data    (inverted)
+; 6	/RD    Read data     (inverted)
+; 7     /RESET Drive reset   (inverted)
+
+IDE_SET		equ	$08		; assert /cs0
+IDE_WRITE	equ	$28		; assert /write
+IDE_READ	equ	$48		; assert /read
+IDE_RESET	equ	$80		; assert /reset
+IDE_BITWR	equ	$05
+IDE_BITRD	equ	$06
+
+
+; PPI 8255 settings:
+PPI_INPUT	equ	$92		; Set PPI A+B to input
+PPI_OUTPUT	equ	$80		; Set PPI A+B to output
+
+; ------------------------------------------
+; Initialize disk
+; Output: Z-flag set if hardware detected
+; probe for PPI 8255 hardware
+; ------------------------------------------
+ideInit:	ld	hl,idePorts
+ideProbe:	ld	a,(hl)
+		cp	$ff
+		jr	z,ideNotDetected
+		call	ideInit1
+		ret	z
+		inc	hl
+		jr	ideProbe
+
+ideInit1:	ld	(ix+W_IODATA),a		; PPIDE Data
+		add	a,$03
+		ld	(ix+W_IOCTL),a		; PPIDE Control
+		call	maltOutput
+		push	hl
+		ld	hl,$00a5		; register=0 value=a5
+		call	maltSetReg
+		pop	hl
+		ld	c,(ix+W_IODATA)
+		in	a,(c)
+		cp	$a5
+		ret	nz
+
+		call	maltReset		; interface detected, reset disk controller
+		xor	a			; z=detected
+		ret
+
+ideNotDetected:	or	a			; nz=not detected
+		ret
+
+; List of ports that are probed, end with $ff
+idePorts:	db	$3c,$34,$1c,$14,$ff
+
+
+; ------------------------------------------
+; Get IDE device information
+; ------------------------------------------
+ideInfo:	call	ideWaitReady
+		ret	c			; time-out
+		ld	a,IDE_CMD_INFO
+		call	maltCommand
+		call	ideWaitData
+		jp 	nz,ideError
+		call	ideReadSector
+		xor	a
+		ret
+
+; ------------------------------------------
+; IDE set sector start address and number of sectors
+; Input: C,D,E = 24-bit sector number
+; ------------------------------------------
+ideSetSector:	call	ideWaitReady
+		ret	c
+		push	hl
+		push	bc
+		call	maltOutput
+		pop	bc
+		push	bc
+		ld	h,$02			; IDE register 2
+		ld	l,$01			; number of sectors is 1
+		call	maltSetReg
+		inc	h			; IDE register 3
+		ld	l,e			; bit 0..7
+		call	maltSetReg
+		inc	h			; IDE register 4
+		ld	l,d			; bit 8..15
+		call	maltSetReg
+		inc	h			; IDE register 5
+		ld	l,c			; bit 16..23
+		call	maltSetReg
+		inc	h			; IDE register 6
+		ld	l,$e0			; LBA mode, drive 0
+		call	maltSetReg
+		pop	bc
+		pop	hl
+		xor	a
+		ret
+
+; ------------------------------------------
+; IDE set command read sector
+; ------------------------------------------
+ideCmdRead:	push	bc
+		ld 	a,IDE_CMD_READ
+		call	malt_command_1
+		call	ideWaitData
+		pop	bc
+		ret
+
+; ------------------------------------------
+; IDE Read Sector
+; Input: HL = transfer address
+; ------------------------------------------
+ideReadSector:	ld	a,(ix+W_IODATA)		; select PPI port A
+		ld	b,$80			; counter (decreases by 5 in 4-byte loop)
+		ld	c,a
+		inc	c
+		inc	c			; select PPI port C
+		ld	d,IDE_READ
+		ld	e,IDE_SET
+		out	(c),e			; set data register
+rdsec_loop:
+		REPT 2
+		out	(c),d			; assert read
+		ld	c,a			; select PPI port A
+		ini				; read low byte, increase bufferpointer, decrease counter
+		inc	c			; select PPI port B
+		ini				; read high byte, increase bufferpointer, decrease counter
+		inc	c			; select PPI port C
+		out	(c),e			; deassert read
+		ENDR
+		djnz	rdsec_loop		; 640 MOD 5 = 0
+		ret
+
+; ------------------------------------------
+; IDE set command write sector
+; ------------------------------------------
+ideCmdWrite:	push	bc
+		ld	a,IDE_CMD_WRITE
+		call	malt_command_1
+		call	ideWaitData
+		call	maltOutput
+		pop	bc
+		ret
+
+; ------------------------------------------
+; IDE Write Sector
+; Input: HL = transfer address
+; ------------------------------------------
+ideWriteSector:	ld	a,(ix+W_IODATA)		; select PPI port A
+		ld	b,$80			; counter: 128x4=512 bytes
+		ld	c,a
+		inc	c
+		inc	c			; select PPI port C
+		ld	d,IDE_WRITE
+		ld	e,IDE_SET
+		out	(c),e			; set data sector
+wrsec_loop:
+		REPT 2
+		ld	c,a
+		outi				; write low byte
+		inc	c
+		outi				; write high byte
+		inc 	c
+		out	(c),d			; assert write
+		out	(c),e			; deassert write
+		ENDR
+		djnz	wrsec_loop
+		ret
+
+; ------------------------------------------
+; Wait for IDE ready or time-out
+; ------------------------------------------
+ideWaitReady:	push	hl
+		push	bc
+		call	maltInput
+		ld	b,$14			; time-out after 20 seconds
+wait_1:		ld	hl,$4000		; wait loop appr. 1 sec for MSX/3.58Mhz
+wait_2:		call	maltStatus
+		and	%11000000
+		cp	%01000000		; BUSY=0 RDY=1 ?
+		jr	z,wait_end		; z=yes
+		dec	hl
+		ld	a,h
+		or	l
+		jr	nz,wait_2
+		djnz	wait_1
+		scf				; time-out
+wait_end:	pop	bc
+		pop	hl
+		ret
+
+; ------------------------------------------
+; Wait for IDE data read/write request
+; ------------------------------------------
+ideWaitData:	call 	maltInput
+waitdata_1:	call	maltStatus
+		bit	7,a			; IDE busy?
+		jr	nz,waitdata_1		; nz=yes
+		bit	0,a			; IDE error?
+		ret	nz			; nz=yes
+		bit	3,a			; IDE data request?
+		jr	z,waitdata_1		; z=no
+		xor	a			; no error
+		ret
+
+; ------------------------------------------
+; IDE error handling
+; ------------------------------------------
+ideError:	ld	a,IDE_SET+REG_ERROR
+		call	maltReadReg
+		push	af
+		call	maltReset		; reset disk controller before retry
+		pop	af
+		jp	dosError		; let DOS handle the error
+
+; ------------------------------------------
+; PPI IDE read status register
+; ------------------------------------------
+maltStatus:	ld	a,IDE_SET+REG_STATUS
+maltReadReg:	push	bc
+		ld	b,a
+		ld	c,(ix+W_IODATA)
+		inc	c
+		inc	c			; select PPI port C
+		out	(c),b
+		set	IDE_BITRD,b		; assert read
+		out	(c),b
+		dec	c
+		dec	c			; select PPI port A
+		in	a,(c)			; read register
+		inc	c
+		inc	c			; select PPI port C
+		res	IDE_BITRD,b		; deassert read
+		out	(c),b
+		pop	bc
+		ret
+
+; ------------------------------------------
+; PPI IDE set command
+; Input:  A = command
+; ------------------------------------------
+maltCommand:	call	maltOutput
+malt_command_1:	push	hl
+		ld	h,REG_COMMAND
+		ld	l,a
+		call	maltSetReg
+		pop	hl
+		ret
+
+; ------------------------------------------
+; PPI IDE set register
+; Input:  H = register
+;         L = value
+; ------------------------------------------
+maltSetReg:	push	bc
+		ld	c,(ix+W_IODATA)
+		out	(c),l			; write value
+		inc	c
+		inc	c
+		ld	a,IDE_SET
+		add	a,h
+		out	(c),a			; set register
+		set	IDE_BITWR,a		; assert write
+		out	(c),a
+		res	IDE_BITWR,a		; deassert write
+		out 	(c),a
+		pop	bc
+		ret
+
+; ------------------------------------------
+; PPI IDE reset disk controller
+; do hard reset, no soft reset
+; ------------------------------------------
+maltReset:	ld	c,(ix+W_IODATA)
+		inc	c
+		inc	c
+		ld	a,IDE_RESET
+		out	(c),a			; assert reset
+		REPT 5				; delay appr.60us, minimum is 25us (90 cycles)
+		ex	(sp),hl			; 20 cycles
+		ex	(sp),hl
+		ENDR
+		xor	a			; deassert reset (clear all control signals)
+		ret
+
+; ------------------------------------------
+; PPI IDE set data direction
+; ------------------------------------------
+maltInput:	ld	b,PPI_INPUT		; PPI A+B is input
+		ld	c,(ix+W_IOCTL)
+		out	(c),b
+		ret
+
+maltOutput:	ld	b,PPI_OUTPUT		; PPI A+B is output
+		ld	c,(ix+W_IOCTL)
+		out	(c),b
+		ret
+
+	; END MALT
 
 	ELIFDEF SODA
 ; ------------------------------------------------------------------------------

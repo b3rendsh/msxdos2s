@@ -8,11 +8,14 @@ between 2 different 32K ROM images.
 
 It's intended use is to host a 32K MSXDOS2.2 + BEER 2.0 DRIVER DISK ROM.
 You can select between two different versions of this ROM or use the 2nd 32K
-to host the 16K DOS 1.03 based BEER 2.03 ROM or legacy BEER 1.9 DISK ROM.
+to host the 16K DOS 1.03 based BEER 2.0 ROM or legacy BEER 1.9 DISK ROM.
 
 The PCB design is derived work from the MSX Makers! BEER-202 v1.1 design.
 Besides the mentioned changes there are also small differences in the 
 footprints and layout of the PCB due to migration to a newer Kicad version.
+
+Recommended are a NEC 8255AC-5 PPI and consumer graded CF cards up to 1GB
+capacity.
 
 Alternatives
 ------------
@@ -43,8 +46,8 @@ If the ROM is flashed correctly with the latest firmware and the system
 boots into BASIC it should display a line with "Disk BASIC version .."
 
 You can test compatibility with an IDE disk / CF card with the TASTE program,
-even if the disk is not formatted yet.
-
+even if the disk is not formatted yet. The optional write test will destroy 
+the last sectors at the end of a disk (up to 4GB). 
 
 License
 -------

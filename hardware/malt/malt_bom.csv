@@ -1,0 +1,17 @@
+"Id";"Designator";"Footprint";"Quantity","Designation"
+1;"C1,C2,C3,C4,C5";"C_Disc_D4.7mm_W2.5mm_P5.00mm";5;"100nF";
+2;"C6";"Capacitor electrolytic radial (lying)";1;"100uF";
+3;"D1";"LED_D3.0mm";1;"LED Green";
+4;"R1";"R_Axial_DIN0204_L3.6mm_D1.6mm_P7.62mm_Horizontal";1;"330";
+5;"R2,R3,R4";"R_Axial_DIN0204_L3.6mm_D1.6mm_P7.62mm_Horizontal";3;"10K";
+6;"U1";"DIP-32_W15.24mm_Socket";1;"SST39SF010A";
+7;"U2";"DIP-40_W15.24mm";1;"82C55A";
+8;"U3";"DIP-14_W7.62mm";1;"74HCT32";
+9;"U4";"DIP-14_W7.62mm";1;"74HCT04";
+10;"U5";"DIP-16_W7.62mm";1;"74HCT138";
+11;"P40";"PinHeader_2x20_P2.54mm_Horizontal";1;"PINHD-02x20";
+12;"P44";"PinHeader_2x22_P2.00mm_Horizontal";1;"Conn_02x22";
+13;"JP1";"PinHeader_1x03_P2.54mm_Vertical";1;"PIN_1x3";
+14;"JP2";"PinHeader_1x02_P2.54mm_Vertical";1;"Conn_01x02";
+15;"JP3";"SW_Slide_SPDT_Angled_CK_OS102011MA1Q";1;"PIN_1x3";
+16;"JP4";"PinHeader_2x03_P2.54mm_Vertical";1;"Conn_02x03";

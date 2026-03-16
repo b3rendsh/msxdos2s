@@ -383,7 +383,7 @@ A41B5:		ld	d,a
 
 ; Identification string (not used)
 	IFDEF IDEDOS1
-Q41C1:		db	" MSX-DOS 1 for BEER PPI IDE and SODA CF IDE   "
+Q41C1:		db	" MSX-DOS 1 for BEER, SODA, MALT and JIO       "
 	ELSE
 Q41C1:		db	" MSX-DOS ver. 2.2 Copyright 1984 by Microsoft "
 	ENDIF

@@ -31,7 +31,7 @@ endif
 # Note: the rom folder must be an existing folder
 ROM 	:= .$/rom
 
-all:	beer1 soda1 jio1 beer2 soda2 core2 jio2 pio2 uart2 beer2s taste img
+all:	beer1 soda1 malt1 jio1 beer2 soda2 malt2 core2 jio2 pio2 uart2 beer2s taste img
 
 rdate:
 	@echo db $(QUOTE)$(shell $(GETDATE))$(QUOTE) > rdate.inc
@@ -51,6 +51,9 @@ beer1:
 soda1:
 	@$(MAKE) dos1 INTERFACE="SODA IDE" DEFINES=-DSODA PREFIX=soda DRIVER="$(DRV_IDE)"
 
+malt1:
+	@$(MAKE) dos1 INTERFACE="MALT IDE" DEFINES=-DMALT PREFIX=malt DRIVER="$(DRV_IDE)"
+
 jio1:
 	@$(MAKE) dos1 INTERFACE="JIO" DEFINES=-DJIO PREFIX=jio DRIVER="$(DRV_JIO)"
 
@@ -68,6 +71,9 @@ beer2:
 
 soda2:
 	@$(MAKE) dos2 INTERFACE="SODA IDE" DEFINES=-DSODA PREFIX=soda DRIVER="$(DRV_IDE)"
+
+malt2:
+	@$(MAKE) dos2 INTERFACE="MALT IDE" DEFINES=-DMALT PREFIX=malt DRIVER="$(DRV_IDE)"
 
 core2:
 	@$(MAKE) dos2 INTEFACE="CORE" DEFINES=-DCORE PREFIX=core DRIVER="$(DRV_IDE)"

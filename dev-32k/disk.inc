@@ -2,6 +2,7 @@
 ; --------------------
 ; SODA		Include SODA 8-bit CF IDE driver
 ; BEER		Include BEER PPI 8255 IDE driver
+; MALT		Include MALT PPI 8255 IDE driver
 ; JIO		Include JIO 115K2 driver
 ; CORE		Include dummy IDE driver
 ; IDEDOS1	MSX-DOS 1 IDE
@@ -42,12 +43,12 @@
 	OPTM	EQU	1
 	BTWAIT	EQU	$5000
 
-IF BEER || JIO || UART || IDEDOS1
+IF BEER || MALT || JIO || UART || IDEDOS1
 	DEFINE	FASTALLOC
 	DEFINE	MAXENT
 ENDIF
 
-IF SODA || BEER
+IF SODA || BEER || MALT
 	DEFINE	TURBOR
 	DEFINE	FAT16
 	DEFINE	FAT16DOS1

@@ -581,9 +581,17 @@ nokey:		or	$ff
 ;   Carry flag = NC: successfully initialized   C: interface error / time-out
 ; May corrupt: AF,BC,DE,HL
 ; ------------------------------------------
-DRVINIT:	call	ideInit
+DRVINIT:
+	IFDEF DEBUG
+		call	PrintMsg
+		db	"Detect interface ",0
+	ENDIF
+		call	ideInit
 		ret	nz
-
+	IFDEF DEBUG
+		call	PrintMsg
+		db	"ok",13,10,0
+	ENDIF
 		ld	hl,PART_BUF
 		call	ideInfo
 		ret	c
@@ -592,6 +600,8 @@ DRVINIT:	call	ideInit
 		db	12,"BEER  : PPI IDE "
 	ELIFDEF SODA
 		db	12,"SODA  : CF IDE "
+	ELIFDEF MALT
+		db	12,"MALT  : PPIDE "
 	ELSE
 		db	12,"CORE  : "
 	ENDIF
