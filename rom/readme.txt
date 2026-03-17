@@ -5,8 +5,8 @@ This folder contains the following ROM images:
 
 BEER_AND_SODA.ZIP
 -----------------
-ZIP archive with ROM and EEPROM images for the BEER and SODA IDE interfaces.
-The ROM images include DOS enhancements and IDE disk drivers.
+ZIP archive with ROM and EEPROM images for the BEER, MALT and SODA IDE 
+interfaces. The ROM images include DOS enhancements and IDE disk drivers.
 Sources in dev-32k folder.
 
 There is a build script (Makefile) so you can create a custom ROM with the

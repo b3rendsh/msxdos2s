@@ -918,6 +918,7 @@ maltReset:	ld	c,(ix+W_IODATA)
 		ex	(sp),hl
 		ENDR
 		xor	a			; deassert reset (clear all control signals)
+		out	(c),a
 		ret
 
 ; ------------------------------------------
