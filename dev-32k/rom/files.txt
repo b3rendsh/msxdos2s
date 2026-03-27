@@ -13,8 +13,6 @@ malt_dos2.rom	32K MALT / PPIDE DOS 2 rom
 soda_dos1.rom	16K SODA / CF IDE DOS 1 rom 
 soda_dos2.rom	32K SODA / CF IDE DOS 2 rom
 core_dos2.rom	32K DOS 2 rom including: FAT16,format,ramdisk,optimizations,dummy driver
-TASTE.COM	BEER/SODA IDE info and test program (MSX-DOS)
-TASTE.BIN	BEER/SODA IDE info and test program (BASIC BINARY)
 
 BEER DOS2 in openMSX:
 Copy dummy_16k.rom to openMSX/share/extensions/hddrom.rom

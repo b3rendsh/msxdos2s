@@ -31,7 +31,7 @@ endif
 # Note: the rom folder must be an existing folder
 ROM 	:= .$/rom
 
-all:	beer1 soda1 malt1 jio1 beer2 soda2 malt2 core2 jio2 pio2 uart2 beer2s taste img
+all:	beer1 soda1 malt1 jio1 beer2 soda2 malt2 core2 jio2 pio2 uart2 beer2s img
 
 rdate:
 	@echo db $(QUOTE)$(shell $(GETDATE))$(QUOTE) > rdate.inc
@@ -98,14 +98,6 @@ beer2s:	rdate
 	z88dk-appmake +rom -b obj/dummy.bin -o $(ROM)/beer_32k.img -s 32768 --org 0
 	z88dk-appmake +inject -b $(ROM)/beer_32k.img -i obj/beer_162__.bin -s 00000 -o $(ROM)/beer_32k.img 
 	z88dk-appmake +inject -b $(ROM)/beer_32k.img -i obj/beer_161__.bin -s 16384 -o $(ROM)/beer_32k.img
-	@echo done
-
-taste:
-	@echo Assembling TASTE program..
-	z80asm -b -m -Oobj -o=taste.com taste.asm
-	$(CP) obj$/taste.com $(ROM)$/TASTE.COM
-	z80asm -DBASBIN -b -m -l -Oobj -o=taste.bin taste.asm
-	$(CP) obj$/taste.bin $(ROM)$/TASTE.BIN
 	@echo done
 
 img:	
