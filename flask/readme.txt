@@ -15,15 +15,14 @@ that is currently visible in the Z80 address space and not the entire ROM chip.
 Commandline options:
 
 /Sx	Set the target slot to slot #x
+	If the slot is specified then the SST device id is not checked,
+	to support other types of JEDEC compatible flash ROM.
 	If this option is omitted then the program will search for the first
-	slot with a SST flash ROM. Extended slots are not supported.
+	slot with a SST flash ROM. 
+	Flashing a ROM in an extended slot is not supported.
 
 /A	Set the start address to 0x8000
 	The default start address for ROM images up to 32KB is 0x4000 and larger
 	ROM images up to 64KB will be loaded at address 0x0000.
 
 /E	Erase the entire flash ROM memory instead of the 64K sector erase.
-
-
-
-

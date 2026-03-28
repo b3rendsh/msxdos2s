@@ -1,6 +1,6 @@
 ; -----------------------------------------------------------------------------
 ; FLASK
-; SST simple 64K flash ROM writer
+; SST / JEDEC compatible simple 64K flash ROM writer
 ;
 ; Copyright (C) 2026 H.J. Berends*
 ;
@@ -27,6 +27,7 @@
 ; + cosmetic text changes and code optimizations
 ; + simplified address option
 ; + no banked flash rom support
+; + if slot is specified then don't check SST device id (support JEDEC compatible flash)
 ; todo:
 ; + add verify option
 ; + add read option
@@ -245,7 +246,9 @@ option_s:	call	get_one
 		cp	4
 		jp	nc,usage
 		ld	(target_slot),a
-		ld	a, (hl)
+		ld	a,$ff		; if slot is specified then don't check flash device id
+		ld	(check_id),a
+		ld	a,(hl)
 		cp	'-'
 		jp	z,usage		; expansion slots not supported
 		jr	parse_l1
@@ -608,6 +611,10 @@ detect_target:	ld	a,(target_slot)
 		call	get_device_name
 		call	puts
 		call	puts_crlf
+		ld	hl,(rom_size)
+		ld	a,h
+		or	l
+		jr	z,detect_end
 		ld	de,t_rom_size
 		call	puts
 		ld	hl,(rom_size)
@@ -615,7 +622,7 @@ detect_target:	ld	a,(target_slot)
 		ld	de,t_kb
 		call	puts
 
-		xor	a
+detect_end:	xor	a
 		ret
 
 t_file_size:	db	"File size : ",0
@@ -627,6 +634,7 @@ t_kb:		db	"KB",CR,LF,0
 ;  DATA
 ; -----------------------------------------------------------------------------
 target_slot:	db	$FF		; 0xFF: auto
+check_id:	db	0		; 0:yes, 255:no
 file_size:	dw	0		; KB
 rom_size:	dw	0		; KB
 target_block:	db	0		; 0..7: 8K block number
@@ -849,11 +857,16 @@ is_slot_flash:	or	a
 
 		ld	a,(manufact_id)
 		call	get_manufact_name
-		ret	nz
+		jr	nz,unknown_flash
 
 		ld	a,(manufact_id + 1)
 		call	get_device_name
+		ret	z
+
+unknown_flash:	ld	a,(check_id)		; if slot is specified then unknown (flash) rom is ok
+		inc	a
 		ret
+
 
 not_flash:	xor	a
 		inc	a
