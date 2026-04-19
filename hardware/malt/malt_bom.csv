@@ -1,4 +1,4 @@
-"Id";"Designator";"Footprint";"Quantity","Designation"
+"Id";"Designator";"Footprint";"Quantity";"Designation"
 1;"C1,C2,C3,C4,C5";"C_Disc_D4.7mm_W2.5mm_P5.00mm";5;"100nF";
 2;"C6";"Capacitor electrolytic radial (lying)";1;"100uF";
 3;"D1";"LED_D3.0mm";1;"LED Green";
