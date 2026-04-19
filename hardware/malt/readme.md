@@ -32,33 +32,40 @@ A basic understanding of the MSX (disk) system, soldering skills and knowledge o
 2. 40-pin: populate jumper JP2 to connect +5V to pin 20 for use with a CF card adapter.
 
 **Choose flash ROM or EEPROM**
-1. SST flash ROM (default)
+1. SST flash ROM (default)  
 The cart can be used with 128K, 256K or 512K SST (or other JEDEC compatible) flash ROM.  
 Use a jumper (JP1) or SPDT switch (SW1) to switch between two ROM banks.  
 Don't populate the PCB with both JP1 and SW1 or else you can create a short circuit!  
 The switch or jumper should only be toggled when the MSX computer is off!
 
-2. W27C512 EEPROM
+2. W27C512 EEPROM  
 Make sure to place the 28-pin chip correctly in the 32-pin socket. See pictures.  
-Flash the disk ROM with an external programmer like the T48. A standard 32KB disk ROM image should start at EEPROM address 0x4000!  
+Flash the disk ROM with an external programmer like the T48.  
+A standard 32KB disk ROM image should start at EEPROM address 0x4000!  
 The ROM bank switch/jumper will have no function.
 
 **Select an I/O address range with jumper JP3**
-1: 0x1C-0x1F
-2: 0x34-0x37 (default)
+
+1: 0x1C-0x1F  
+2: 0x34-0x37 (default)  
 3: 0x3C-0x3F
+
 The MSX-DOS software driver will try to autodetect the selected I/O address.
 
 **Select disk media type to use with the cart**
-1. Compact Flash (default). 
+
+1. Compact Flash (default)  
 There are CF to IDE adapters for 40 pin or 44 pin IDE connectors. The front of the adapter should point to the backside of the MSX cart! See pictures.  
 Some of the 40 pin CF adapters have pin 20 blocked. You can still use them if you drill a hole and connect a dupont wire between the CF card power conector (LP4) and jumper JP2 +5V pin. See pictures.  
 
-2. Classic 2,5" notebook harddisk. This type of disk uses a 44-pin connector. It is not recommended to power the harddisk via the MSX! Instead use an external power supply and a custom built adapter cable.
+2. Classic 2,5" notebook harddisk  
+This type of disk uses a 44-pin connector. It is not recommended to power the harddisk via the MSX! Instead use an external power supply and a custom built adapter cable.
 
-3. Classic 3,5" harddisk. This type of disk uses a 40-pin connector. A 40-pin flat cable may have pin 20 blocked. Use an external molex power adapter (or old ATX power supply). 
+3. Classic 3,5" harddisk  
+This type of disk uses a 40-pin connector. A 40-pin flat cable may have pin 20 blocked. Use an external molex power adapter (or old ATX power supply). 
 
-4. Other ATA/IDE disks. E.g. using adapters for SD to IDE and SATA to IDE. These options are not tested yet.
+4. Other ATA/IDE disks   
+E.g. using SD to IDE adapter or SATA to IDE. These options are not tested yet.
 
 ## Hardware test
 
@@ -70,7 +77,7 @@ The LED on the cart should light up whenever there is disk activity.
       
 ## Flash disk ROM
 
-You can use the flask program to flash a disk image to the selected ROM bank.
+You can use the [flask program](https://github.com/b3rendsh/msxdos2s/tree/main/flask) to flash a disk image to the selected ROM bank.
 1. Power off the MSX computer
 2. Select the ROM bank with jumper JP1 or switch SW1
 3. Set the ROM enable switch SW2 to OFF position
@@ -79,7 +86,7 @@ You can use the flask program to flash a disk image to the selected ROM bank.
 6. Flash the ROM from a 2nd disk system (e.g. floppy) 
 7. Reboot the MSX
 
-If you don't have a 2nd disk system then you can load cxdos1 from tape to flash the ROM. In this scenario the disk media should have a valid MSX FAT partition. The MSX tape input can be used with an android phone and msx2cas app to load the bin file. Alternatively you can also a convert a bin file to a wav file with openMSX and play the wav on a suitable device.
+If you don't have a 2nd disk system then you can load [CXDOS1D.BIN](https://github.com/b3rendsh/cxdos) from tape to flash the ROM. In this scenario the disk media should have a valid MSX FAT partition with flask.com and disk image file. The MSX tape input can be used with an android phone and msx2cas app to load the bin file. Alternatively you can also a convert a bin file to a wav file with openMSX and play the wav on a suitable device.
 
 ## Notes
 
@@ -91,8 +98,9 @@ The cart should fit in a Konami type case with some cutouts for the switches and
 
 ## Pictures
 
-[MALT 44P](pictures/malt_p44_cf.jpg)
-[MALT 40P](pictures/malt_p40.jpg)
+[MALT IDE 44-pin](pictures/malt_p44_cf.jpg)
+
+[MALT IDE 40-pin](pictures/malt_p40.jpg)
 
 [more pictures](pictures/)
 
