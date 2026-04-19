@@ -14,6 +14,12 @@ It uses the same 8255 PPI chip as the MSX BEER interface but the IDE control sig
 
 ![malt pcb design](pictures/malt_design_small.jpg)
 
+>[!CAUTION]
+>If the SW1 switch is mounted then the JP1 jumper should not be used.  
+> Only toggle the SW1 switch (right side) when the MSX computer is off.
+>
+>The SW2 switch (left side) can be toggled when the MSX computer is on.
+
 ## Howto build
 
 A basic understanding of the MSX (disk) system, soldering skills and knowledge of retro computer electronics is required to build and use this cart.
