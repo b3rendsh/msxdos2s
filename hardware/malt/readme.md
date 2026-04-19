@@ -12,6 +12,8 @@ It uses the same 8255 PPI chip as the MSX BEER interface but the IDE control sig
 * MSX-DOS 1 and 2 disk system driver (ATA master disk only)
 * RomWBW CP/M PPIDE driver that supports ATA, ATAPI and master/slave drives
 
+![malt pcb design](pictures/malt_design_small.jpg)
+
 ## Howto build
 
 A basic understanding of the MSX (disk) system, soldering skills and knowledge of retro computer electronics is required to build and use this cart.
