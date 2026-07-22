@@ -29,6 +29,7 @@
 		EXTERN	GETWRK		; Get address of disk driver's work area
 		EXTERN	DRVSIZE		; DOS driver workarea size (offset)
 		EXTERN	W_CURDRV	; Workarea variable defined by the DOS driver
+		EXTERN	GETDPB		; Set DPB using sector 0 / bootsector of partition
 
 ; Hardware driver variables
 W_RWFLAG	equ	DRVSIZE+$00	; Read/Write flag
@@ -191,8 +192,16 @@ wr01:		call	ideWriteSector
 ; ------------------------------------------
 DSKCHG:
 	IFDEF IDEDOS1
+		; In IDEDOS1 whenever the current drive is changed this routine returns that the disk has changed in order
+		; to flush the FAT cache, this is a deviation from the original MSX-DOS 1.03 without FAT swapper. 	
+		; The DPB of the drive is then also updated to support custom partition structures that deviate from the 
+		; default DPB defined by the driver e.g. different number of reserved sectors.
 		push	af
+		push	bc
+		push	hl
 		call	GETWRK
+		pop	hl
+		pop	bc
 		pop	af
 		cp	(ix+W_CURDRV)		; current drive
 		ld	(ix+W_CURDRV),a
@@ -201,9 +210,16 @@ DSKCHG:
 		xor	a
 		ret
 
-r501:		ld	b,$FF			; changed
-		xor	a
+r501:		call	GETDPB			; if the disk is changed then update DPB
+		jr	c,r502			; if cx then error reading boot sector
+		ld	b,$ff			; changed
+		xor	a			; no error
 		ret
+
+r502:		ld	b,0			; unknown
+		scf				; error flag
+		ret
+
 	ELSE
 		; always return unchanged for DOS2 (disks are not hot-pluggable)
 		ld	b,$01

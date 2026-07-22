@@ -4539,7 +4539,7 @@ A5A11:
 		ld	(DOSHIM),hl		; bottom MSX-DOS system
 		call	A5AE7			; try reading bootsector of drive 0
 		jp	c,A5B3A			; error, start diskbasic
-		ld	(DOSFLG),a		 ; flag bootable disk
+		ld	(DOSFLG),a		; flag bootable disk
 		ld	a,(RAMAD0)
 		ld	h,00H			; page 0
 		call	C64C2			; calculate slot masks
