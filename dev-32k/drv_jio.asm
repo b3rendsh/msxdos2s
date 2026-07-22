@@ -258,7 +258,7 @@ INIENV:		call	GETWRK			; HL and IX point to work buffer
 		or	(ix+W_DRIVES)		; number of drives 0?
 		ret	z
 		ld	(ix+W_CURDRV),$ff	; Init current drive
-		ld	(ix+W_DSKCHG),$00	; Init partition changed flags
+		ld	(ix+W_DSKCHG),$ff	; Init partition changed flags
 
 	IFNDEF CXDOS1
 		call	GETSLT
